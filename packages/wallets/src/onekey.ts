@@ -1,1 +1,1 @@
-export * from "@swapkit/wallet-extensions/onekey";
+export * from "@swapkit-dev/wallet-extensions/onekey";

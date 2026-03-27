@@ -1,9 +1,7 @@
 {
   "author": "swapkit-dev",
   "dependencies": {
-    "@cosmjs/amino": "~0.37.0",
     "@cosmjs/crypto": "0.37.0",
-    "@cosmjs/proto-signing": "~0.37.0",
     "@keepkey/keepkey-sdk": "~0.2.62",
     "@ledgerhq/devices": "~8.10.0",
     "@ledgerhq/errors": "~6.29.0",
@@ -21,22 +19,19 @@
     "@near-js/crypto": "~2.5.0",
     "@near-js/transactions": "~2.5.0",
     "@scure/base": "2.0.0",
-    "@swapkit-dev/helpers": "^4.12.0",
-    "@swapkit-dev/toolboxes": "^4.11.2",
-    "@swapkit-dev/utxo-signer": "^2.1.0",
-    "@swapkit/wallet-core": "workspace:*",
+    "@swapkit-dev/helpers": "workspace:*",
+    "@swapkit-dev/toolboxes": "workspace:*",
+    "@swapkit-dev/utxo-signer": "workspace:*",
+    "@swapkit-dev/wallet-core": "workspace:*",
     "@trezor/connect-web": "~9.6.4",
     "cosmjs-types": "~0.10.1",
     "ethers": "^6.14.0",
     "ripple-binary-codec": "2.5.1",
-    "ts-pattern": "^5.9.0",
-    "xrpl": "~4.4.2"
+    "ts-pattern": "^5.9.0"
   },
   "description": "SwapKit - Wallet Hardware",
   "devDependencies": {
-    "@cosmjs/amino": "0.37.0",
     "@cosmjs/crypto": "0.37.0",
-    "@cosmjs/proto-signing": "0.37.0",
     "@keepkey/keepkey-sdk": "0.2.62",
     "@ledgerhq/devices": "8.10.0",
     "@ledgerhq/errors": "6.29.0",
@@ -58,8 +53,7 @@
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
     "ripple-binary-codec": "2.5.1",
-    "ts-pattern": "^5.9.0",
-    "xrpl": "4.4.2"
+    "ts-pattern": "^5.9.0"
   },
   "exports": {
     ".": {
@@ -87,19 +81,15 @@
       "types": "./dist/types/trezor/index.d.ts"
     }
   },
-  "files": [
-    "dist/"
-  ],
-  "homepage": "https://github.com/swapkit/wallets",
+  "files": ["dist/", "src/"],
+  "homepage": "https://github.com/swapkit/SwapKit",
   "license": "SEE LICENSE IN LICENSE",
-  "name": "@swapkit/wallet-hardware",
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@swapkit-dev/wallet-hardware",
+  "publishConfig": { "access": "restricted" },
   "repository": {
+    "directory": "packages/wallet-hardware",
     "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git",
-    "directory": "packages/wallet-hardware"
+    "url": "git+https://github.com/swapkit/SwapKit.git"
   },
   "scripts": {
     "build": "bun run ./build.ts",
@@ -109,5 +99,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.5.6"
+  "version": "4.6.1"
 }

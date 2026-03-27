@@ -12,13 +12,12 @@
     "@radixdlt/babylon-gateway-api-sdk": "~1.10.0",
     "@radixdlt/radix-dapp-toolkit": "~2.2.0",
     "@scure/base": "~2.0.0",
-    "@swapkit-dev/helpers": "^4.12.0",
-    "@swapkit-dev/toolboxes": "^4.11.2",
-    "@swapkit-dev/utxo-signer": "^2.1.0",
-    "@swapkit/wallet-core": "workspace:*",
-    "@swapkit/wallet-extensions": "workspace:*",
-    "@swapkit/wallet-hardware": "workspace:*",
-    "@swapkit/wallet-keystore": "workspace:*",
+    "@swapkit-dev/helpers": "workspace:*",
+    "@swapkit-dev/toolboxes": "workspace:*",
+    "@swapkit-dev/utxo-signer": "workspace:*",
+    "@swapkit-dev/wallet-core": "workspace:*",
+    "@swapkit-dev/wallet-extensions": "workspace:*",
+    "@swapkit-dev/wallet-hardware": "workspace:*",
     "@walletconnect/modal": "~2.7.0",
     "@walletconnect/sign-client": "~2.23.0",
     "cosmjs-types": "~0.10.1",
@@ -113,12 +112,6 @@
       "require": "./dist/src/keplr.cjs",
       "types": "./dist/types/keplr.d.ts"
     },
-    "./keystore": {
-      "bun": "./src/keystore.ts",
-      "default": "./dist/src/keystore.js",
-      "require": "./dist/src/keystore.cjs",
-      "types": "./dist/types/keystore.d.ts"
-    },
     "./ledger": {
       "bun": "./src/ledger.ts",
       "default": "./dist/src/ledger.js",
@@ -204,20 +197,12 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": [
-    "dist/"
-  ],
-  "homepage": "https://github.com/swapkit/wallets",
+  "files": ["dist/", "src/"],
+  "homepage": "https://github.com/swapkit/SwapKit",
   "license": "SEE LICENSE IN LICENSE",
-  "name": "@swapkit/wallets",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git",
-    "directory": "packages/wallets"
-  },
+  "name": "@swapkit-dev/wallets",
+  "publishConfig": { "access": "restricted" },
+  "repository": { "type": "git", "url": "git+https://github.com/swapkit/SwapKit.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
@@ -226,5 +211,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.5.15"
+  "version": "4.6.1"
 }

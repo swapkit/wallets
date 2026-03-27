@@ -3,7 +3,7 @@ import "@near-wallet-selector/modal-ui-js/styles.css";
 import type { Transaction } from "@near-js/transactions";
 import { Chain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit-dev/helpers";
 import { getNearToolbox } from "@swapkit-dev/toolboxes/near";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 
 function createNearSigner(wallet: Wallet) {
   return {

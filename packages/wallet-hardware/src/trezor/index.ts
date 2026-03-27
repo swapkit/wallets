@@ -19,7 +19,7 @@ import {
 } from "@swapkit-dev/toolboxes/utxo";
 import type { BTCNetwork, PCZT, Transaction, ZcashTransaction } from "@swapkit-dev/utxo-signer";
 import { NETWORKS, ZcashConsensusBranchId, ZcashVersionGroupId } from "@swapkit-dev/utxo-signer";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 
 function decodeOpReturnData(script: Uint8Array): string | null {
   if (script.length < 2 || script[0] !== 0x6a) return null;

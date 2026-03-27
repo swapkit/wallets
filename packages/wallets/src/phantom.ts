@@ -1,1 +1,1 @@
-export * from "@swapkit/wallet-extensions/phantom";
+export * from "@swapkit-dev/wallet-extensions/phantom";

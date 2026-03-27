@@ -12,7 +12,7 @@ import {
 import type { ThorchainDepositParams } from "@swapkit-dev/toolboxes/cosmos";
 import type { NearSigner } from "@swapkit-dev/toolboxes/near";
 import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit-dev/toolboxes/tron";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type { SignClient } from "@walletconnect/sign-client";
 import type { SessionTypes, SignClientTypes } from "@walletconnect/types";

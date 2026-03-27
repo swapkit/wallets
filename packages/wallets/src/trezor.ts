@@ -1,1 +1,1 @@
-export * from "@swapkit/wallet-hardware/trezor";
+export * from "@swapkit-dev/wallet-hardware/trezor";

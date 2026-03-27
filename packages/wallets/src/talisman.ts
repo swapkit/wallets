@@ -1,1 +1,1 @@
-export * from "@swapkit/wallet-extensions/talisman";
+export * from "@swapkit-dev/wallet-extensions/talisman";

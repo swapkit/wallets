@@ -11,7 +11,7 @@ import {
 
 export type { PairingInfo } from "@keepkey/keepkey-sdk";
 
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import { cosmosWalletMethods } from "./chains/cosmos";
 import { KeepKeySigner } from "./chains/evm";
 import { mayachainWalletMethods } from "./chains/mayachain";

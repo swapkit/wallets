@@ -6,7 +6,7 @@ import {
   SwapKitError,
   WalletOption,
 } from "@swapkit-dev/helpers";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import { chainRegistry } from "./chainRegistry";
 
 const keplrSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;

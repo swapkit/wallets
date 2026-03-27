@@ -7,7 +7,7 @@ import {
   SwapKitError,
   WalletOption,
 } from "@swapkit-dev/helpers";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 
 const cosmostationSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;
 const cosmostationSupportedEVMChains = [

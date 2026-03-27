@@ -23,7 +23,7 @@ import {
   type UTXOForMultiAddressTransfer,
 } from "@swapkit-dev/toolboxes/utxo";
 import type { Transaction } from "@swapkit-dev/utxo-signer";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import { getLedgerAddress, getLedgerClient } from "./helpers";
 
 export const ledgerWallet = createWallet({

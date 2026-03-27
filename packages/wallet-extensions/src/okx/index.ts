@@ -1,6 +1,6 @@
 import { Chain, filterSupportedChains, WalletOption } from "@swapkit-dev/helpers";
 
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import { getWalletMethods } from "./helpers";
 
 export const okxWallet = createWallet({

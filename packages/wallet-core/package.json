@@ -1,8 +1,6 @@
 {
   "author": "swapkit-dev",
-  "dependencies": {
-    "@swapkit-dev/helpers": "^4.12.0"
-  },
+  "dependencies": { "@swapkit-dev/helpers": "workspace:*" },
   "description": "SwapKit - Wallet Core",
   "exports": {
     ".": {
@@ -12,19 +10,15 @@
       "types": "./dist/types/index.d.ts"
     }
   },
-  "files": [
-    "dist/"
-  ],
-  "homepage": "https://github.com/swapkit/wallets",
+  "files": ["dist/", "src/"],
+  "homepage": "https://github.com/swapkit/SwapKit",
   "license": "SEE LICENSE IN LICENSE",
-  "name": "@swapkit/wallet-core",
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@swapkit-dev/wallet-core",
+  "publishConfig": { "access": "restricted" },
   "repository": {
+    "directory": "packages/wallet-core",
     "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git",
-    "directory": "packages/wallet-core"
+    "url": "git+https://github.com/swapkit/SwapKit.git"
   },
   "scripts": {
     "build": "bun run ./build.ts",
@@ -34,5 +28,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.1.19"
+  "version": "4.1.21"
 }

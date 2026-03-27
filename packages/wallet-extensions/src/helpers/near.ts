@@ -159,7 +159,7 @@ function actionToWalletJson(action: Transaction["actions"][number]) {
       return {
         params: {
           // args must be base64 string for wallet JSON
-          args: Buffer.from(String(data.functionCall?.args ?? "{}")).toString("base64"),
+          args: typeof Buffer.from(data.functionCall?.args ?? "{}").toString("base64"),
           deposit: (data.functionCall?.deposit ?? 0).toString(),
           gas: (data.functionCall?.gas ?? 0).toString(),
           methodName: data.functionCall?.methodName ?? "",

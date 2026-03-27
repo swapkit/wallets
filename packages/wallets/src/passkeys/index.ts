@@ -12,7 +12,7 @@ import {
 } from "@swapkit-dev/helpers";
 import type { SolanaProvider } from "@swapkit-dev/toolboxes/solana";
 import { Transaction } from "@swapkit-dev/utxo-signer";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import {
   AddressPurpose,
   BitcoinNetworkType,

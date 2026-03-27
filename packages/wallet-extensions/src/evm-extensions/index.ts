@@ -9,7 +9,7 @@ import {
   switchEVMWalletNetwork,
   WalletOption,
 } from "@swapkit-dev/helpers";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import type { BrowserProvider, Eip1193Provider } from "ethers";
 
 export type EVMWalletOptions =

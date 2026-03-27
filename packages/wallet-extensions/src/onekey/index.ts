@@ -9,7 +9,7 @@ import {
   WalletOption,
 } from "@swapkit-dev/helpers";
 import { Transaction } from "@swapkit-dev/utxo-signer";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains } from "@swapkit-dev/wallet-core";
 import type { BitcoinProvider, GetAddressOptions, GetAddressResponse, SignTransactionOptions } from "sats-connect";
 
 async function getWalletMethodsForExtension(chain: Chain) {
