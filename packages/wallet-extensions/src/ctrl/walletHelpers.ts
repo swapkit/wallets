@@ -15,7 +15,6 @@ import {
 import type { SolanaProvider } from "@swapkit-dev/toolboxes/solana";
 import type { Eip1193Provider } from "ethers";
 import { match } from "ts-pattern";
-import type { NearBrowserWalletProvider } from "../helpers/near";
 
 type TransactionMethod = "transfer" | "deposit";
 
@@ -42,9 +41,7 @@ type CtrlProviderType<T> = T extends typeof Chain.Solana
     ? Keplr
     : T extends EVMChain
       ? Eip1193Provider
-      : T extends typeof Chain.Near
-        ? NearBrowserWalletProvider
-        : undefined;
+      : undefined;
 
 export function getCtrlProvider<T extends Chain>(chain: T): CtrlProviderType<T> {
   if (!window.ctrl) throw new SwapKitError("wallet_ctrl_not_found");
@@ -60,7 +57,6 @@ export function getCtrlProvider<T extends Chain>(chain: T): CtrlProviderType<T> 
     .with(Chain.Solana, () => window.ctrl?.solana)
     .with(Chain.THORChain, () => window.ctrl?.thorchain)
     .with(Chain.Maya, () => window.ctrl?.mayachain)
-    .with(Chain.Near, () => window.ctrl?.near)
     .otherwise(() => undefined);
 }
 
@@ -127,19 +123,6 @@ export async function getCtrlAddress(chain: Chain) {
 
       const accounts = await provider.connect();
       return accounts.publicKey.toString();
-    }
-
-    if (chain === Chain.Near) {
-      if (!window.ctrl?.near) {
-        throw new SwapKitError("wallet_ctrl_not_found", { chain: Chain.Near });
-      }
-
-      if (!window.ctrl.near.isSignedIn?.()) {
-        const result = await window.ctrl.near.request<string[]>?.({ method: "connect" });
-        return result?.[0] || "";
-      }
-
-      return window.ctrl.near.getAccountId?.() || "";
     }
 
     const accounts = await eipProvider.request({ method: "request_accounts", params: [] });
