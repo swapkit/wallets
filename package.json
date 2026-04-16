@@ -1,10 +1,10 @@
 {
   "dependencies": {
-    "@swapkit/core": "4.4.11",
-    "@swapkit/helpers": "4.12.9",
+    "@swapkit/core": "4.4.12",
+    "@swapkit/helpers": "4.13.0",
     "@swapkit/plugins": "4.6.24",
     "@swapkit/server": "4.2.35",
-    "@swapkit/toolboxes": "4.14.4",
+    "@swapkit/toolboxes": "4.14.5",
     "@swapkit/wallet-core": "4.1.28",
     "@swapkit/wallet-keystore": "4.3.16"
   },
@@ -21,11 +21,11 @@
   },
   "name": "swapkit-wallets",
   "overrides": {
-    "@swapkit/core": "4.4.11",
-    "@swapkit/helpers": "4.12.9",
+    "@swapkit/core": "4.4.12",
+    "@swapkit/helpers": "4.13.0",
     "@swapkit/plugins": "4.6.24",
     "@swapkit/server": "4.2.35",
-    "@swapkit/toolboxes": "4.14.4",
+    "@swapkit/toolboxes": "4.14.5",
     "@swapkit/types": "0.7.3",
     "@swapkit/wallet-core": "4.1.28",
     "@swapkit/wallet-keystore": "4.3.16"

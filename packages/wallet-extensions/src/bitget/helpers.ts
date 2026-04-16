@@ -80,9 +80,7 @@ export async function getWalletMethods(chain: Chain) {
       const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
       const [{ address }] = accounts;
 
-      const signer = Object.assign(offlineSigner, {
-        getAddress: () => Promise.resolve(address),
-      });
+      const signer = Object.assign(offlineSigner, { getAddress: () => Promise.resolve(address) });
 
       const toolbox = getCosmosToolbox(Chain.Cosmos, { signer });
 

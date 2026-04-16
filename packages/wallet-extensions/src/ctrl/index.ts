@@ -139,12 +139,7 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
 
           const response = await ctrlRequest<{ status: string; result: { psbt: string } }>({
             method: "sign_psbt",
-            params: {
-              psbt: psbtB64,
-              signInputs: { [address]: signingIndexes },
-              allowedSignHash: 1,
-              broadcast: false,
-            },
+            params: { allowedSignHash: 1, broadcast: false, psbt: psbtB64, signInputs: { [address]: signingIndexes } },
           });
 
           if (response?.status !== "success" || !response.result?.psbt) {
