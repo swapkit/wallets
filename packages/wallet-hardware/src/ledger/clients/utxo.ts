@@ -1,5 +1,6 @@
 import type BitcoinApp from "@ledgerhq/hw-app-btc";
 import type { CreateTransactionArg } from "@ledgerhq/hw-app-btc/lib-es/createTransaction";
+import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
@@ -104,24 +105,24 @@ const BaseLedgerUTXO = ({
   let btcApp: InstanceType<typeof BitcoinApp>;
   let transport: any = null;
 
-  async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
-    if (checkBtcApp && !btcApp) {
-      new SwapKitError("wallet_ledger_connection_error", {
-        message: `Ledger connection failed:\n${JSON.stringify({ btcApp, checkBtcApp })}`,
-      });
+  return (derivationPathArray?: DerivationPathArray | string, injectedTransport?: Transport) => {
+    async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
+      if (checkBtcApp && !btcApp) {
+        new SwapKitError("wallet_ledger_connection_error", {
+          message: `Ledger connection failed:\n${JSON.stringify({ btcApp, checkBtcApp })}`,
+        });
+      }
+
+      transport ||= injectedTransport ?? (await getLedgerTransport());
     }
 
-    transport ||= await getLedgerTransport();
-  }
+    async function createTransportWebUSB() {
+      transport = injectedTransport ?? (await getLedgerTransport());
+      const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
 
-  async function createTransportWebUSB() {
-    transport = await getLedgerTransport();
-    const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
+      btcApp = new BitcoinApp({ currency: chain, transport });
+    }
 
-    btcApp = new BitcoinApp({ currency: chain, transport });
-  }
-
-  return (derivationPathArray?: DerivationPathArray | string) => {
     const derivationPath =
       typeof derivationPathArray === "string"
         ? derivationPathArray

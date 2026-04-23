@@ -22,9 +22,9 @@ function establishConnection(transport: Transport) {
   return new Xrp(transport);
 }
 
-export const XRPLedger = async (derivationPath?: DerivationPathArray) => {
+export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTransport?: Transport) => {
   const path = derivationPathToString(derivationPath || NetworkDerivationPath[Chain.Ripple]);
-  const transport = await getLedgerTransport();
+  const transport = injectedTransport ?? (await getLedgerTransport());
   const xrpInstance = establishConnection(transport);
 
   const { address, publicKey } = await xrpInstance.getAddress(path);

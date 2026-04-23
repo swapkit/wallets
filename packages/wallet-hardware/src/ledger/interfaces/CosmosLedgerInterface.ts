@@ -1,3 +1,4 @@
+import type Transport from "@ledgerhq/hw-transport";
 import { type DerivationPathArray, LedgerErrorCode, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 
 import { THORChainApp } from "../clients/thorchain/lib";
@@ -10,11 +11,21 @@ export abstract class CosmosLedgerInterface {
   ledgerApp: any;
   chain: "thor" | "cosmos" = "thor";
 
+  private readonly injectedTransport: Transport | null;
+
+  constructor(transport?: Transport) {
+    this.injectedTransport = transport ?? null;
+    if (transport) this.transport = transport;
+  }
+
   checkOrCreateTransportAndLedger = async (forceReconnect = false) => {
     if (!forceReconnect && this.transport && this.ledgerApp) return;
 
     try {
-      this.transport = forceReconnect || !this.transport ? await getLedgerTransport() : this.transport;
+      const needsNewTransport = !this.transport || (forceReconnect && !this.injectedTransport);
+      if (needsNewTransport) {
+        this.transport = this.injectedTransport ?? (await getLedgerTransport());
+      }
 
       switch (this.chain) {
         case "thor": {

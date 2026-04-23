@@ -1,4 +1,5 @@
 import type TronApp from "@ledgerhq/hw-app-trx";
+import type Transport from "@ledgerhq/hw-transport";
 import {
   type DerivationPathArray,
   derivationPathToString,
@@ -13,12 +14,14 @@ export class TronLedgerInterface implements TronSigner {
   derivationPath: string;
   ledgerApp: InstanceType<typeof TronApp> | null = null;
   ledgerTimeout = 50000;
+  private readonly injectedTransport: Transport | null;
 
-  constructor(derivationPath?: DerivationPathArray | string) {
+  constructor(derivationPath?: DerivationPathArray | string, transport?: Transport) {
     this.derivationPath =
       typeof derivationPath === "string"
         ? derivationPath
         : derivationPathToString(derivationPath || NetworkDerivationPath.TRON);
+    this.injectedTransport = transport ?? null;
   }
 
   checkOrCreateTransportAndLedger = async () => {
@@ -27,7 +30,7 @@ export class TronLedgerInterface implements TronSigner {
   };
 
   createTransportAndLedger = async () => {
-    const transport = await getLedgerTransport();
+    const transport = this.injectedTransport ?? (await getLedgerTransport());
     const TronApp = (await import("@ledgerhq/hw-app-trx")).default;
 
     this.ledgerApp = new TronApp(transport);
@@ -82,4 +85,5 @@ export class TronLedgerInterface implements TronSigner {
   };
 }
 
-export const TronLedger = (derivationPath?: DerivationPathArray) => new TronLedgerInterface(derivationPath);
+export const TronLedger = (derivationPath?: DerivationPathArray, transport?: Transport) =>
+  new TronLedgerInterface(derivationPath, transport);

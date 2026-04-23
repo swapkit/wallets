@@ -1,3 +1,4 @@
+import type Transport from "@ledgerhq/hw-transport";
 import { Chain, type DerivationPathArray, type EVMChain, SwapKitError, WalletOption } from "@swapkit/helpers";
 
 import { CosmosLedger } from "../clients/cosmos";
@@ -61,29 +62,35 @@ type LedgerSupportedChain = keyof LedgerSignerMap;
 export const getLedgerClient = async <T extends LedgerSupportedChain>({
   chain,
   derivationPath,
+  transport,
 }: {
   chain: T;
   derivationPath?: DerivationPathArray;
+  transport?: Transport;
 }): Promise<LedgerSignerMap[T]> => {
   const { match } = await import("ts-pattern");
 
   return (
     match(chain as LedgerSupportedChain)
       .returnType<Promise<LedgerSignerMap[T]>>()
-      .with(Chain.THORChain, () => Promise.resolve(new THORChainLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Cosmos, () => Promise.resolve(new CosmosLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Bitcoin, () => Promise.resolve(BitcoinLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.BitcoinCash, () => Promise.resolve(BitcoinCashLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Dash, () => Promise.resolve(DashLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Dogecoin, () => Promise.resolve(DogecoinLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Litecoin, () => Promise.resolve(LitecoinLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Zcash, () => Promise.resolve(ZcashLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Ripple, () => Promise.resolve(XRPLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Tron, () => Promise.resolve(TronLedger(derivationPath) as LedgerSignerMap[T]))
-      .with(Chain.Sui, () => Promise.resolve(SuiLedger(derivationPath) as LedgerSignerMap[T]))
+      .with(Chain.THORChain, () =>
+        Promise.resolve(new THORChainLedger(derivationPath, transport) as LedgerSignerMap[T]),
+      )
+      .with(Chain.Cosmos, () => Promise.resolve(new CosmosLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Bitcoin, () => Promise.resolve(BitcoinLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.BitcoinCash, () =>
+        Promise.resolve(BitcoinCashLedger(derivationPath, transport) as LedgerSignerMap[T]),
+      )
+      .with(Chain.Dash, () => Promise.resolve(DashLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Dogecoin, () => Promise.resolve(DogecoinLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Litecoin, () => Promise.resolve(LitecoinLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Zcash, () => Promise.resolve(ZcashLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Ripple, () => Promise.resolve(XRPLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Tron, () => Promise.resolve(TronLedger(derivationPath, transport) as LedgerSignerMap[T]))
+      .with(Chain.Sui, () => Promise.resolve(SuiLedger(derivationPath, transport) as LedgerSignerMap[T]))
       // @ts-expect-error
       .with(Chain.Near, () => {
-        return Promise.resolve(getNearLedgerClient(derivationPath));
+        return Promise.resolve(getNearLedgerClient(derivationPath, transport));
       })
       .with(
         Chain.Arbitrum,
@@ -100,7 +107,7 @@ export const getLedgerClient = async <T extends LedgerSupportedChain>({
         Chain.XLayer,
         async () => {
           const { getProvider } = await import("@swapkit/toolboxes/evm");
-          const params = { derivationPath, provider: await getProvider(chain as EVMChain) };
+          const params = { derivationPath, provider: await getProvider(chain as EVMChain), transport };
 
           return match(chain as Chain)
             .with(Chain.BinanceSmartChain, () => BinanceSmartChainLedger(params) as LedgerSignerMap[T])
