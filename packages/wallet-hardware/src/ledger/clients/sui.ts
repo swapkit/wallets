@@ -15,14 +15,14 @@ export class SuiLedgerInterface {
   ledgerApp: InstanceType<typeof Sui> | null = null;
   address: string | null = null;
   publicKey: Uint8Array | null = null;
-  private readonly injectedTransport: Transport | null;
+  private readonly injectedTransport?: Transport;
 
   constructor(derivationPath?: DerivationPathArray | string, transport?: Transport) {
     this.derivationPath =
       typeof derivationPath === "string"
         ? derivationPath
         : derivationPathToString(derivationPath || NetworkDerivationPath[Chain.Sui]);
-    this.injectedTransport = transport ?? null;
+    this.injectedTransport = transport;
   }
 
   /**

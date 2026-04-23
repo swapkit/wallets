@@ -22,7 +22,7 @@ class EVMLedgerInterface extends AbstractSigner {
   derivationPath = "";
   ledgerApp: InstanceType<typeof EthereumApp> | null = null;
   ledgerTimeout = 50000;
-  private readonly injectedTransport: Transport | null;
+  private readonly injectedTransport?: Transport;
 
   constructor({
     provider,
@@ -34,7 +34,7 @@ class EVMLedgerInterface extends AbstractSigner {
 
     this.chainId = chainId || ChainId.Ethereum;
     this.derivationPath = typeof derivationPath === "string" ? derivationPath : derivationPathToString(derivationPath);
-    this.injectedTransport = transport ?? null;
+    this.injectedTransport = transport;
 
     Object.defineProperty(this, "provider", { enumerable: true, value: provider || null, writable: false });
   }
@@ -44,7 +44,7 @@ class EVMLedgerInterface extends AbstractSigner {
       chainId: this.chainId,
       derivationPath: this.derivationPath,
       provider,
-      transport: this.injectedTransport ?? undefined,
+      transport: this.injectedTransport,
     });
 
   checkOrCreateTransportAndLedger = async () => {

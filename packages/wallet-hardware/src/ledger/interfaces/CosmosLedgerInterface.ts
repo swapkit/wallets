@@ -11,10 +11,10 @@ export abstract class CosmosLedgerInterface {
   ledgerApp: any;
   chain: "thor" | "cosmos" = "thor";
 
-  private readonly injectedTransport: Transport | null;
+  private readonly injectedTransport?: Transport;
 
   constructor(transport?: Transport) {
-    this.injectedTransport = transport ?? null;
+    this.injectedTransport = transport;
     if (transport) this.transport = transport;
   }
 
@@ -22,6 +22,8 @@ export abstract class CosmosLedgerInterface {
     if (!forceReconnect && this.transport && this.ledgerApp) return;
 
     try {
+      // Consumer owns the lifecycle of an injected transport, so forceReconnect
+      // only refreshes ledgerApp — the transport itself stays as passed in.
       const needsNewTransport = !this.transport || (forceReconnect && !this.injectedTransport);
       if (needsNewTransport) {
         this.transport = this.injectedTransport ?? (await getLedgerTransport());

@@ -14,14 +14,14 @@ export class TronLedgerInterface implements TronSigner {
   derivationPath: string;
   ledgerApp: InstanceType<typeof TronApp> | null = null;
   ledgerTimeout = 50000;
-  private readonly injectedTransport: Transport | null;
+  private readonly injectedTransport?: Transport;
 
   constructor(derivationPath?: DerivationPathArray | string, transport?: Transport) {
     this.derivationPath =
       typeof derivationPath === "string"
         ? derivationPath
         : derivationPathToString(derivationPath || NetworkDerivationPath.TRON);
-    this.injectedTransport = transport ?? null;
+    this.injectedTransport = transport;
   }
 
   checkOrCreateTransportAndLedger = async () => {
