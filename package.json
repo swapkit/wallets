@@ -1,11 +1,11 @@
 {
   "dependencies": {
     "@scure/bip32": "2.0.1",
-    "@swapkit/core": "4.4.19",
+    "@swapkit/core": "4.4.20",
     "@swapkit/helpers": "4.13.0",
     "@swapkit/plugins": "4.6.26",
     "@swapkit/server": "4.2.37",
-    "@swapkit/toolboxes": "4.15.6",
+    "@swapkit/toolboxes": "4.15.7",
     "@swapkit/wallet-core": "4.2.0",
     "@swapkit/wallet-keystore": "4.3.19",
     "ledger-bitcoin": "0.3.0"
@@ -23,11 +23,11 @@
   },
   "name": "swapkit-wallets",
   "overrides": {
-    "@swapkit/core": "4.4.19",
+    "@swapkit/core": "4.4.20",
     "@swapkit/helpers": "4.13.0",
     "@swapkit/plugins": "4.6.26",
     "@swapkit/server": "4.2.37",
-    "@swapkit/toolboxes": "4.15.6",
+    "@swapkit/toolboxes": "4.15.7",
     "@swapkit/types": "0.7.3",
     "@swapkit/wallet-core": "4.2.0",
     "@swapkit/wallet-extensions": "workspace:*",
