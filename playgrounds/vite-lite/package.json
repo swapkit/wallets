@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@swapkit/sdk": "^4.6.9",
+    "@swapkit/sdk": "^4.6.10",
     "@swapkit/ui": "^0.11.0",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
@@ -21,7 +21,11 @@
   },
   "name": "@internal/playground-vite-lite",
   "private": true,
-  "scripts": { "build": "vite build", "dev": "vite", "preview": "vite preview" },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
   "type": "module",
-  "version": "0.0.7"
+  "version": "0.0.8"
 }

@@ -18,8 +18,8 @@
     "@swapkit/toolboxes": "^4.15.7",
     "@swapkit/utxo-signer": "^2.1.1",
     "@swapkit/wallet-core": "^4.2.0",
-    "@swapkit/wallet-extensions": "^4.5.4",
-    "@swapkit/wallet-hardware": "^4.8.4",
+    "@swapkit/wallet-extensions": "^4.5.5",
+    "@swapkit/wallet-hardware": "^4.9.1",
     "@walletconnect/modal": "~2.7.0",
     "@walletconnect/sign-client": "~2.23.0",
     "cosmjs-types": "~0.10.1",
@@ -205,12 +205,21 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": { "access": "public" },
-  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/wallets",
+    "type": "git",
+    "url": "git+https://github.com/swapkit/wallets.git"
+  },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
@@ -219,5 +228,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.8.3"
+  "version": "4.8.4"
 }

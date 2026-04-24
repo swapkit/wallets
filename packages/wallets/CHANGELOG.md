@@ -1,5 +1,15 @@
 # @swapkit-dev/wallets
 
+## 4.8.4
+
+### Patch Changes
+
+- [#31](https://github.com/swapkit/wallets/pull/31) [`ef5f220`](https://github.com/swapkit/wallets/commit/ef5f22005c99f71071205fa7b9b1820ace5a8c8c) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update core dependencies: @swapkit/core@4.4.20,@swapkit/toolboxes@4.15.7
+
+- Updated dependencies [[`ef5f220`](https://github.com/swapkit/wallets/commit/ef5f22005c99f71071205fa7b9b1820ace5a8c8c)]:
+  - @swapkit/wallet-extensions@4.5.5
+  - @swapkit/wallet-hardware@4.9.1
+
 ## 4.8.3
 
 ### Patch Changes
