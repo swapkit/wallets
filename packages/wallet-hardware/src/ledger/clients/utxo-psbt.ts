@@ -40,10 +40,13 @@ function pathToNumberArray(path: string): number[] {
 }
 
 const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
-  let appClient: import("ledger-bitcoin").AppClient | undefined;
-  let masterFingerprint: string | undefined;
-
   return (derivationPathArray?: DerivationPathArray | string, injectedTransport?: Transport) => {
+    // Per-call state — each BitcoinPsbtLedger/LitecoinPsbtLedger invocation has its own
+    // AppClient and master fingerprint so different consumers (e.g. concurrent MCP
+    // sessions on different devices) cannot inherit each other's ledger bindings or xpub.
+    let appClient: import("ledger-bitcoin").AppClient | undefined;
+    let masterFingerprint: string | undefined;
+
     async function getAppClient() {
       if (!appClient) {
         const transport = injectedTransport ?? (await getLedgerTransport());

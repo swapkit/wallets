@@ -102,10 +102,13 @@ const BaseLedgerUTXO = ({
   chain: "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
   additionalSignParams?: Partial<CreateTransactionArg>;
 }) => {
-  let btcApp: InstanceType<typeof BitcoinApp>;
-  let transport: any = null;
-
   return (derivationPathArray?: DerivationPathArray | string, injectedTransport?: Transport) => {
+    // Per-call state — each BitcoinLedger/LitecoinLedger/... invocation has its own
+    // transport + btcApp so different consumers (e.g. concurrent MCP sessions) cannot
+    // cross-contaminate each other's Ledger device handle.
+    let btcApp: InstanceType<typeof BitcoinApp>;
+    let transport: any = null;
+
     async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
       if (checkBtcApp && !btcApp) {
         new SwapKitError("wallet_ledger_connection_error", {
