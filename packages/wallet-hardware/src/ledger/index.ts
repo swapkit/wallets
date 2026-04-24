@@ -31,12 +31,22 @@ import type { Transaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import { getLedgerAddress, getLedgerClient } from "./helpers";
 
+/**
+ * Options passed to `connectLedger` at call time.
+ *
+ * When `transport` is supplied, the consumer opens and owns its lifecycle —
+ * wallet-hardware will use that exact instance for every per-chain Ledger
+ * client and will NOT recreate it on `forceReconnect`. When omitted, the
+ * default browser flow (WebHID / WebUSB via `navigator.usb`) is used.
+ */
+export type ConnectLedgerOptions = { transport?: Transport };
+
 export const ledgerWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectLedger(
       chains: Chain[],
       derivationPath?: DerivationPathArray,
-      { transport }: { transport?: Transport } = {},
+      { transport }: ConnectLedgerOptions = {},
     ) {
       const [chain] = filterSupportedChains({ chains, supportedChains, walletType });
 
@@ -146,11 +156,7 @@ async function getWalletMethods({
   chain,
   derivationPath,
   transport,
-}: {
-  chain: Chain;
-  derivationPath?: DerivationPathArray;
-  transport?: Transport;
-}) {
+}: ConnectLedgerOptions & { chain: Chain; derivationPath?: DerivationPathArray }) {
   switch (chain) {
     case Chain.BitcoinCash:
     case Chain.Bitcoin:
