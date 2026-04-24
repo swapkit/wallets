@@ -1,5 +1,26 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.0
+
+### Minor Changes
+
+- [#29](https://github.com/swapkit/wallets/pull/29) [`6d9b39c`](https://github.com/swapkit/wallets/commit/6d9b39c8bf2baf07cfcd320eeb45533dcec3dd27) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Add an optional `transport` option to `connectLedger`, allowing Node and other non-browser consumers to pass their own `@ledgerhq/hw-transport` instance:
+
+  ```ts
+  import { ledgerWallet } from "@swapkit/wallet-hardware/ledger";
+  import TransportNodeHidSingleton from "@ledgerhq/hw-transport-node-hid-singleton";
+
+  const transport = await TransportNodeHidSingleton.default.open(null);
+
+  await ledgerWallet.connectLedger.connectWallet({ addChain })(
+    chains,
+    derivationPath,
+    { transport }
+  );
+  ```
+
+  When `transport` is omitted, the existing WebHID / WebUSB flow is used exactly as before, so web consumers need no changes. `node-hid` is not added as a runtime dependency; consumers bring their own transport.
+
 ## 4.8.4
 
 ### Patch Changes
