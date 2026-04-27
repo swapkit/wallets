@@ -1,6 +1,7 @@
 import { AssetValue, Chain, ChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 import {
   getKEEPKEYAddress,
   getKEEPKEYMethods,
@@ -10,7 +11,7 @@ import {
   walletTransfer,
 } from "./walletHelpers";
 
-export const keepkeyBexWallet = createWallet({
+export const keepkeyBexWallet: ExtensionWallet<"connectKeepkeyBex"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectKeepkeyBex(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

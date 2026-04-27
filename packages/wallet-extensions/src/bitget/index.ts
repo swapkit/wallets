@@ -1,9 +1,9 @@
 import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-
 import { getWalletMethods } from "./helpers";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const bitgetWallet = createWallet({
+export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectBitget(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

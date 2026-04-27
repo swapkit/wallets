@@ -3,6 +3,7 @@ import { Chain, filterSupportedChains, prepareNetworkSwitch, SwapKitError, Walle
 import { Transaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BitcoinProvider, GetAddressOptions, GetAddressResponse, SignTransactionOptions } from "sats-connect";
+import type { ExtensionWallet } from "../walletTypes";
 
 async function getWalletMethodsForExtension(chain: Chain) {
   switch (chain) {
@@ -124,7 +125,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
   }
 }
 
-export const onekeyWallet = createWallet({
+export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectOnekeyWallet(chains: Chain[]) {
       if (!window.$onekey) {

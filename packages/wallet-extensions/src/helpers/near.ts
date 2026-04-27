@@ -124,7 +124,7 @@ export async function createNearSignerFromProvider(provider: NearBrowserWalletPr
     },
   };
 
-  return signer as NearSigner;
+  return signer as unknown as NearSigner;
 }
 
 /**

@@ -1,7 +1,8 @@
 import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const petraWallet = createWallet({
+export const petraWallet: ExtensionWallet<"connectPetra"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectPetra(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

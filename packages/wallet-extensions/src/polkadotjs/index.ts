@@ -1,7 +1,8 @@
 import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const polkadotWallet = createWallet({
+export const polkadotWallet: ExtensionWallet<"connectPolkadotJs"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectPolkadotJs(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

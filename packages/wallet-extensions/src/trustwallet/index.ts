@@ -11,6 +11,7 @@ import {
 import type { TONTransactionMessage } from "@swapkit/toolboxes/ton";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
 export type TrustWalletTonProvider = {
   adapter: { handler: (request: { method: string; params?: unknown }) => Promise<unknown>; strategy: string };
@@ -20,7 +21,7 @@ export type TrustWalletTonProvider = {
   isConnected(): boolean;
 };
 
-export const trustwalletWallet = createWallet({
+export const trustwalletWallet: ExtensionWallet<"connectTrustWallet"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectTrustWallet(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

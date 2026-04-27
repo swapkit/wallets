@@ -7,9 +7,10 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { getCtrlAddress, getCtrlProvider, walletTransfer } from "./walletHelpers";
 
-export const ctrlWallet = createWallet({
+export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectCtrl(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

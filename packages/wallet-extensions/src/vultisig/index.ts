@@ -12,6 +12,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import {
   getVultisigAddress,
   getVultisigMethods,
@@ -20,7 +21,7 @@ import {
   walletTransfer,
 } from "./walletHelpers";
 
-export const vultisigWallet = createWallet({
+export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectVultisig(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

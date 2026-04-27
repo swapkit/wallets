@@ -1,6 +1,7 @@
 import type { Keplr } from "@keplr-wallet/types";
 import { Chain, ChainId, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
 const cosmostationSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;
 const cosmostationSupportedEVMChains = [
@@ -69,7 +70,7 @@ async function connectEvmChains(chains: Chain[], addChain: any) {
   }
 }
 
-export const cosmostationWallet = createWallet({
+export const cosmostationWallet: ExtensionWallet<"connectCosmostation"> = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectCosmostation(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType: WalletOption.COSMOSTATION });

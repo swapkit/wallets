@@ -8,8 +8,9 @@ import {
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const talismanWallet = createWallet({
+export const talismanWallet: ExtensionWallet<"connectTalisman"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectTalisman(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

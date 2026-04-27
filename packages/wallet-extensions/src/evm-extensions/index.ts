@@ -9,6 +9,7 @@ import {
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BrowserProvider, Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
 export type EVMWalletOptions =
   | WalletOption.BRAVE
@@ -57,7 +58,11 @@ export const getWeb3WalletMethods = async ({
   });
 };
 
-export const evmWallet = createWallet({
+export const evmWallet: ExtensionWallet<
+  "connectEVMWallet",
+  EVMChain[],
+  [chains: Chain[], walletType?: EVMWalletOptions, eip1193Provider?: Eip1193Provider]
+> = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectEVMWallet(
       chains: Chain[],

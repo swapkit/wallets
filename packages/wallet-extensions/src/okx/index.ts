@@ -1,9 +1,9 @@
 import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
-
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { getWalletMethods } from "./helpers";
 
-export const okxWallet = createWallet({
+export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectOkx(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
