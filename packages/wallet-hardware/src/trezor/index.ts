@@ -210,13 +210,16 @@ function buildUtxoOutputsForTrezor(
       continue;
     }
 
-    const finalAddress = chain === Chain.BitcoinCash ? stripPrefix(toCashAddress(outputAddress)) : outputAddress;
-    const isChangeAddress = finalAddress === myAddress;
+    const isBch = chain === Chain.BitcoinCash;
+    const cashAddrWithPrefix = isBch ? toCashAddress(outputAddress) : outputAddress;
+    const isChangeAddress = isBch
+      ? stripPrefix(cashAddrWithPrefix) === stripPrefix(myAddress)
+      : cashAddrWithPrefix === myAddress;
 
     outputs.push(
       isChangeAddress
         ? { address_n, amount: Number(output.amount), script_type: scriptType.output }
-        : { address: finalAddress, amount: Number(output.amount), script_type: "PAYTOADDRESS" },
+        : { address: cashAddrWithPrefix, amount: Number(output.amount), script_type: "PAYTOADDRESS" },
     );
   }
   return outputs;
@@ -480,25 +483,24 @@ async function getTrezorWallet<T extends Chain>({
           toolbox.stripPrefix,
         );
 
-        const result = await TrezorConnect.signTransaction({
-          coin,
-          inputs: inputs.map(({ hash, index, value }) => ({
-            address_n,
-            amount: value,
-            prev_hash: hash,
-            prev_index: index,
-            script_type: scriptType.input,
-          })),
-          outputs,
-        });
+        const trezorInputs = inputs.map(({ hash, index, value }) => ({
+          address_n,
+          amount: value,
+          prev_hash: hash,
+          prev_index: index,
+          script_type: scriptType.input,
+        }));
+
+        const result = await TrezorConnect.signTransaction({ coin, inputs: trezorInputs, outputs });
 
         if (result.success) {
           return result.payload.serializedTx;
         }
 
+        const payload = result.payload as { error?: string; code?: string };
         throw new SwapKitError({
           errorKey: "wallet_trezor_failed_to_sign_transaction",
-          info: { chain, error: (result.payload as { error: string; code?: string }).error },
+          info: { chain, code: payload?.code ?? "unknown", error: payload?.error ?? "unknown", payload },
         });
       };
 
