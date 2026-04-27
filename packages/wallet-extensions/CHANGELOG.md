@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.5.7
+
+### Patch Changes
+
+- [#36](https://github.com/swapkit/wallets/pull/36) [`f2a042b`](https://github.com/swapkit/wallets/commit/f2a042b90f0c1ed41ed8ca931567fe360cb69f6e) Thanks [@ice-chillios](https://github.com/ice-chillios)! - bump deps
+
 ## 4.5.6
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 4.6.12
+
+### Patch Changes
+
+- [#36](https://github.com/swapkit/wallets/pull/36) [`f2a042b`](https://github.com/swapkit/wallets/commit/f2a042b90f0c1ed41ed8ca931567fe360cb69f6e) Thanks [@ice-chillios](https://github.com/ice-chillios)! - bump deps
+
+- Updated dependencies [[`f2a042b`](https://github.com/swapkit/wallets/commit/f2a042b90f0c1ed41ed8ca931567fe360cb69f6e)]:
+  - @swapkit/wallets@4.8.6
+
 ## 4.6.11
 
 ### Patch Changes
