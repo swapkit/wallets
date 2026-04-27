@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.4
+
+### Patch Changes
+
+- [#38](https://github.com/swapkit/wallets/pull/38) [`8d52c70`](https://github.com/swapkit/wallets/commit/8d52c70e8aa428a9f717311d68b8e7dc9237c194) Thanks [@mfaizan1](https://github.com/mfaizan1)! - Fix Trezor BCH transaction signing: send the prefixed CashAddr to Trezor as the output address while comparing prefix-stripped values for change-output detection. Also enrich the `wallet_trezor_failed_to_sign_transaction` error with `code` and the raw `payload` so failures can be diagnosed.
+
 ## 4.9.3
 
 ### Patch Changes
