@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.5
+
+### Patch Changes
+
+- [`4499da0`](https://github.com/swapkit/wallets/commit/4499da06f6077b097e1c1d70906350ac764bfece) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - bump deps for all sk
+
 ## 4.9.4
 
 ### Patch Changes
