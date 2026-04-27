@@ -11,8 +11,8 @@ import {
   SwapKitError,
   type TCLikeChain,
   WalletOption,
-} from "@swapkit-dev/helpers";
-import type { SolanaProvider } from "@swapkit-dev/toolboxes/solana";
+} from "@swapkit/helpers";
+import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { Eip1193Provider } from "ethers";
 import { match } from "ts-pattern";
 

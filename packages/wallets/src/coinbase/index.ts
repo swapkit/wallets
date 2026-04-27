@@ -1,4 +1,4 @@
-import { Chain, ChainToChainId, filterSupportedChains, SKConfig, WalletOption } from "@swapkit-dev/helpers";
+import { Chain, ChainToChainId, filterSupportedChains, SKConfig, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 
 import { getWalletMethods } from "./signer";
@@ -27,6 +27,16 @@ export const coinbaseWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.XLayer]: true,
+  },
   name: "connectCoinbaseWallet",
   supportedChains: [
     Chain.Arbitrum,

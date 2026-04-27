@@ -1,7 +1,8 @@
-import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit-dev/helpers";
+import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const polkadotWallet = createWallet({
+export const polkadotWallet: ExtensionWallet<"connectPolkadotJs"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectPolkadotJs(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -16,6 +17,8 @@ export const polkadotWallet = createWallet({
 
       return true;
     },
+  // Polkadot is not in V3 swap chain list
+  directSigningSupport: {},
   name: "connectPolkadotJs",
   supportedChains: [Chain.Polkadot],
   walletType: WalletOption.POLKADOT_JS,
@@ -26,7 +29,7 @@ export const POLKADOT_SUPPORTED_CHAINS = getWalletSupportedChains(polkadotWallet
 async function getWalletMethods(chain: Chain) {
   switch (chain) {
     case Chain.Polkadot: {
-      const { getSubstrateToolbox } = await import("@swapkit-dev/toolboxes/substrate");
+      const { getSubstrateToolbox } = await import("@swapkit/toolboxes/substrate");
       const injectedExtension = window?.injectedWeb3?.["polkadot-js"];
 
       const rawExtension = await injectedExtension?.enable?.("polkadot-js");

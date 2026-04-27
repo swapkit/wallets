@@ -1,17 +1,15 @@
-import {
-  Chain,
-  ChainId,
-  ChainToChainId,
-  filterSupportedChains,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit-dev/helpers";
+import { Chain, ChainId, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { chainRegistry } from "./chainRegistry";
 
 const keplrSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;
 
-export const keplrWallet = createWallet({
+export const keplrWallet: ExtensionWallet<
+  "connectKeplr",
+  Chain[],
+  [chains: Chain[], walletType?: WalletOption.KEPLR | WalletOption.LEAP]
+> = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectKeplr(
       chains: Chain[],
@@ -36,7 +34,7 @@ export const keplrWallet = createWallet({
           const signer = await keplrClient?.getOfflineSignerAuto(chainId);
           if (!signer) throw new SwapKitError("wallet_keplr_signer_not_found");
 
-          const { getCosmosToolbox } = await import("@swapkit-dev/toolboxes/cosmos");
+          const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
 
           const accounts = await signer.getAccounts();
           if (!accounts?.[0]?.address) throw new SwapKitError("wallet_keplr_no_accounts");
@@ -50,6 +48,7 @@ export const keplrWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: { [Chain.Cosmos]: true, [Chain.Kujira]: true, [Chain.Noble]: true, [Chain.THORChain]: true },
   name: "connectKeplr",
   supportedChains: [Chain.Cosmos, Chain.Kujira, Chain.Noble, Chain.THORChain],
 });

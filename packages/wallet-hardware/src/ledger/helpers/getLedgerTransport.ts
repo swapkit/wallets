@@ -1,5 +1,5 @@
 import type Transport from "@ledgerhq/hw-transport";
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 
 const getNavigatorUsb = () =>
   navigator?.usb as unknown as {

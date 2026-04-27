@@ -6,7 +6,7 @@ import {
   SwapKitError,
   SwapKitNumber,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import type { JsonRpcProvider, Provider, TransactionRequest, TypedDataDomain, TypedDataField } from "ethers";
 
 type TrezorEVMSignerParams = {
@@ -80,7 +80,7 @@ export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEV
       explicitPrimaryType?: string,
     ) => {
       const TrezorConnect = (await import("@trezor/connect-web")).default;
-      const { buildEIP712DomainType } = await import("@swapkit-dev/toolboxes/evm");
+      const { buildEIP712DomainType } = await import("@swapkit/toolboxes/evm");
       const { TypedDataEncoder } = await import("ethers");
 
       const { EIP712Domain: _, ...filteredTypes } = types;
@@ -137,7 +137,7 @@ export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEV
       }
 
       const TrezorConnect = (await import("@trezor/connect-web")).default;
-      const { toHexString } = await import("@swapkit-dev/toolboxes/evm");
+      const { toHexString } = await import("@swapkit/toolboxes/evm");
       const { Transaction } = await import("ethers");
 
       const additionalFields = isEIP1559

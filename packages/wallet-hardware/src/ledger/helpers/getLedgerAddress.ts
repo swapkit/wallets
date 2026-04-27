@@ -1,4 +1,4 @@
-import { Chain, SwapKitError, WalletOption } from "@swapkit-dev/helpers";
+import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 
 import type { getNearLedgerClient } from "../clients/near";
 import type { SuiLedger } from "../clients/sui";

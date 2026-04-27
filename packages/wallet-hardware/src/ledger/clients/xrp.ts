@@ -1,7 +1,7 @@
 import Xrp from "@ledgerhq/hw-app-xrp";
 import type Transport from "@ledgerhq/hw-transport";
-import { Chain, type DerivationPathArray, derivationPathToString, NetworkDerivationPath } from "@swapkit-dev/helpers";
-import type { RippleTransaction } from "@swapkit-dev/toolboxes/ripple";
+import { Chain, type DerivationPathArray, derivationPathToString, NetworkDerivationPath } from "@swapkit/helpers";
+import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
 import { encode } from "ripple-binary-codec";
 import type { Payment } from "xrpl";
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
@@ -22,15 +22,15 @@ function establishConnection(transport: Transport) {
   return new Xrp(transport);
 }
 
-export const XRPLedger = async (derivationPath?: DerivationPathArray) => {
+export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTransport?: Transport) => {
   const path = derivationPathToString(derivationPath || NetworkDerivationPath[Chain.Ripple]);
-  const transport = await getLedgerTransport();
+  const transport = injectedTransport ?? (await getLedgerTransport());
   const xrpInstance = establishConnection(transport);
 
   const { address, publicKey } = await xrpInstance.getAddress(path);
 
   async function signTransaction(transaction: Payment | RippleTransaction) {
-    const { hashes } = await import("@swapkit-dev/toolboxes/ripple");
+    const { hashes } = await import("@swapkit/toolboxes/ripple");
     const cleanedTxWithPubKey = cleanTransactionObject(transaction);
     const transactionJSON = {
       ...cleanedTxWithPubKey,

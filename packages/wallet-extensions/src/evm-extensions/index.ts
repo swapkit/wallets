@@ -3,14 +3,13 @@ import {
   type EVMChain,
   EVMChains,
   filterSupportedChains,
-  getChainConfig,
   prepareNetworkSwitch,
   SwapKitError,
-  switchEVMWalletNetwork,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BrowserProvider, Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
 export type EVMWalletOptions =
   | WalletOption.BRAVE
@@ -47,21 +46,10 @@ export const getWeb3WalletMethods = async ({
   provider: BrowserProvider;
 }) => {
   if (!walletProvider) throw new SwapKitError("wallet_evm_extensions_not_found");
-  const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+  const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
 
   const signer = await provider.getSigner();
   const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
-  const { chainIdHex } = getChainConfig(chain);
-
-  const currentNetwork = await provider.getNetwork();
-  if (currentNetwork.chainId.toString() !== chainIdHex) {
-    try {
-      const networkParams = toolbox.getNetworkParams();
-      await switchEVMWalletNetwork(provider, chain, networkParams);
-    } catch {
-      throw new SwapKitError("wallet_evm_extensions_failed_to_switch_network", { chain });
-    }
-  }
 
   return prepareNetworkSwitch({
     chain,
@@ -70,7 +58,11 @@ export const getWeb3WalletMethods = async ({
   });
 };
 
-export const evmWallet = createWallet({
+export const evmWallet: ExtensionWallet<
+  "connectEVMWallet",
+  EVMChain[],
+  [chains: Chain[], walletType?: EVMWalletOptions, eip1193Provider?: Eip1193Provider]
+> = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectEVMWallet(
       chains: Chain[],
@@ -107,6 +99,7 @@ export const evmWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: Object.fromEntries(EVMChains.map((chain) => [chain, true])),
   name: "connectEVMWallet",
   supportedChains: [...EVMChains] as EVMChain[],
 });

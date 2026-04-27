@@ -4,13 +4,13 @@ import {
   filterSupportedChains,
   prepareNetworkSwitch,
   SwapKitError,
-  switchEVMWalletNetwork,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const talismanWallet = createWallet({
+export const talismanWallet: ExtensionWallet<"connectTalisman"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectTalisman(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -25,6 +25,21 @@ export const talismanWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.Berachain]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Chainflip]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Gnosis]: true,
+    [Chain.Monad]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.XLayer]: true,
+    // Polkadot: not in V3 chain list
+  },
   name: "connectTalisman",
   supportedChains: [
     Chain.Berachain,
@@ -53,7 +68,7 @@ async function getWeb3WalletMethods({
   walletProvider: Eip1193Provider | undefined;
   chain: EVMChain;
 }) {
-  const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+  const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
   const { BrowserProvider } = await import("ethers");
 
   if (!walletProvider) {
@@ -63,17 +78,6 @@ async function getWeb3WalletMethods({
   const provider = new BrowserProvider(walletProvider, "any");
   const signer = await provider.getSigner();
   const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
-
-  try {
-    if (chain !== Chain.Ethereum) {
-      await switchEVMWalletNetwork(provider, chain, toolbox.getNetworkParams());
-    }
-  } catch {
-    throw new SwapKitError({
-      errorKey: "wallet_failed_to_add_or_switch_network",
-      info: { chain, wallet: WalletOption.TALISMAN },
-    });
-  }
 
   return prepareNetworkSwitch({ chain, provider, toolbox });
 }
@@ -103,7 +107,7 @@ async function getWalletMethods(chain: Chain) {
 
     case Chain.Polkadot:
     case Chain.Chainflip: {
-      const { getSubstrateToolbox, SubstrateNetwork } = await import("@swapkit-dev/toolboxes/substrate");
+      const { getSubstrateToolbox, SubstrateNetwork } = await import("@swapkit/toolboxes/substrate");
 
       const injectedExtension = window?.injectedWeb3?.talisman;
       const rawExtension = await injectedExtension?.enable?.("talisman");

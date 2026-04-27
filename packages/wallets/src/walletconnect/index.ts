@@ -8,10 +8,10 @@ import {
   SKConfig,
   SwapKitError,
   WalletOption,
-} from "@swapkit-dev/helpers";
-import type { ThorchainDepositParams } from "@swapkit-dev/toolboxes/cosmos";
-import type { NearSigner } from "@swapkit-dev/toolboxes/near";
-import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit-dev/toolboxes/tron";
+} from "@swapkit/helpers";
+import type { ThorchainDepositParams } from "@swapkit/toolboxes/cosmos";
+import type { NearSigner } from "@swapkit/toolboxes/near";
+import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type { SignClient } from "@walletconnect/sign-client";
@@ -65,6 +65,20 @@ export const walletconnectWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Aurora]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.Berachain]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Monad]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.XLayer]: true,
+    // Cosmos/Kujira/Maya/THORChain: cosmos toolbox built without signer; Tron/Near: signer wired but pending hardening (V3 plan PRs)
+  },
   name: "connectWalletconnect",
   supportedChains: [
     Chain.Arbitrum,
@@ -107,15 +121,17 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
   switch (chain) {
     case Chain.Arbitrum:
+    case Chain.Aurora:
     case Chain.Avalanche:
     case Chain.Base:
+    case Chain.Berachain:
     case Chain.BinanceSmartChain:
     case Chain.Ethereum:
     case Chain.Monad:
     case Chain.Optimism:
     case Chain.Polygon:
     case Chain.XLayer: {
-      const { getProvider, getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+      const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
 
       const provider = await getProvider(chain);
       const signer = await getEVMSigner({ chain, provider, walletconnect });
@@ -142,7 +158,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
         fromBase64,
         getDefaultChainFee,
         parseAminoMessageForDirectSigning,
-      } = await import("@swapkit-dev/toolboxes/cosmos");
+      } = await import("@swapkit/toolboxes/cosmos");
       const toolbox = await getCosmosToolbox(chain);
 
       const fee = getDefaultChainFee(chain);
@@ -217,7 +233,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
     }
 
     case Chain.Near: {
-      const { getNearToolbox } = await import("@swapkit-dev/toolboxes/near");
+      const { getNearToolbox } = await import("@swapkit/toolboxes/near");
       const { DEFAULT_NEAR_METHODS } = await import("./constants");
 
       // Create a NEAR signer that uses WalletConnect
@@ -271,7 +287,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
     }
 
     case Chain.Tron: {
-      const { getTronToolbox } = await import("@swapkit-dev/toolboxes/tron");
+      const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
       const { DEFAULT_TRON_METHODS } = await import("./constants");
 
       // Create a Tron signer that uses WalletConnect

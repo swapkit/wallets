@@ -1,0 +1,63 @@
+{
+  "author": "swapkit-dev",
+  "dependencies": {
+    "@stricahq/typhonjs": "~3.0.1",
+    "@swapkit/core": "^4.4.21",
+    "@swapkit/helpers": "^4.13.5",
+    "@swapkit/plugins": "^4.6.35",
+    "@swapkit/server": "^4.2.46",
+    "@swapkit/toolboxes": "^4.15.8",
+    "@swapkit/wallet-core": "^4.2.5",
+    "@swapkit/wallet-keystore": "^4.3.27",
+    "@swapkit/wallets": "workspace:*",
+    "cosmjs-types": "0.10.1"
+  },
+  "description": "SwapKit - SDK",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./core": {
+      "bun": "./src/core.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs",
+      "types": "./dist/types/core.d.ts"
+    },
+    "./plugins": {
+      "bun": "./src/plugins.ts",
+      "import": "./dist/plugins.js",
+      "require": "./dist/plugins.cjs",
+      "types": "./dist/types/plugins.d.ts"
+    },
+    "./server": {
+      "bun": "./src/server.ts",
+      "import": "./dist/server.js",
+      "require": "./dist/server.cjs",
+      "types": "./dist/types/server.d.ts"
+    },
+    "./wallets": {
+      "bun": "./src/wallets.ts",
+      "import": "./dist/wallets.js",
+      "require": "./dist/wallets.cjs",
+      "types": "./dist/types/wallets.d.ts"
+    }
+  },
+  "files": ["dist/", "src/"],
+  "homepage": "https://github.com/swapkit/wallets",
+  "license": "SEE LICENSE IN LICENSE",
+  "name": "@swapkit/sdk",
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/sdk", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
+  "scripts": {
+    "build": "bun run ./build.ts",
+    "build:clean": "rm -rf dist && bun run ./build.ts",
+    "clean": "rm -rf dist node_modules *.tsbuildinfo",
+    "type-check": "bun tsc --noEmit",
+    "type-check:go": "tsgo"
+  },
+  "type": "module",
+  "version": "4.6.11"
+}

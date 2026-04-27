@@ -1,5 +1,5 @@
-import type { Chain, DerivationPathArray } from "@swapkit-dev/helpers";
-import { SwapKitError, WalletOption } from "@swapkit-dev/helpers";
+import type { Chain, DerivationPathArray } from "@swapkit/helpers";
+import { SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { JsonRpcProvider, Provider, Signer, TypedDataDomain, TypedDataField } from "ethers";
 
 type OneKeyEVMSignerParams = {

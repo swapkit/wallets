@@ -1,4 +1,4 @@
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 
 export interface Coin {
   readonly denom: string;

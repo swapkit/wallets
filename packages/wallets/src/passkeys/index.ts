@@ -7,11 +7,10 @@ import {
   prepareNetworkSwitch,
   SKConfig,
   SwapKitError,
-  switchEVMWalletNetwork,
   WalletOption,
-} from "@swapkit-dev/helpers";
-import type { SolanaProvider } from "@swapkit-dev/toolboxes/solana";
-import { Transaction } from "@swapkit-dev/utxo-signer";
+} from "@swapkit/helpers";
+import type { SolanaProvider } from "@swapkit/toolboxes/solana";
+import { Transaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import {
   AddressPurpose,
@@ -37,7 +36,7 @@ async function getPasskeyWallet() {
 function getWalletMethods({ wallet, chain: paramChain }: { wallet: Wallet; chain: Chain }) {
   return match(paramChain)
     .with(Chain.Bitcoin, async (chain) => {
-      const { getUtxoToolbox } = await import("@swapkit-dev/toolboxes/utxo");
+      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const provider = await wallet.getProvider("bitcoin");
 
       if (!provider) {
@@ -101,7 +100,7 @@ function getWalletMethods({ wallet, chain: paramChain }: { wallet: Wallet; chain
       return { ...toolbox, address };
     })
     .with(...EVMChains, async (chain) => {
-      const { getProvider, getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+      const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
       const { BrowserProvider } = await import("ethers");
 
       const walletProvider = await wallet.getProvider("ethereum");
@@ -118,19 +117,10 @@ function getWalletMethods({ wallet, chain: paramChain }: { wallet: Wallet; chain
       const address = await signer.getAddress();
       const toolbox = await getEvmToolboxAsync(chain, { provider: jsonRpcProvider, signer });
 
-      try {
-        if (chain !== Chain.Ethereum) {
-          const networkParams = toolbox.getNetworkParams();
-          await switchEVMWalletNetwork(browserProvider, chain, networkParams);
-        }
-      } catch {
-        throw new SwapKitError("wallet_passkeys_failed_to_switch_network", { chain });
-      }
-
       return { ...prepareNetworkSwitch({ chain, provider: browserProvider, toolbox }), address };
     })
     .with(Chain.Solana, async () => {
-      const { getSolanaToolbox } = await import("@swapkit-dev/toolboxes/solana");
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
       const provider = (await wallet.getProvider("solana")) as any as SolanaProvider;
       const providerConnection = await provider.connect();
       const address = providerConnection.publicKey.toString();
@@ -178,6 +168,11 @@ export const passkeysWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
+    [Chain.Bitcoin]: true,
+    [Chain.Solana]: true,
+  },
   name: "connectPasskeys",
   supportedChains: [...EVMChains, Chain.Bitcoin, Chain.Solana],
   walletType: WalletOption.PASSKEYS,

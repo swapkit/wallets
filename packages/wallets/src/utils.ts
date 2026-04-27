@@ -1,4 +1,4 @@
-import { WalletOption } from "@swapkit-dev/helpers";
+import { WalletOption } from "@swapkit/helpers";
 import type { SKWallets } from "./types";
 
 export async function loadWallet<W extends WalletOption>(walletOption: W): Promise<SKWallets[W]> {
@@ -40,16 +40,13 @@ export async function loadWallet<W extends WalletOption>(walletOption: W): Promi
       async () => (await import("@swapkit/wallet-extensions/trustwallet")).trustwalletWallet,
     )
 
-    .with(WalletOption.KEYSTORE, async () => (await import("@swapkit/wallet-keystore")).keystoreWallet)
+    .with(WalletOption.KEYSTORE, async () => (await import("./keystore")).keystoreWallet)
     .with(WalletOption.TREZOR, async () => (await import("@swapkit/wallet-hardware/trezor")).trezorWallet)
     .with(WalletOption.LEDGER, async () => (await import("@swapkit/wallet-hardware/ledger")).ledgerWallet)
     .with(WalletOption.PASSKEYS, async () => (await import("./passkeys")).passkeysWallet)
     .with(WalletOption.PETRA, async () => (await import("@swapkit/wallet-extensions/petra")).petraWallet)
     .with(WalletOption.PHANTOM, async () => (await import("@swapkit/wallet-extensions/phantom")).phantomWallet)
-    .with(
-      WalletOption.POLKADOT_JS,
-      async () => (await import("@swapkit/wallet-extensions/polkadotjs")).polkadotWallet,
-    )
+    .with(WalletOption.POLKADOT_JS, async () => (await import("@swapkit/wallet-extensions/polkadotjs")).polkadotWallet)
     .with(WalletOption.RADIX_WALLET, async () => (await import("./radix")).radixWallet)
     .with(WalletOption.TALISMAN, async () => (await import("@swapkit/wallet-extensions/talisman")).talismanWallet)
     .with(WalletOption.TRONLINK, async () => (await import("@swapkit/wallet-extensions/tronlink")).tronlinkWallet)

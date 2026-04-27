@@ -1,6 +1,6 @@
-import { $, Glob } from "bun";
 import { existsSync, mkdirSync, readdirSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { $ } from "bun";
 
 /**
  * Bun stores dependencies in node_modules/.bun/ instead of hoisting them
@@ -41,7 +41,7 @@ function symlinkBunDeps() {
 }
 
 const dtsPlugin = {
-  name: "@swapkit-dev/bun-dts-plugin",
+  name: "@swapkit/bun-dts-plugin",
   setup: async (pkgName: string) => {
     const scope = `./packages/${pkgName}`;
 
@@ -82,7 +82,7 @@ const dtsPlugin = {
         console.error(Buffer.from(error.stdout).toString());
       }
       throw new Error(
-        `Error building @swapkit-dev/${pkgName} d.ts files
+        `Error building @swapkit/${pkgName} d.ts files
          Fix the errors above and run "bun build:dts" again`,
       );
     } finally {
@@ -91,20 +91,13 @@ const dtsPlugin = {
   },
 };
 
-export const orderedPackages = [
-  "wallet-core",
-  "wallet-extensions",
-  "wallet-hardware",
-  "wallet-keystore",
-  "wallet-mobile",
-  "wallets",
-];
+export const orderedPackages = ["wallet-extensions", "wallet-hardware", "wallet-mobile", "wallets", "sdk"];
 
 // Symlink .bun/ deps to standard node_modules/ paths so tsc can resolve them
 console.info("Symlinking .bun/ dependencies for tsc compatibility...");
 await symlinkBunDeps();
 
 for (const pkg of orderedPackages) {
-  console.info(`Building @swapkit-dev/${pkg} d.ts files`);
+  console.info(`Building @swapkit/${pkg} d.ts files`);
   await dtsPlugin.setup(pkg);
 }

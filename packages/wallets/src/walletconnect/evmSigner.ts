@@ -1,4 +1,4 @@
-import { type EVMChain, SwapKitError, WalletOption } from "@swapkit-dev/helpers";
+import { type EVMChain, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type {
   JsonRpcProvider,
   Provider,
@@ -89,7 +89,7 @@ class WalletconnectSigner extends AbstractSigner {
   };
 
   sendTransaction = async ({ from, to, value, data }: TransactionRequest) => {
-    const { toHexString } = await import("@swapkit-dev/toolboxes/evm");
+    const { toHexString } = await import("@swapkit/toolboxes/evm");
 
     const baseTx = { data, from, to, value: toHexString(BigInt(value || 0)) };
     const response = await this.walletconnect?.client.request({

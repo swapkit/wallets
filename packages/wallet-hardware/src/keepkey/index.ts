@@ -7,7 +7,7 @@ import {
   SKConfig,
   SwapKitError,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 
 export type { PairingInfo } from "@keepkey/keepkey-sdk";
 
@@ -52,6 +52,21 @@ export const keepkeyWallet = createWallet({
       );
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.Berachain]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Gnosis]: true,
+    [Chain.Monad]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.Ripple]: true,
+    [Chain.XLayer]: true,
+    // BTC/BCH/DASH/DOGE/LTC/Cosmos/THORChain/Maya: pending KeepKey SDK signer wrappers (V3 plan PRs)
+  },
   name: "connectKeepkey",
   supportedChains: [
     Chain.Arbitrum,
@@ -89,7 +104,7 @@ async function getWalletMethods({
   chain: Chain;
   derivationPath?: DerivationPathArray;
 }) {
-  const { getProvider, getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+  const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
 
   switch (chain) {
     case Chain.BinanceSmartChain:

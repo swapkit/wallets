@@ -1,8 +1,9 @@
-import { Chain, filterSupportedChains, WalletOption } from "@swapkit-dev/helpers";
+import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
 
-export const tronlinkWallet = createWallet({
+export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectTronLink(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -38,6 +39,7 @@ export const tronlinkWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: { [Chain.Tron]: true },
   name: "connectTronLink",
   supportedChains: [Chain.Tron],
   walletType: WalletOption.TRONLINK,

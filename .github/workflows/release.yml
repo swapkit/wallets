@@ -2,6 +2,9 @@ name: Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - develop
 
 jobs:
   build-lint-test:
@@ -45,8 +48,14 @@ jobs:
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
 
+      - name: Setup Node with working npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - name: Copy npmrc config
         run: cp .npmrc.prod .npmrc

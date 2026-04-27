@@ -1,9 +1,9 @@
-import { Chain, filterSupportedChains, WalletOption } from "@swapkit-dev/helpers";
-
+import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { getWalletMethods } from "./helpers";
 
-export const okxWallet = createWallet({
+export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectOkx(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -17,6 +17,24 @@ export const okxWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Aurora]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.Berachain]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
+    [Chain.Cosmos]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Gnosis]: true,
+    [Chain.Monad]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.Tron]: true,
+    [Chain.XLayer]: true,
+    // [Chain.Aptos]: blocked on toolbox
+  },
   name: "connectOkx",
   supportedChains: [
     Chain.Arbitrum,

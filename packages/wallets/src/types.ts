@@ -1,4 +1,4 @@
-import { WalletOption } from "@swapkit-dev/helpers";
+import { WalletOption } from "@swapkit/helpers";
 import type { bitgetWallet } from "@swapkit/wallet-extensions/bitget";
 import type { cosmostationWallet } from "@swapkit/wallet-extensions/cosmostation";
 import type { ctrlWallet } from "@swapkit/wallet-extensions/ctrl";
@@ -60,6 +60,47 @@ export type SKWallets = {
 };
 
 export type SKConnectWallets = SKWallets[keyof SKWallets];
+
+export type HDWalletAccountParams = { accountIndex?: number };
+
+export type HDWalletDeriveAddressParams = HDWalletAccountParams & { index: number; change?: boolean };
+
+export type HDWalletDeriveAddressesParams = HDWalletAccountParams & {
+  count: number;
+  startIndex?: number;
+  change?: boolean;
+};
+
+export type HDWalletDerivedAddress = {
+  address: string;
+  index: number;
+  change: boolean;
+  path: string;
+  accountIndex: number;
+  pubkey: string;
+};
+
+export type HDWalletExtendedPublicKey = {
+  xpub: string;
+  path: string;
+  accountIndex: number;
+  xpubSegwit?: string;
+  chainCode?: string;
+  publicKey?: string;
+  fingerprint?: number;
+  depth?: number;
+};
+
+export type HDWalletDiscoveryMethods = {
+  getExtendedPublicKey?: () =>
+    | Promise<string | HDWalletExtendedPublicKey | undefined>
+    | string
+    | HDWalletExtendedPublicKey
+    | undefined;
+  getExtendedPublicKeyInfo: (params?: HDWalletAccountParams) => Promise<HDWalletExtendedPublicKey | undefined>;
+  deriveAddressAtIndex: (params: HDWalletDeriveAddressParams) => Promise<HDWalletDerivedAddress | undefined>;
+  deriveAddresses: (params: HDWalletDeriveAddressesParams) => Promise<HDWalletDerivedAddress[]>;
+};
 
 export type SKWalletsSupportedChains = {
   [WalletOption.BITGET]: typeof bitgetWallet.connectBitget.supportedChains;

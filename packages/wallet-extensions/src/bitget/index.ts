@@ -1,9 +1,9 @@
-import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit-dev/helpers";
+import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-
+import type { ExtensionWallet } from "../walletTypes";
 import { getWalletMethods } from "./helpers";
 
-export const bitgetWallet = createWallet({
+export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectBitget(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -18,6 +18,14 @@ export const bitgetWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
+    [Chain.Bitcoin]: true,
+    [Chain.Cosmos]: true,
+    [Chain.Solana]: true,
+    [Chain.Tron]: true,
+    // [Chain.Aptos]: blocked on toolbox — getAptosToolbox needs to accept AptosExtensionProvider
+  },
   name: "connectBitget",
   supportedChains: [...EVMChains, Chain.Cosmos, Chain.Bitcoin, Chain.Solana, Chain.Tron],
   walletType: WalletOption.BITGET,

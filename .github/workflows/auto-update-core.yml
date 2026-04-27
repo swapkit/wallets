@@ -22,7 +22,7 @@ jobs:
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
 
-      - name: Update @swapkit-dev/* dependencies
+      - name: Update @swapkit/* dependencies
         shell: bash
         run: |
           echo "📦 SDK published new versions:"
@@ -46,6 +46,16 @@ jobs:
                 echo "  ✅ Updated $PKG in $pkg_json (devDependencies)"
               fi
             done
+
+            # Also sync root package.json dependencies + overrides (prevents transitive drift)
+            if jq -e ".dependencies[\"$PKG\"]" package.json > /dev/null 2>&1; then
+              jq ".dependencies[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
+              echo "  ✅ Updated $PKG in root package.json (dependencies)"
+            fi
+            if jq -e ".overrides[\"$PKG\"]" package.json > /dev/null 2>&1; then
+              jq ".overrides[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
+              echo "  ✅ Updated $PKG in root package.json (overrides)"
+            fi
           done
 
       - name: Install updated dependencies
@@ -107,12 +117,12 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update @swapkit-dev/* core dependencies"
+          commit-message: "chore: update @swapkit/* core dependencies"
           title: "chore: auto-update core dependencies"
           body: |
             ## Auto-update from core repo
 
-            The core repo published new package versions. This PR bumps all `@swapkit-dev/*` dependencies.
+            The core repo published new package versions. This PR bumps all `@swapkit/*` dependencies.
 
             **Updated packages:**
             ```

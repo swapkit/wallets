@@ -1,8 +1,9 @@
 import type { AminoSignResponse, OfflineAminoSigner, StdSignature, StdSignDoc } from "@cosmjs/amino";
+import type { OfflineDirectSigner } from "@cosmjs/proto-signing";
 import type { Keplr } from "@keplr-wallet/types";
-import type { EthereumWindowProvider } from "@swapkit-dev/helpers";
-import type { SolanaProvider } from "@swapkit-dev/toolboxes/solana";
-import type { SubstrateInjectedExtension } from "@swapkit-dev/toolboxes/substrate";
+import type { EthereumWindowProvider } from "@swapkit/helpers";
+import type { SolanaProvider } from "@swapkit/toolboxes/solana";
+import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
@@ -90,6 +91,7 @@ declare global {
           signature: StdSignature,
         ) => Promise<boolean>;
         getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
+        getOfflineSignerAuto: (chainId: string) => Promise<OfflineAminoSigner | OfflineDirectSigner>;
       };
       solana: SolanaProvider;
       ethereum: EthereumWindowProvider;

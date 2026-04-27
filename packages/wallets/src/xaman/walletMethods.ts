@@ -1,4 +1,4 @@
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 import type { Xumm } from "xumm";
 import type { XamanPaymentParams, XamanTrustSetParams } from "./types";
 
@@ -21,11 +21,16 @@ export const connectXamanWallet = async (xumm: Xumm) => {
   }
 };
 
-async function submitXamanPayload(
+export async function submitXamanPayload(
   xumm: Xumm,
-  transaction: Parameters<NonNullable<Xumm["payload"]>["createAndSubscribe"]>[0],
+  txjson: Record<string, unknown>,
+  { submit = true }: { submit?: boolean } = {},
 ) {
-  const subscription = await xumm.payload?.createAndSubscribe(transaction, (event) => {
+  const payload = (submit ? txjson : { options: { submit: false }, txjson }) as Parameters<
+    NonNullable<Xumm["payload"]>["createAndSubscribe"]
+  >[0];
+
+  const subscription = await xumm.payload?.createAndSubscribe(payload, (event) => {
     if ("signed" in event.data) return event.data;
     return undefined;
   });
@@ -58,6 +63,7 @@ async function submitXamanPayload(
 
   const transactionId = payloadDetails.response?.txid || "";
   const account = payloadDetails.response?.account || "";
+  const hex = payloadDetails.response?.hex || "";
 
   if (!transactionId) {
     throw new SwapKitError("wallet_xaman_transaction_failed");
@@ -67,7 +73,7 @@ async function submitXamanPayload(
     deepLink: created.next?.always || "",
     payloadId: created.uuid || "",
     qrCode: created.refs?.qr_png || "",
-    result: { account, reason: undefined, success: true, transactionId },
+    result: { account, hex, reason: undefined, success: true, transactionId },
     websocketUrl: created.refs?.websocket_status || "",
   };
 }

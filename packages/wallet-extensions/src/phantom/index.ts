@@ -5,10 +5,11 @@ import {
   type GenericTransferParams,
   SwapKitError,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
-export const phantomWallet = createWallet({
+export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectPhantom(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -29,6 +30,7 @@ export const phantomWallet = createWallet({
         throw new SwapKitError("wallet_connection_rejected_by_user", error);
       }
     },
+  directSigningSupport: { [Chain.Bitcoin]: true, [Chain.Ethereum]: true, [Chain.Monad]: true, [Chain.Solana]: true },
   name: "connectPhantom",
   supportedChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Monad, Chain.Solana],
   walletType: WalletOption.PHANTOM,
@@ -46,8 +48,8 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
       if (!provider?.isPhantom) {
         throw new SwapKitError("wallet_phantom_not_found");
       }
-      const { getUtxoToolbox } = await import("@swapkit-dev/toolboxes/utxo");
-      const { Transaction } = await import("@swapkit-dev/utxo-signer");
+      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
+      const { Transaction } = await import("@swapkit/utxo-signer");
       const [{ address }] = await provider.requestAccounts();
 
       async function signTransaction(tx: InstanceType<typeof Transaction>) {
@@ -67,8 +69,8 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
 
     case Chain.Ethereum:
     case Chain.Monad: {
-      const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
-      const { prepareNetworkSwitch, switchEVMWalletNetwork } = await import("@swapkit-dev/helpers");
+      const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
+      const { prepareNetworkSwitch } = await import("@swapkit/helpers");
       const { BrowserProvider } = await import("ethers");
 
       const provider = new BrowserProvider(phantom?.ethereum, "any");
@@ -77,16 +79,11 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
       const signer = await provider.getSigner();
       const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
 
-      if (chain !== Chain.Ethereum) {
-        const networkParams = toolbox.getNetworkParams();
-        await switchEVMWalletNetwork(provider, chain, networkParams);
-      }
-
       return { ...prepareNetworkSwitch({ chain, provider, toolbox }), address };
     }
 
     case Chain.Solana: {
-      const { getSolanaToolbox } = await import("@swapkit-dev/toolboxes/solana");
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
       const provider = phantom?.solana;
       if (!provider?.isPhantom) {
         throw new SwapKitError("wallet_phantom_not_found");

@@ -6,7 +6,7 @@ import {
   derivationPathToString,
   NetworkDerivationPath,
   SwapKitError,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import type { JsonRpcProvider, Provider, TransactionRequest, TypedDataDomain, TypedDataField } from "ethers";
 import { AbstractSigner } from "ethers";
 
@@ -41,7 +41,7 @@ export class KeepKeySigner extends AbstractSigner {
     value: Record<string, unknown>,
     explicitPrimaryType?: string,
   ) => {
-    const { buildEIP712DomainType } = await import("@swapkit-dev/toolboxes/evm");
+    const { buildEIP712DomainType } = await import("@swapkit/toolboxes/evm");
     const { TypedDataEncoder } = await import("ethers");
 
     const { EIP712Domain: _, ...filteredTypes } = types;
@@ -100,7 +100,7 @@ export class KeepKeySigner extends AbstractSigner {
     if (!(isEIP1559 || gasPrice))
       throw new SwapKitError("wallet_keepkey_invalid_params", { reason: "Missing gasPrice" });
 
-    const { toHexString } = await import("@swapkit-dev/toolboxes/evm");
+    const { toHexString } = await import("@swapkit/toolboxes/evm");
 
     const nonceValue = nonce
       ? BigInt(nonce)

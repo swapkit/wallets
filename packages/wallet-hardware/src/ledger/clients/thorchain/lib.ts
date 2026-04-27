@@ -1,5 +1,5 @@
 import type Transport from "@ledgerhq/hw-transport";
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 
 import {
   CHUNK_SIZE,
@@ -88,8 +88,7 @@ export class THORChainApp {
 
   appInfo() {
     return this.transport.send(0xb0, 0x01, 0, 0).then((response: any) => {
-      const errorCodeData = response.slice(-2);
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1];
+      const returnCode = response.readUInt16BE(response.length - 2);
 
       let appName = "";
       let appVersion = "";
@@ -192,35 +191,32 @@ export class THORChainApp {
     }
   }
 
-  getAddressAndPubKey(path: number[], hrp: string, showInDevice = false) {
-    return this.serializePath(path)
-      .then((serializedPath: Buffer) => {
-        const data = Buffer.concat([THORChainApp.serializeHRP(hrp), serializedPath]);
-        return this.transport
-          .send(
-            CLA,
-            INS.GET_ADDR_SECP256K1,
-            showInDevice ? P1_VALUES.SHOW_ADDRESS_IN_DEVICE : P1_VALUES.ONLY_RETRIEVE,
-            0,
-            data,
-            [ERROR_CODE.NoError],
-          )
-          .then((response: any) => {
-            const errorCodeData = response.slice(-2);
-            const returnCode = errorCodeData[0] * 256 + errorCodeData[1];
+  async getAddressAndPubKey(path: number[], hrp: string, showInDevice = false) {
+    try {
+      const serializedPath = await this.serializePath(path);
+      const data = Buffer.concat([THORChainApp.serializeHRP(hrp), serializedPath]);
+      const response = await this.transport.send(
+        CLA,
+        INS.GET_ADDR_SECP256K1,
+        showInDevice ? P1_VALUES.SHOW_ADDRESS_IN_DEVICE : P1_VALUES.ONLY_RETRIEVE,
+        0,
+        data,
+        [ERROR_CODE.NoError],
+      );
 
-            const compressedPk = Buffer.from(response.slice(0, 33));
-            const bech32Address = Buffer.from(response.slice(33, -2)).toString();
+      const compressedPk = Buffer.from(response.slice(0, 33));
+      const bech32Address = Buffer.from(response.slice(33, -2)).toString();
+      const returnCode = response.readUInt16BE(response.length - 2);
 
-            return {
-              bech32_address: bech32Address,
-              compressed_pk: compressedPk,
-              error_message: errorCodeToString(returnCode),
-              return_code: returnCode,
-            };
-          }, processErrorResponse);
-      })
-      .catch((err) => processErrorResponse(err));
+      return {
+        bech32_address: bech32Address,
+        compressed_pk: compressedPk,
+        error_message: errorCodeToString(returnCode),
+        return_code: returnCode,
+      };
+    } catch (err) {
+      return processErrorResponse(err);
+    }
   }
 
   showAddressAndPubKey(path: number[], hrp: string) {

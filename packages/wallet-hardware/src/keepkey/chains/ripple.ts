@@ -5,8 +5,8 @@ import {
   type DerivationPathArray,
   derivationPathToString,
   type GenericTransferParams,
-} from "@swapkit-dev/helpers";
-import { getRippleToolbox } from "@swapkit-dev/toolboxes/ripple";
+} from "@swapkit/helpers";
+import { getRippleToolbox } from "@swapkit/toolboxes/ripple";
 import { bip32ToAddressNList } from "../coins";
 
 export const rippleWalletMethods = async ({

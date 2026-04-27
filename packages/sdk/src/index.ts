@@ -1,0 +1,143 @@
+import { type SKConfigState, SwapKit } from "@swapkit/core";
+import type { createPlugin } from "@swapkit/plugins";
+import { ChainflipPlugin } from "@swapkit/plugins/chainflip";
+import { EVMPlugin } from "@swapkit/plugins/evm";
+import { GardenPlugin } from "@swapkit/plugins/garden";
+import { HarborPlugin } from "@swapkit/plugins/harbor";
+import { NearPlugin } from "@swapkit/plugins/near";
+import { RadixPlugin } from "@swapkit/plugins/radix";
+import { SolanaPlugin } from "@swapkit/plugins/solana";
+import { SwapKitPlugin } from "@swapkit/plugins/swapkit";
+import { MayachainPlugin, ThorchainPlugin } from "@swapkit/plugins/thorchain";
+import type { createWallet } from "@swapkit/wallets";
+
+import { bitgetWallet } from "@swapkit/wallets/bitget";
+import { coinbaseWallet } from "@swapkit/wallets/coinbase";
+import { ctrlWallet } from "@swapkit/wallets/ctrl";
+import { evmWallet } from "@swapkit/wallets/evm-extensions";
+import { keepkeyWallet } from "@swapkit/wallets/keepkey";
+import { keepkeyBexWallet } from "@swapkit/wallets/keepkey-bex";
+import { keplrWallet } from "@swapkit/wallets/keplr";
+import { keystoreWallet } from "@swapkit/wallets/keystore";
+import { ledgerWallet } from "@swapkit/wallets/ledger";
+import { walletSelectorWallet } from "@swapkit/wallets/near-wallet-selector";
+import { okxWallet } from "@swapkit/wallets/okx";
+import { onekeyWallet } from "@swapkit/wallets/onekey";
+import { passkeysWallet } from "@swapkit/wallets/passkeys";
+import { phantomWallet } from "@swapkit/wallets/phantom";
+import { radixWallet } from "@swapkit/wallets/radix";
+import { talismanWallet } from "@swapkit/wallets/talisman";
+import { trezorWallet } from "@swapkit/wallets/trezor";
+import { tronlinkWallet } from "@swapkit/wallets/tronlink";
+import { walletconnectWallet } from "@swapkit/wallets/walletconnect";
+import { xamanWallet } from "@swapkit/wallets/xaman";
+
+export * from "@swapkit/core";
+export * from "@swapkit/helpers";
+export * from "@swapkit/helpers/api";
+export * from "@swapkit/plugins";
+export * from "@swapkit/plugins/chainflip";
+export * from "@swapkit/plugins/evm";
+export * from "@swapkit/plugins/harbor";
+export * from "@swapkit/plugins/near";
+export * from "@swapkit/plugins/radix";
+export * from "@swapkit/plugins/solana";
+export * from "@swapkit/plugins/swapkit";
+export * from "@swapkit/plugins/thorchain";
+export type { HDWalletAccountParams } from "@swapkit/toolboxes";
+export * from "@swapkit/toolboxes";
+export * from "@swapkit/toolboxes/cosmos";
+export * from "@swapkit/toolboxes/evm";
+export * from "@swapkit/toolboxes/radix";
+export * from "@swapkit/toolboxes/solana";
+export * from "@swapkit/toolboxes/utxo";
+export * from "@swapkit/wallets";
+
+const exodusWallet = { ...passkeysWallet, connectExodusWallet: passkeysWallet.connectPasskeys };
+
+export {
+  bitgetWallet,
+  coinbaseWallet,
+  ctrlWallet,
+  evmWallet,
+  exodusWallet,
+  keepkeyBexWallet,
+  keepkeyWallet,
+  keplrWallet,
+  keystoreWallet,
+  ledgerWallet,
+  okxWallet,
+  onekeyWallet,
+  passkeysWallet,
+  phantomWallet,
+  radixWallet,
+  talismanWallet,
+  trezorWallet,
+  tronlinkWallet,
+  walletconnectWallet,
+  walletSelectorWallet,
+  xamanWallet,
+};
+
+export const defaultPlugins = {
+  ...ChainflipPlugin,
+  ...EVMPlugin,
+  ...MayachainPlugin,
+  ...ThorchainPlugin,
+  ...RadixPlugin,
+  ...SolanaPlugin,
+  ...NearPlugin,
+  ...GardenPlugin,
+  ...SwapKitPlugin,
+  ...HarborPlugin,
+};
+
+export const defaultWallets = {
+  ...bitgetWallet,
+  ...coinbaseWallet,
+  ...ctrlWallet,
+  ...evmWallet,
+  ...exodusWallet,
+  ...keepkeyBexWallet,
+  ...keepkeyWallet,
+  ...keplrWallet,
+  ...keystoreWallet,
+  ...ledgerWallet,
+  ...okxWallet,
+  ...onekeyWallet,
+  ...phantomWallet,
+  ...passkeysWallet,
+  ...radixWallet,
+  ...talismanWallet,
+  ...trezorWallet,
+  ...tronlinkWallet,
+  ...walletSelectorWallet,
+  ...walletconnectWallet,
+  ...xamanWallet,
+} as ReturnType<typeof createWallet>;
+
+export type SwapKitClient<
+  Plugins extends ReturnType<typeof createPlugin>,
+  Wallets extends ReturnType<typeof createWallet>,
+> = ReturnType<typeof SwapKit<typeof defaultPlugins & Plugins, typeof defaultWallets & Wallets>>;
+
+export function createSwapKit<
+  Plugins extends ReturnType<typeof createPlugin>,
+  Wallets extends ReturnType<typeof createWallet>,
+>({
+  config,
+  plugins,
+  wallets,
+}: {
+  config?: SKConfigState;
+  plugins?: Plugins;
+  wallets?: Wallets;
+} = {}): SwapKitClient<Plugins, Wallets> {
+  const mergedPlugins = { ...defaultPlugins, ...plugins };
+  const mergedWallets = { ...defaultWallets, ...wallets };
+
+  return SwapKit({ config: config, plugins: mergedPlugins, wallets: mergedWallets }) as unknown as SwapKitClient<
+    Plugins,
+    Wallets
+  >;
+}

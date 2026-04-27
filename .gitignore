@@ -4,3 +4,5 @@ dist/
 .tsconfig.tmp.json
 build/data.json
 .DS_Store
+.env
+.env.local

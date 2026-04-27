@@ -1,9 +1,10 @@
+import type Transport from "@ledgerhq/hw-transport";
 import {
   type DerivationPathArray,
   derivationPathToString,
   NetworkDerivationPath,
   SwapKitError,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import { CosmosLedgerInterface } from "../interfaces/CosmosLedgerInterface";
 
 export class CosmosLedger extends CosmosLedgerInterface {
@@ -11,8 +12,8 @@ export class CosmosLedger extends CosmosLedgerInterface {
 
   derivationPath: string;
 
-  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.GAIA) {
-    super();
+  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.GAIA, transport?: Transport) {
+    super(transport);
     this.chain = "cosmos";
     this.derivationPath = derivationPathToString(derivationPath);
   }

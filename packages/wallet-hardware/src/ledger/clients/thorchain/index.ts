@@ -1,5 +1,6 @@
+import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
-import { type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit-dev/helpers";
+import { type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 
 import { CosmosLedgerInterface } from "../../interfaces/CosmosLedgerInterface";
 import type { GetAddressAndPubKeyResponse } from "../../types";
@@ -10,8 +11,8 @@ export class THORChainLedger extends CosmosLedgerInterface {
 
   derivationPath: DerivationPathArray;
 
-  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.THOR) {
-    super();
+  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.THOR, transport?: Transport) {
+    super(transport);
     this.chain = "thor";
     this.derivationPath = derivationPath;
   }

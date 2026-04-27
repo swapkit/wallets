@@ -2,8 +2,8 @@
 
 import type { Account } from "@near-js/accounts";
 import { type Action, SignedTransaction, type Transaction } from "@near-js/transactions";
-import { SwapKitError } from "@swapkit-dev/helpers";
-import type { NearSigner } from "@swapkit-dev/toolboxes/near";
+import { SwapKitError } from "@swapkit/helpers";
+import type { NearSigner } from "@swapkit/toolboxes/near";
 
 /**
  * NEAR Browser Wallet Provider Interface
@@ -124,7 +124,7 @@ export async function createNearSignerFromProvider(provider: NearBrowserWalletPr
     },
   };
 
-  return signer as NearSigner;
+  return signer as unknown as NearSigner;
 }
 
 /**

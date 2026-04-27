@@ -6,9 +6,9 @@ import {
   type FeeOption,
   SwapKitError,
   WalletOption,
-} from "@swapkit-dev/helpers";
-import { erc20ABI } from "@swapkit-dev/helpers/contracts";
-import type { ApproveParams, CallParams, EVMTxParams } from "@swapkit-dev/toolboxes/evm";
+} from "@swapkit/helpers";
+import { erc20ABI } from "@swapkit/helpers/contracts";
+import type { ApproveParams, CallParams, EVMTxParams } from "@swapkit/toolboxes/evm";
 import type { BrowserProvider, Eip1193Provider } from "ethers";
 
 interface UTXOProvider {
@@ -182,7 +182,7 @@ export async function walletTransfer(
 export function getKEEPKEYMethods(provider: BrowserProvider, chain: EVMChain) {
   return {
     approve: async ({ assetAddress, spenderAddress, amount, from }: ApproveParams) => {
-      const { MAX_APPROVAL, getCreateContractTxObject, toHexString } = await import("@swapkit-dev/toolboxes/evm");
+      const { MAX_APPROVAL, getCreateContractTxObject, toHexString } = await import("@swapkit/toolboxes/evm");
 
       const createTx = getCreateContractTxObject({ chain, provider });
       const { value, to, data } = await createTx({
@@ -202,7 +202,7 @@ export function getKEEPKEYMethods(provider: BrowserProvider, chain: EVMChain) {
         throw new SwapKitError("wallet_keepkey_contract_address_not_provided");
       }
       const { createContract, getCreateContractTxObject, isStateChangingCall, toHexString } = await import(
-        "@swapkit-dev/toolboxes/evm"
+        "@swapkit/toolboxes/evm"
       );
 
       const isStateChanging = isStateChangingCall({ abi, funcName });
@@ -227,7 +227,7 @@ export function getKEEPKEYMethods(provider: BrowserProvider, chain: EVMChain) {
         throw new SwapKitError("wallet_keepkey_send_transaction_no_address");
       }
 
-      const { toHexString } = await import("@swapkit-dev/toolboxes/evm");
+      const { toHexString } = await import("@swapkit/toolboxes/evm");
 
       return provider.send("eth_sendTransaction", [
         { data: data || "0x", from, to, value: toHexString(BigInt(value || 0)) },

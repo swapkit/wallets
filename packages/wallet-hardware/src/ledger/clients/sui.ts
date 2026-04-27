@@ -1,11 +1,12 @@
 import type Sui from "@ledgerhq/hw-app-sui";
+import type Transport from "@ledgerhq/hw-transport";
 import {
   Chain,
   type DerivationPathArray,
   derivationPathToString,
   NetworkDerivationPath,
   SwapKitError,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
@@ -14,12 +15,14 @@ export class SuiLedgerInterface {
   ledgerApp: InstanceType<typeof Sui> | null = null;
   address: string | null = null;
   publicKey: Uint8Array | null = null;
+  private readonly injectedTransport?: Transport;
 
-  constructor(derivationPath?: DerivationPathArray | string) {
+  constructor(derivationPath?: DerivationPathArray | string, transport?: Transport) {
     this.derivationPath =
       typeof derivationPath === "string"
         ? derivationPath
         : derivationPathToString(derivationPath || NetworkDerivationPath[Chain.Sui]);
+    this.injectedTransport = transport;
   }
 
   /**
@@ -36,7 +39,7 @@ export class SuiLedgerInterface {
   private async createTransportAndLedger() {
     if (this.ledgerApp) return;
 
-    const transport = await getLedgerTransport();
+    const transport = this.injectedTransport ?? (await getLedgerTransport());
     const SuiApp = (await import("@ledgerhq/hw-app-sui")).default;
     this.ledgerApp = new SuiApp(transport);
   }
@@ -127,4 +130,5 @@ export class SuiLedgerInterface {
   }
 }
 
-export const SuiLedger = (derivationPath?: DerivationPathArray) => new SuiLedgerInterface(derivationPath);
+export const SuiLedger = (derivationPath?: DerivationPathArray, transport?: Transport) =>
+  new SuiLedgerInterface(derivationPath, transport);

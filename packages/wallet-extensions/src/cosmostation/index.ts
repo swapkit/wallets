@@ -1,13 +1,7 @@
 import type { Keplr } from "@keplr-wallet/types";
-import {
-  Chain,
-  ChainId,
-  ChainToChainId,
-  filterSupportedChains,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit-dev/helpers";
+import { Chain, ChainId, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 
 const cosmostationSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;
 const cosmostationSupportedEVMChains = [
@@ -36,7 +30,7 @@ async function connectCosmosChains(chains: Chain[], addChain: any, keplrProvider
       const signer = await keplrProvider.getOfflineSignerAuto(chainId);
       if (!signer) throw new SwapKitError("wallet_cosmostation_signer_not_found");
 
-      const { getCosmosToolbox } = await import("@swapkit-dev/toolboxes/cosmos");
+      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
 
       const accounts = await signer.getAccounts();
       if (!accounts?.[0]?.address) throw new SwapKitError("wallet_cosmostation_no_accounts");
@@ -62,7 +56,7 @@ async function connectEvmChains(chains: Chain[], addChain: any) {
     throw new SwapKitError("wallet_cosmostation_no_evm_accounts");
   }
 
-  const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+  const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
 
   for (const chain of chains) {
     const toolbox = await getEvmToolboxAsync(chain as any, { provider });
@@ -76,7 +70,7 @@ async function connectEvmChains(chains: Chain[], addChain: any) {
   }
 }
 
-export const cosmostationWallet = createWallet({
+export const cosmostationWallet: ExtensionWallet<"connectCosmostation"> = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectCosmostation(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType: WalletOption.COSMOSTATION });
@@ -105,6 +99,20 @@ export const cosmostationWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Cosmos]: true,
+    [Chain.Kujira]: true,
+    [Chain.Noble]: true,
+    [Chain.THORChain]: true,
+    [Chain.Ethereum]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Polygon]: true,
+    [Chain.Arbitrum]: true,
+    [Chain.Optimism]: true,
+    [Chain.Base]: true,
+    [Chain.XLayer]: true,
+  },
   name: "connectCosmostation",
   supportedChains: [
     Chain.Cosmos,

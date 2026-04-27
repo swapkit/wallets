@@ -1,16 +1,9 @@
 import { base64 } from "@scure/base";
-import {
-  addEVMWalletNetwork,
-  Chain,
-  filterSupportedChains,
-  type NetworkParams,
-  prepareNetworkSwitch,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit-dev/helpers";
-import { Transaction } from "@swapkit-dev/utxo-signer";
+import { Chain, filterSupportedChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { Transaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BitcoinProvider, GetAddressOptions, GetAddressResponse, SignTransactionOptions } from "sats-connect";
+import type { ExtensionWallet } from "../walletTypes";
 
 async function getWalletMethodsForExtension(chain: Chain) {
   switch (chain) {
@@ -19,7 +12,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
         throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
       }
 
-      const { getUtxoToolbox } = await import("@swapkit-dev/toolboxes/utxo");
+      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const {
         signTransaction: satsSignTransaction,
         getAddress,
@@ -90,7 +83,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
         throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
       }
 
-      const { getSolanaToolbox } = await import("@swapkit-dev/toolboxes/solana");
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
 
       const signer = window.$onekey.sol;
       const address = await signer.getAddress();
@@ -109,7 +102,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
     case Chain.Optimism:
     case Chain.Polygon:
     case Chain.XLayer: {
-      const { getProvider, getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+      const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
       if (!window.$onekey?.ethereum) {
         throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
       }
@@ -123,15 +116,6 @@ async function getWalletMethodsForExtension(chain: Chain) {
       const address = await signer.getAddress();
 
       const toolbox = await getEvmToolboxAsync(chain, { provider: jsonRpcProvider, signer });
-      try {
-        if (chain !== Chain.Ethereum) {
-          const networkParams = toolbox.getNetworkParams() as NetworkParams;
-
-          await addEVMWalletNetwork(provider, networkParams);
-        }
-      } catch (error) {
-        throw new SwapKitError({ errorKey: "wallet_failed_to_add_or_switch_network", info: { chain, error } });
-      }
 
       return { address, ...prepareNetworkSwitch({ chain, provider, toolbox }) };
     }
@@ -141,7 +125,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
   }
 }
 
-export const onekeyWallet = createWallet({
+export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectOnekeyWallet(chains: Chain[]) {
       if (!window.$onekey) {
@@ -162,6 +146,20 @@ export const onekeyWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Aurora]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Gnosis]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.Solana]: true,
+    [Chain.XLayer]: true,
+  },
   name: "connectOnekeyWallet",
   supportedChains: [
     Chain.Arbitrum,

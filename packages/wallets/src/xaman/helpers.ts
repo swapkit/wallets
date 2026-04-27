@@ -1,7 +1,7 @@
-import { type AssetValue, Chain, SwapKitError } from "@swapkit-dev/helpers";
+import { type AssetValue, Chain, SwapKitError } from "@swapkit/helpers";
 import { match } from "ts-pattern";
 import type { Xumm } from "xumm";
-import { sendXamanTransaction, sendXamanTrustSet } from "./walletMethods";
+import { sendXamanTransaction, sendXamanTrustSet, submitXamanPayload } from "./walletMethods";
 
 interface GetWalletForChainParams {
   chain: Chain;
@@ -12,8 +12,23 @@ interface GetWalletForChainParams {
 export function getWalletForChain({ xumm, chain, address }: GetWalletForChainParams) {
   return match(chain)
     .with(Chain.Ripple, async () => {
-      const { getRippleToolbox } = await import("@swapkit-dev/toolboxes/ripple");
-      const toolbox = await getRippleToolbox({});
+      const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
+
+      const signer = {
+        getAddress: () => address,
+        signTransaction: async (jsonTx: Record<string, unknown>) => {
+          const txjson = { ...jsonTx, Account: jsonTx.Account ?? address };
+          const submitted = await submitXamanPayload(xumm, txjson, { submit: false });
+
+          if (!submitted.result.hex) {
+            throw new SwapKitError("wallet_xaman_transaction_failed");
+          }
+
+          return { hash: submitted.result.transactionId, tx_blob: submitted.result.hex };
+        },
+      };
+
+      const toolbox = await getRippleToolbox({ signer });
 
       const transfer = async ({
         assetValue,

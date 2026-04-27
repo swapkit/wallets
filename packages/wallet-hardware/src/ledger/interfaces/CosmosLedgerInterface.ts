@@ -1,4 +1,5 @@
-import { type DerivationPathArray, LedgerErrorCode, NetworkDerivationPath, SwapKitError } from "@swapkit-dev/helpers";
+import type Transport from "@ledgerhq/hw-transport";
+import { type DerivationPathArray, LedgerErrorCode, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 
 import { THORChainApp } from "../clients/thorchain/lib";
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
@@ -10,11 +11,23 @@ export abstract class CosmosLedgerInterface {
   ledgerApp: any;
   chain: "thor" | "cosmos" = "thor";
 
+  private readonly injectedTransport?: Transport;
+
+  constructor(transport?: Transport) {
+    this.injectedTransport = transport;
+    if (transport) this.transport = transport;
+  }
+
   checkOrCreateTransportAndLedger = async (forceReconnect = false) => {
     if (!forceReconnect && this.transport && this.ledgerApp) return;
 
     try {
-      this.transport = forceReconnect || !this.transport ? await getLedgerTransport() : this.transport;
+      // Consumer owns the lifecycle of an injected transport, so forceReconnect
+      // only refreshes ledgerApp — the transport itself stays as passed in.
+      const needsNewTransport = !this.transport || (forceReconnect && !this.injectedTransport);
+      if (needsNewTransport) {
+        this.transport = this.injectedTransport ?? (await getLedgerTransport());
+      }
 
       switch (this.chain) {
         case "thor": {

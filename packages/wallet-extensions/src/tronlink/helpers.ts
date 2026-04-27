@@ -1,7 +1,9 @@
-import { Chain, SwapKitError, WalletOption } from "@swapkit-dev/helpers";
-import { getTronToolbox, type TronTransaction } from "@swapkit-dev/toolboxes/tron";
+import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { getTronToolbox, type TronTransaction } from "@swapkit/toolboxes/tron";
 import type { TronLinkWindow } from "./types.js";
 import { TronLinkResponseCode } from "./types.js";
+
+type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
 export function waitForTronLink(timeout = 3000): Promise<TronLinkWindow> {
   return new Promise((resolve, reject) => {
@@ -64,7 +66,7 @@ async function requestTronLinkAccounts(tronLink: TronLinkWindow) {
   }
 }
 
-export async function getWalletForChain(chain: Chain, expectedNetwork?: string) {
+export async function getWalletForChain(chain: Chain, expectedNetwork?: string): Promise<WalletMethodsWithAddress> {
   if (chain !== Chain.Tron) {
     throw new SwapKitError("wallet_chain_not_supported", { chain, wallet: WalletOption.TRONLINK });
   }
@@ -75,6 +77,11 @@ export async function getWalletForChain(chain: Chain, expectedNetwork?: string) 
   isLocked && (await requestTronLinkAccounts(tronLink));
 
   const address = tronLink.tronWeb?.defaultAddress?.base58;
+  if (!address) {
+    throw new SwapKitError("wallet_tronlink_request_accounts_failed", {
+      message: "TronLink did not return a default address",
+    });
+  }
 
   if (expectedNetwork) {
     verifyNetwork(expectedNetwork);

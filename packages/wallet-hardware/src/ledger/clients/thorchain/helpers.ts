@@ -1,4 +1,4 @@
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 import { CLA, ERROR_CODE, errorCodeToString, INS, P2_VALUES, PAYLOAD_TYPE, processErrorResponse } from "./common";
 
 export function serializePathv1(path: number[]) {

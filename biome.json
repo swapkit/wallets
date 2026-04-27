@@ -64,7 +64,6 @@
       },
       "nursery": {
         "noFloatingPromises": "on",
-        "noImportCycles": "on",
         "recommended": true,
         "useExplicitType": "off",
         "useSortedClasses": { "fix": "safe", "level": "warn", "options": {} }
@@ -98,6 +97,7 @@
         "noEvolvingTypes": "off",
         "noExplicitAny": "off",
         "noFocusedTests": { "fix": "none", "level": "error" },
+        "noImportCycles": "on",
         "noReactSpecificProps": "off",
         "useAwait": "error"
       }

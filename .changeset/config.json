@@ -4,5 +4,6 @@
   "baseBranch": "develop",
   "changelog": ["@changesets/changelog-github", { "repo": "swapkit/wallets" }],
   "commit": false,
+  "ignore": ["@internal/*"],
   "updateInternalDependencies": "patch"
 }

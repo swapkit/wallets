@@ -1,11 +1,12 @@
 import type EthereumApp from "@ledgerhq/hw-app-eth";
+import type Transport from "@ledgerhq/hw-transport";
 import {
   ChainId,
   type DerivationPathArray,
   derivationPathToString,
   NetworkDerivationPath,
   SwapKitError,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import {
   AbstractSigner,
   type Provider,
@@ -21,22 +22,30 @@ class EVMLedgerInterface extends AbstractSigner {
   derivationPath = "";
   ledgerApp: InstanceType<typeof EthereumApp> | null = null;
   ledgerTimeout = 50000;
+  private readonly injectedTransport?: Transport;
 
   constructor({
     provider,
     derivationPath = NetworkDerivationPath.OP,
     chainId = ChainId.Optimism,
-  }: { provider: Provider; derivationPath?: DerivationPathArray | string; chainId?: ChainId }) {
+    transport,
+  }: { provider: Provider; derivationPath?: DerivationPathArray | string; chainId?: ChainId; transport?: Transport }) {
     super(provider);
 
     this.chainId = chainId || ChainId.Ethereum;
     this.derivationPath = typeof derivationPath === "string" ? derivationPath : derivationPathToString(derivationPath);
+    this.injectedTransport = transport;
 
     Object.defineProperty(this, "provider", { enumerable: true, value: provider || null, writable: false });
   }
 
   connect = (provider: Provider) =>
-    new EVMLedgerInterface({ chainId: this.chainId, derivationPath: this.derivationPath, provider });
+    new EVMLedgerInterface({
+      chainId: this.chainId,
+      derivationPath: this.derivationPath,
+      provider,
+      transport: this.injectedTransport,
+    });
 
   checkOrCreateTransportAndLedger = async () => {
     if (this.ledgerApp) return;
@@ -44,7 +53,7 @@ class EVMLedgerInterface extends AbstractSigner {
   };
 
   createTransportAndLedger = async () => {
-    const transport = await getLedgerTransport();
+    const transport = this.injectedTransport ?? (await getLedgerTransport());
     const EthereumApp = (await import("@ledgerhq/hw-app-eth")).default;
 
     this.ledgerApp = new EthereumApp(transport);
@@ -93,7 +102,7 @@ class EVMLedgerInterface extends AbstractSigner {
     value: Record<string, unknown>,
     explicitPrimaryType?: string,
   ) => {
-    const { buildEIP712DomainType } = await import("@swapkit-dev/toolboxes/evm");
+    const { buildEIP712DomainType } = await import("@swapkit/toolboxes/evm");
     const { Signature, TypedDataEncoder } = await import("ethers");
     await this.createTransportAndLedger();
 
@@ -164,7 +173,7 @@ class EVMLedgerInterface extends AbstractSigner {
   };
 }
 
-type LedgerParams = { provider: Provider; derivationPath?: DerivationPathArray };
+type LedgerParams = { provider: Provider; derivationPath?: DerivationPathArray; transport?: Transport };
 
 export const ArbitrumLedger = (params: LedgerParams) =>
   new EVMLedgerInterface({ ...params, chainId: ChainId.Arbitrum });

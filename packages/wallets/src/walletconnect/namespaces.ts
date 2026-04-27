@@ -1,4 +1,4 @@
-import { SwapKitError } from "@swapkit-dev/helpers";
+import { SwapKitError } from "@swapkit/helpers";
 import type { ProposalTypes } from "@walletconnect/types";
 import {
   DEFAULT_COSMOS_METHODS,

@@ -5,11 +5,12 @@ import {
   type GenericTransferParams,
   SwapKitError,
   WalletOption,
-} from "@swapkit-dev/helpers";
+} from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { ExtensionWallet } from "../walletTypes";
 import { getCtrlAddress, getCtrlProvider, walletTransfer } from "./walletHelpers";
 
-export const ctrlWallet = createWallet({
+export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectCtrl(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -25,6 +26,27 @@ export const ctrlWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    [Chain.Arbitrum]: true,
+    [Chain.Aurora]: true,
+    [Chain.Avalanche]: true,
+    [Chain.Base]: true,
+    [Chain.Berachain]: true,
+    [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
+    [Chain.Cosmos]: true,
+    [Chain.Ethereum]: true,
+    [Chain.Gnosis]: true,
+    [Chain.Kujira]: true,
+    [Chain.Monad]: true,
+    [Chain.Near]: true,
+    [Chain.Noble]: true,
+    [Chain.Optimism]: true,
+    [Chain.Polygon]: true,
+    [Chain.Solana]: true,
+    [Chain.XLayer]: true,
+    // BCH/DOGE/LTC/THORChain/Maya: blocked on CTRL provider — no raw signing RPC
+  },
   name: "connectCtrl",
   supportedChains: [
     Chain.Arbitrum,
@@ -58,7 +80,7 @@ export const CTRL_SUPPORTED_CHAINS = getWalletSupportedChains(ctrlWallet);
 async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
   switch (chain) {
     case Chain.Solana: {
-      const { getSolanaToolbox } = await import("@swapkit-dev/toolboxes/solana");
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
       const provider = getCtrlProvider(chain);
 
       if (!provider) {
@@ -71,7 +93,7 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
 
     case Chain.Maya:
     case Chain.THORChain: {
-      const { getCosmosToolbox, THORCHAIN_GAS_VALUE, MAYA_GAS_VALUE } = await import("@swapkit-dev/toolboxes/cosmos");
+      const { getCosmosToolbox, THORCHAIN_GAS_VALUE, MAYA_GAS_VALUE } = await import("@swapkit/toolboxes/cosmos");
 
       const gasLimit = chain === Chain.Maya ? MAYA_GAS_VALUE : THORCHAIN_GAS_VALUE;
       const toolbox = await getCosmosToolbox(chain);
@@ -86,7 +108,7 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
     case Chain.Cosmos:
     case Chain.Kujira:
     case Chain.Noble: {
-      const { getCosmosToolbox } = await import("@swapkit-dev/toolboxes/cosmos");
+      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
       const chainId = ChainToChainId[chain];
       const provider = getCtrlProvider(chain);
 
@@ -102,11 +124,62 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
       return toolbox;
     }
 
-    case Chain.Bitcoin:
+    case Chain.Bitcoin: {
+      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
+      const { Transaction } = await import("@swapkit/utxo-signer");
+      const provider = getCtrlProvider(Chain.Bitcoin) as
+        | { request: (args: { method: string; params: unknown }, cb?: (err: unknown, res: unknown) => void) => unknown }
+        | undefined;
+
+      if (!provider) {
+        throw new SwapKitError("wallet_ctrl_not_found", { chain: Chain.Bitcoin });
+      }
+
+      const address = await getCtrlAddress(Chain.Bitcoin);
+      if (!address) {
+        throw new SwapKitError({ errorKey: "wallet_provider_not_found", info: { chain, wallet: WalletOption.CTRL } });
+      }
+
+      const ctrlRequest = <T>(args: { method: string; params: unknown }): Promise<T> =>
+        new Promise<T>((resolve, reject) => {
+          const handler = (err: unknown, res: unknown) => (err ? reject(err) : resolve(res as T));
+          const maybePromise = provider.request(args, handler);
+          if (maybePromise && typeof (maybePromise as { then?: unknown }).then === "function") {
+            (maybePromise as Promise<T>).then(
+              (res) => handler(null, res),
+              (err) => handler(err, null),
+            );
+          }
+        });
+
+      const signer = {
+        getAddress: async () => address,
+        signTransaction: async (tx: InstanceType<typeof Transaction>) => {
+          const psbtB64 = Buffer.from(tx.toPSBT()).toString("base64");
+          const signingIndexes = Array.from({ length: tx.inputsLength }, (_, i) => i);
+
+          const response = await ctrlRequest<{ status: string; result: { psbt: string } }>({
+            method: "sign_psbt",
+            params: { allowedSignHash: 1, broadcast: false, psbt: psbtB64, signInputs: { [address]: signingIndexes } },
+          });
+
+          if (response?.status !== "success" || !response.result?.psbt) {
+            throw new SwapKitError("plugin_swapkit_invalid_transaction", { chain: Chain.Bitcoin });
+          }
+
+          return Transaction.fromPSBT(new Uint8Array(Buffer.from(response.result.psbt, "base64")));
+        },
+      };
+
+      const toolbox = await getUtxoToolbox(Chain.Bitcoin, { signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.BitcoinCash:
     case Chain.Dogecoin:
     case Chain.Litecoin: {
-      const { getUtxoToolbox } = await import("@swapkit-dev/toolboxes/utxo");
+      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const toolbox = await getUtxoToolbox(chain);
 
       return { ...toolbox, transfer: walletTransfer };
@@ -124,8 +197,8 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
     case Chain.Optimism:
     case Chain.Polygon:
     case Chain.XLayer: {
-      const { prepareNetworkSwitch, switchEVMWalletNetwork } = await import("@swapkit-dev/helpers");
-      const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+      const { prepareNetworkSwitch } = await import("@swapkit/helpers");
+      const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
       const { BrowserProvider } = await import("ethers");
       const ethereumWindowProvider = getCtrlProvider(chain);
 
@@ -136,18 +209,6 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
       const provider = new BrowserProvider(ethereumWindowProvider, "any");
       const signer = await provider.getSigner();
       const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
-
-      try {
-        if (chain !== Chain.Ethereum) {
-          const networkParams = toolbox.getNetworkParams();
-          await switchEVMWalletNetwork(provider, chain, networkParams);
-        }
-      } catch {
-        throw new SwapKitError({
-          errorKey: "wallet_failed_to_add_or_switch_network",
-          info: { chain, wallet: WalletOption.CTRL },
-        });
-      }
 
       return prepareNetworkSwitch({ chain, provider, toolbox });
     }

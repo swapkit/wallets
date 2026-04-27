@@ -19,6 +19,7 @@ export const TRON_MAINNET_ID = "tron:0x2b6653dc";
 export const AURORA_MAINNET_ID = "eip155:1313161554";
 export const BERACHAIN_MAINNET_ID = "eip155:80094";
 export const MONAD_MAINNET_ID = "eip155:143";
+export const XLAYER_MAINNET_ID = "eip155:196";
 
 export const DEFAULT_LOGGER = "debug";
 

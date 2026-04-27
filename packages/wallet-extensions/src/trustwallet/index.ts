@@ -4,15 +4,14 @@ import {
   EVMChains,
   filterSupportedChains,
   type GenericTransferParams,
-  getChainConfig,
   prepareNetworkSwitch,
   SwapKitError,
-  switchEVMWalletNetwork,
   WalletOption,
-} from "@swapkit-dev/helpers";
-import type { TONTransactionMessage } from "@swapkit-dev/toolboxes/ton";
+} from "@swapkit/helpers";
+import type { TONTransactionMessage } from "@swapkit/toolboxes/ton";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import type { ExtensionWallet } from "../walletTypes";
 
 export type TrustWalletTonProvider = {
   adapter: { handler: (request: { method: string; params?: unknown }) => Promise<unknown>; strategy: string };
@@ -22,7 +21,7 @@ export type TrustWalletTonProvider = {
   isConnected(): boolean;
 };
 
-export const trustwalletWallet = createWallet({
+export const trustwalletWallet: ExtensionWallet<"connectTrustWallet"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectTrustWallet(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
@@ -41,6 +40,10 @@ export const trustwalletWallet = createWallet({
 
       return true;
     },
+  directSigningSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
+    // Ton: no signer wired
+  },
   name: "connectTrustWallet",
   supportedChains: [...EVMChains, Chain.Ton],
   walletType: WalletOption.TRUSTWALLET_WEB,
@@ -59,7 +62,7 @@ async function connectTon() {
     throw new SwapKitError("core_wallet_connection_not_found");
   }
 
-  const { getTONToolbox } = await import("@swapkit-dev/toolboxes/ton");
+  const { getTONToolbox } = await import("@swapkit/toolboxes/ton");
   const toolbox = getTONToolbox();
 
   async function sendTonTransaction(messages: TONTransactionMessage[]) {
@@ -91,7 +94,7 @@ async function connectEvm(chain: EVMChain) {
   if (!walletProvider) throw new SwapKitError("wallet_evm_extensions_not_found");
 
   const { BrowserProvider } = await import("ethers");
-  const { getEvmToolboxAsync } = await import("@swapkit-dev/toolboxes/evm");
+  const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
 
   const provider = new BrowserProvider(walletProvider, "any");
   await provider.send("eth_requestAccounts", []);
@@ -99,17 +102,6 @@ async function connectEvm(chain: EVMChain) {
   const address = await signer.getAddress();
 
   const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
-  const { chainIdHex } = getChainConfig(chain);
-
-  const currentNetwork = await provider.getNetwork();
-  if (currentNetwork.chainId.toString() !== chainIdHex) {
-    try {
-      const networkParams = toolbox.getNetworkParams();
-      await switchEVMWalletNetwork(provider, chain, networkParams);
-    } catch {
-      throw new SwapKitError("wallet_evm_extensions_failed_to_switch_network", { chain });
-    }
-  }
 
   const disconnect = () => provider.send("wallet_revokePermissions", [{ eth_accounts: {} }]);
 

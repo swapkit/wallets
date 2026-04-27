@@ -9,8 +9,8 @@ import {
   getRPCUrl,
   SwapKitError,
   THORConfig,
-} from "@swapkit-dev/helpers";
-import type { ThorchainDepositParams } from "@swapkit-dev/toolboxes/cosmos";
+} from "@swapkit/helpers";
+import type { ThorchainDepositParams } from "@swapkit/toolboxes/cosmos";
 
 import { bip32ToAddressNList } from "../coins";
 
@@ -26,7 +26,7 @@ export async function thorchainWalletMethods({
   const importedAmino = await import("@cosmjs/amino");
   const makeSignDoc = importedAmino.makeSignDoc ?? importedAmino.default?.makeSignDoc;
   const { buildAminoMsg, getDefaultChainFee, createStargateClient, getCosmosToolbox } = await import(
-    "@swapkit-dev/toolboxes/cosmos"
+    "@swapkit/toolboxes/cosmos"
   );
 
   const toolbox = await getCosmosToolbox(Chain.THORChain);

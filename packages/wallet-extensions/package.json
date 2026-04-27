@@ -1,20 +1,20 @@
 {
-  "author": "swapkit-dev",
+  "author": "swapkit",
   "dependencies": {
     "@aptos-labs/ts-sdk": "~1.34.0",
     "@cosmjs/amino": "~0.37.0",
     "@cosmjs/proto-signing": "~0.37.0",
-    "@cosmjs/stargate": "~0.37.0",
-    "@keplr-wallet/types": "0.12.285",
-    "@near-js/accounts": "~2.5.0",
+    "@cosmjs/stargate": "~0.37.1",
+    "@keplr-wallet/types": "0.13.24",
+    "@near-js/accounts": "~2.5.1",
     "@near-js/crypto": "~2.5.0",
     "@near-js/transactions": "~2.5.0",
-    "@scure/base": "~2.0.0",
+    "@scure/base": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit-dev/helpers": "^4.12.0",
-    "@swapkit-dev/toolboxes": "^4.11.2",
-    "@swapkit-dev/utxo-signer": "^2.1.0",
-    "@swapkit/wallet-core": "workspace:*",
+    "@swapkit/helpers": "^4.13.5",
+    "@swapkit/toolboxes": "^4.15.8",
+    "@swapkit/utxo-signer": "^2.1.1",
+    "@swapkit/wallet-core": "^4.2.5",
     "cosmjs-types": "0.10.1",
     "ethers": "^6.14.0",
     "sats-connect": "~1.0.0",
@@ -26,11 +26,11 @@
     "@cosmjs/amino": "0.37.0",
     "@cosmjs/proto-signing": "0.37.0",
     "@cosmjs/stargate": "0.37.0",
-    "@keplr-wallet/types": "0.12.285",
-    "@near-js/accounts": "2.5.0",
+    "@keplr-wallet/types": "0.13.24",
+    "@near-js/accounts": "2.5.1",
     "@near-js/crypto": "2.5.0",
     "@near-js/transactions": "2.5.0",
-    "@scure/base": "2.0.0",
+    "@scure/base": "2.2.0",
     "@solana/web3.js": "1.98.4",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
@@ -135,19 +135,15 @@
       "types": "./dist/types/vultisig/index.d.ts"
     }
   },
-  "files": [
-    "dist/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
+    "directory": "packages/wallet-extensions",
     "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git",
-    "directory": "packages/wallet-extensions"
+    "url": "git+https://github.com/swapkit/wallets.git"
   },
   "scripts": {
     "build": "bun run ./build.ts",
@@ -157,5 +153,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.3.6"
+  "version": "4.5.6"
 }

@@ -1,11 +1,4 @@
-import {
-  type AssetValue,
-  Chain,
-  filterSupportedChains,
-  SKConfig,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit-dev/helpers";
+import { type AssetValue, Chain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 
 export const radixWallet = createWallet({
@@ -28,6 +21,8 @@ export const radixWallet = createWallet({
 
       return true;
     },
+  // Radix is not in V3 swap chain list
+  directSigningSupport: {},
   name: "connectRadixWallet",
   supportedChains: [Chain.Radix],
   walletType: WalletOption.RADIX_WALLET,
@@ -37,7 +32,7 @@ export const RADIX_SUPPORTED_CHAINS = getWalletSupportedChains(radixWallet);
 
 async function getWalletMethods() {
   const { RadixDappToolkit } = await import("@radixdlt/radix-dapp-toolkit");
-  const { getRadixToolbox } = await import("@swapkit-dev/toolboxes/radix");
+  const { getRadixToolbox } = await import("@swapkit/toolboxes/radix");
 
   const dappConfig = SKConfig.get("integrations").radix;
   const rdt = RadixDappToolkit({ ...dappConfig, networkId: dappConfig.network.networkId });

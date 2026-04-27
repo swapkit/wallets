@@ -1,14 +1,10 @@
 import type BitcoinApp from "@ledgerhq/hw-app-btc";
 import type { CreateTransactionArg } from "@ledgerhq/hw-app-btc/lib-es/createTransaction";
+import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
-import {
-  type DerivationPathArray,
-  derivationPathToString,
-  getWalletFormatFor,
-  SwapKitError,
-} from "@swapkit-dev/helpers";
-import type { UTXOType } from "@swapkit-dev/toolboxes/utxo";
-import type { PCZT, Transaction } from "@swapkit-dev/utxo-signer";
+import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
+import type { UTXOType } from "@swapkit/toolboxes/utxo";
+import type { PCZT, Transaction } from "@swapkit/utxo-signer";
 
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
@@ -106,27 +102,30 @@ const BaseLedgerUTXO = ({
   chain: "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
   additionalSignParams?: Partial<CreateTransactionArg>;
 }) => {
-  let btcApp: InstanceType<typeof BitcoinApp>;
-  let transport: any = null;
+  return (derivationPathArray?: DerivationPathArray | string, injectedTransport?: Transport) => {
+    // Per-call state — each BitcoinLedger/LitecoinLedger/... invocation has its own
+    // transport + btcApp so different consumers (e.g. concurrent MCP sessions) cannot
+    // cross-contaminate each other's Ledger device handle.
+    let btcApp: InstanceType<typeof BitcoinApp>;
+    let transport: any = null;
 
-  async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
-    if (checkBtcApp && !btcApp) {
-      new SwapKitError("wallet_ledger_connection_error", {
-        message: `Ledger connection failed:\n${JSON.stringify({ btcApp, checkBtcApp })}`,
-      });
+    async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
+      if (checkBtcApp && !btcApp) {
+        new SwapKitError("wallet_ledger_connection_error", {
+          message: `Ledger connection failed:\n${JSON.stringify({ btcApp, checkBtcApp })}`,
+        });
+      }
+
+      transport ||= injectedTransport ?? (await getLedgerTransport());
     }
 
-    transport ||= await getLedgerTransport();
-  }
+    async function createTransportWebUSB() {
+      transport = injectedTransport ?? (await getLedgerTransport());
+      const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
 
-  async function createTransportWebUSB() {
-    transport = await getLedgerTransport();
-    const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
+      btcApp = new BitcoinApp({ currency: chain, transport });
+    }
 
-    btcApp = new BitcoinApp({ currency: chain, transport });
-  }
-
-  return (derivationPathArray?: DerivationPathArray | string) => {
     const derivationPath =
       typeof derivationPathArray === "string"
         ? derivationPathArray
@@ -142,7 +141,7 @@ const BaseLedgerUTXO = ({
         btcApp = new BitcoinApp({ currency: chain, transport });
       },
       getAddress: async () => {
-        const { toCashAddress } = await import("@swapkit-dev/toolboxes/utxo");
+        const { toCashAddress } = await import("@swapkit/toolboxes/utxo");
 
         await checkBtcAppAndCreateTransportWebUSB(false);
 
@@ -173,7 +172,7 @@ const BaseLedgerUTXO = ({
 
         await createTransportWebUSB();
 
-        const { ZcashTransaction, Script } = await import("@swapkit-dev/utxo-signer");
+        const { ZcashTransaction, Script } = await import("@swapkit/utxo-signer");
 
         const global = pczt.getGlobal();
 

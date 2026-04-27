@@ -1,6 +1,6 @@
 import type { CoinbaseWalletProvider } from "@coinbase/wallet-sdk";
 import type { createCoinbaseWalletSDK } from "@coinbase/wallet-sdk/dist/createCoinbaseWalletSDK.js";
-import { Chain, SwapKitError } from "@swapkit-dev/helpers";
+import { Chain, SwapKitError } from "@swapkit/helpers";
 import type { Provider, TypedDataDomain, TypedDataField } from "ethers";
 
 async function getCoinbaseMobileSigner(walletProvider: CoinbaseWalletProvider, provider?: Provider) {
@@ -39,7 +39,7 @@ async function getCoinbaseMobileSigner(walletProvider: CoinbaseWalletProvider, p
       value: Record<string, unknown>,
       explicitPrimaryType?: string,
     ) {
-      const { buildEIP712DomainType } = await import("@swapkit-dev/toolboxes/evm");
+      const { buildEIP712DomainType } = await import("@swapkit/toolboxes/evm");
       const { TypedDataEncoder } = await import("ethers");
       const address = await this.getAddress();
 
@@ -83,7 +83,7 @@ export const getWalletMethods = async ({
     case Chain.Base:
     case Chain.BinanceSmartChain: {
       const walletProvider = coinbaseSdk.getProvider() as CoinbaseWalletProvider;
-      const { getEvmToolboxAsync, getProvider } = await import("@swapkit-dev/toolboxes/evm");
+      const { getEvmToolboxAsync, getProvider } = await import("@swapkit/toolboxes/evm");
 
       const provider = await getProvider(chain);
       const signer = await getCoinbaseMobileSigner(walletProvider, provider);
