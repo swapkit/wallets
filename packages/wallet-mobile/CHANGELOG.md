@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-mobile
 
+## 4.3.6
+
+### Patch Changes
+
+- [#34](https://github.com/swapkit/wallets/pull/34) [`3104442`](https://github.com/swapkit/wallets/commit/31044425a5753c4436f806379d427d2aa3050158) Thanks [@towanTG](https://github.com/towanTG)! - Update shared `@swapkit/*` dependency ranges to the latest published versions used in this monorepo.
+
 ## 4.3.5
 
 ### Patch Changes
