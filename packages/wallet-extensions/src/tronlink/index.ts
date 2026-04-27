@@ -1,7 +1,7 @@
 import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-import { getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
 import type { ExtensionWallet } from "../walletTypes";
+import { getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
 
 export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>

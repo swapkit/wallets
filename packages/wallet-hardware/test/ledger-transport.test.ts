@@ -23,6 +23,7 @@ mock.module("ledger-bitcoin", () => ({
     getMasterFingerprint = async () => "deadbeef";
   },
   DefaultWalletPolicy: class MockDefaultWalletPolicy {
+    // biome-ignore lint/complexity/noUselessConstructor: skip for tests
     constructor(_template: string, _key: string) {}
   },
 }));

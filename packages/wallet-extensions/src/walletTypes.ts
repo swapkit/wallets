@@ -1,5 +1,5 @@
 import type { Chain, WalletOption } from "@swapkit/helpers";
-import { createWallet } from "@swapkit/wallet-core";
+import type { createWallet } from "@swapkit/wallet-core";
 
 export type ExtensionWallet<
   Name extends string,

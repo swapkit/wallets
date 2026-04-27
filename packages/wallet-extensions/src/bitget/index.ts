@@ -1,7 +1,7 @@
 import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-import { getWalletMethods } from "./helpers";
 import type { ExtensionWallet } from "../walletTypes";
+import { getWalletMethods } from "./helpers";
 
 export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
