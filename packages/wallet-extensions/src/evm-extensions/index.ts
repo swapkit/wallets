@@ -71,19 +71,20 @@ export const evmWallet: ExtensionWallet<
     ) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const { BrowserProvider } = await import("ethers");
+      if (walletType === WalletOption.EIP6963 && !eip1193Provider) {
+        throw new SwapKitError("wallet_evm_extensions_no_provider");
+      }
+
+      const windowProvider = eip1193Provider || getWalletForType(walletType);
+      const browserProvider = new BrowserProvider(windowProvider, "any");
+
+      await browserProvider.send("eth_requestAccounts", []);
+      const signer = await browserProvider.getSigner();
+      const address = await signer.getAddress();
+      const disconnect = () => browserProvider.send("wallet_revokePermissions", [{ eth_accounts: {} }]);
 
       await Promise.all(
         filteredChains.map(async (chain) => {
-          if (walletType === WalletOption.EIP6963 && !eip1193Provider)
-            throw new SwapKitError("wallet_evm_extensions_no_provider");
-
-          const windowProvider = eip1193Provider || getWalletForType(walletType);
-          const browserProvider = new BrowserProvider(windowProvider, "any");
-
-          await browserProvider.send("eth_requestAccounts", []);
-          const signer = await browserProvider.getSigner();
-          const address = await signer.getAddress();
-
           const walletMethods = await getWeb3WalletMethods({
             address,
             chain,
@@ -91,7 +92,6 @@ export const evmWallet: ExtensionWallet<
             walletProvider: windowProvider,
           });
 
-          const disconnect = () => browserProvider.send("wallet_revokePermissions", [{ eth_accounts: {} }]);
           addChain({ ...walletMethods, address, chain, disconnect, walletType });
           return;
         }),
