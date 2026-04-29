@@ -78,3 +78,32 @@ export const getRequiredNamespaces = (chains: string[]): ProposalTypes.RequiredN
     ]),
   );
 };
+
+export const getOptionalNamespaces = (
+  requiredChains: string[],
+  optionalChains: string[],
+): ProposalTypes.OptionalNamespaces => {
+  const selectedNamespaces = getNamespacesFromChains(requiredChains);
+
+  return Object.fromEntries(
+    selectedNamespaces.map((namespace) => [
+      namespace,
+      {
+        chains: optionalChains.filter((chain) => chain.startsWith(namespace)),
+        events: getSupportedEventsByNamespace(namespace) as any[],
+        methods: getSupportedMethodsByNamespace(namespace),
+      },
+    ]),
+  );
+};
+
+export const getConnectionNamespaces = ({
+  requiredChains,
+  optionalChains,
+}: {
+  requiredChains: string[];
+  optionalChains: string[];
+}) => ({
+  optionalNamespaces: getOptionalNamespaces(requiredChains, optionalChains),
+  requiredNamespaces: getRequiredNamespaces(requiredChains),
+});

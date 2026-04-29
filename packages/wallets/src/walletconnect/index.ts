@@ -6,15 +6,22 @@ import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
-import type { SignClient } from "@walletconnect/sign-client";
+import type SignClientClient from "@walletconnect/sign-client";
 import type { SessionTypes, SignClientTypes } from "@walletconnect/types";
 import { DEFAULT_APP_METADATA, DEFAULT_COSMOS_METHODS, DEFAULT_LOGGER, DEFAULT_RELAY_URL } from "./constants";
 import { getEVMSigner } from "./evmSigner";
 import { chainToChainId, getAddressByChain } from "./helpers";
-import { getRequiredNamespaces } from "./namespaces";
+import { getConnectionNamespaces } from "./namespaces";
 
 export * from "./constants";
 export * from "./types";
+
+export interface Walletconnect {
+  accounts: string[];
+  client: SignClientClient;
+  disconnect: () => Promise<void>;
+  session?: SessionTypes.Struct;
+}
 
 export const walletconnectWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
@@ -26,11 +33,12 @@ export const walletconnectWallet = createWallet({
         throw new SwapKitError("wallet_walletconnect_project_id_not_specified");
       }
 
-      const walletconnect = await getWalletconnect(filteredChains, walletConnectProjectId, walletconnectOptions);
-
-      if (!walletconnect) {
-        throw new SwapKitError("wallet_walletconnect_connection_not_established");
-      }
+      const walletconnect = await getWalletconnect(
+        filteredChains,
+        supportedChains,
+        walletConnectProjectId,
+        walletconnectOptions,
+      );
 
       const { accounts } = walletconnect;
 
@@ -94,7 +102,6 @@ export const walletconnectWallet = createWallet({
 });
 
 export const WC_SUPPORTED_CHAINS = getWalletSupportedChains(walletconnectWallet);
-export type Walletconnect = Awaited<ReturnType<typeof getWalletconnect>>;
 
 type WalletConnectCosmosAccount = {
   address?: string;
@@ -384,16 +391,19 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
 async function getWalletconnect(
   chains: Chain[],
+  allSupportedChains: Chain[],
   walletConnectProjectId: string,
   walletconnectOptions?: SignClientTypes.Options,
 ) {
   let modal: WalletConnectModal | undefined;
-  let signer: typeof SignClient | undefined;
-  let session: SessionTypes.Struct | undefined;
-  let accounts: string[] | undefined;
-  try {
-    const requiredNamespaces = getRequiredNamespaces(chains.map(chainToChainId));
+  const chainIds = chains.map(chainToChainId).filter(Boolean);
+  const supportedChainIds = allSupportedChains.map(chainToChainId).filter(Boolean);
+  const { optionalNamespaces, requiredNamespaces } = getConnectionNamespaces({
+    optionalChains: supportedChainIds,
+    requiredChains: chainIds,
+  });
 
+  try {
     const { SignClient } = await import("@walletconnect/sign-client");
     const { WalletConnectModal } = await import("@walletconnect/modal");
 
@@ -405,63 +415,120 @@ async function getWalletconnect(
       ...walletconnectOptions?.core,
     });
 
-    const modal = new WalletConnectModal({
+    modal = new WalletConnectModal({
       logger: DEFAULT_LOGGER,
       projectId: walletConnectProjectId,
       relayUrl: DEFAULT_RELAY_URL,
       ...walletconnectOptions?.core,
     });
 
-    const oldSession = (await client.session.getAll())[0];
-
-    // disconnect old Session cause we can't handle using it with current ui
-    if (oldSession) {
-      await client.disconnect({ reason: { code: 0, message: "Resetting session" }, topic: oldSession.topic });
+    const existingSession = getPreferredSession(client.find({ requiredNamespaces }));
+    if (existingSession) {
+      return createWalletconnectConnection({ client, session: existingSession });
     }
 
+    const pairingTopic = getPreferredPairingTopic(client);
     const { uri, approval } = await client.connect({
-      // Optionally: pass a known prior pairing (e.g. from `client.core.pairing.getPairings()`) to skip the `uri` step.
-      //   pairingTopic: pairing?.topic,
-      // Provide the namespaces and chains (e.g. `eip155` for EVM-based chains) we want to use in this session.
+      optionalNamespaces,
+      pairingTopic,
       requiredNamespaces,
     });
 
     if (uri) {
       modal.openModal({ uri });
-      // Await session approval from the wallet.
-      session = await approval();
-      // Handle the returned session (e.g. update UI to "connected" state).
-      // Close the QRCode modal in case it was open.
-      modal.closeModal();
-
-      function extractAccountsFromSession(session: SessionTypes.Struct) {
-        const accounts: string[] = [];
-
-        for (const [_namespace, data] of Object.entries(session.namespaces)) {
-          accounts.push(...data.accounts);
-        }
-
-        return accounts;
-      }
-
-      accounts = extractAccountsFromSession(session);
     }
 
-    const disconnect = async () => {
-      session && (await client.disconnect({ reason: { code: 0, message: "User disconnected" }, topic: session.topic }));
-    };
+    const session = await approval();
 
     if (!session) {
       throw new SwapKitError("wallet_walletconnect_connection_not_established");
     }
 
-    return { accounts, client, disconnect, session, signer };
-  } catch {
-    // Errors are handled by returning undefined
+    return createWalletconnectConnection({ client, session });
   } finally {
     if (modal) {
       modal.closeModal();
     }
   }
-  return undefined;
+}
+
+function createWalletconnectConnection({
+  client,
+  session,
+}: {
+  client: SignClientClient;
+  session: SessionTypes.Struct;
+}): Walletconnect {
+  const walletconnect: Walletconnect = {
+    accounts: extractAccountsFromSession(session),
+    client,
+    disconnect: async () => {
+      if (!walletconnect.session) return;
+      await client.disconnect({ reason: { code: 0, message: "User disconnected" }, topic: walletconnect.session.topic });
+    },
+    session,
+  };
+
+  client.on("session_delete", ({ topic }: SignClientTypes.EventArguments["session_delete"]) => {
+    if (walletconnect.session?.topic !== topic) return;
+
+    walletconnect.accounts = [];
+    walletconnect.session = undefined;
+  });
+
+  client.on("session_expire", ({ topic }: SignClientTypes.EventArguments["session_expire"]) => {
+    if (walletconnect.session?.topic !== topic) return;
+
+    walletconnect.accounts = [];
+    walletconnect.session = undefined;
+  });
+
+  client.on("session_update", ({ topic, params }: SignClientTypes.EventArguments["session_update"]) => {
+    const currentSession = walletconnect.session;
+    if (!currentSession || currentSession.topic !== topic) return;
+
+    const nextSession = { ...currentSession, namespaces: params.namespaces };
+    walletconnect.session = nextSession;
+    walletconnect.accounts = extractAccountsFromSession(nextSession);
+  });
+
+  return walletconnect;
+}
+
+function extractAccountsFromSession(session: SessionTypes.Struct) {
+  const accounts: string[] = [];
+
+  for (const [_namespace, data] of Object.entries(session.namespaces)) {
+    accounts.push(...data.accounts);
+  }
+
+  return accounts;
+}
+
+function getPreferredSession(sessions: SessionTypes.Struct[]) {
+  return sessions
+    .filter((session) => !isExpired(session.expiry))
+    .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry)[0];
+}
+
+function getPreferredPairingTopic(client: SignClientClient) {
+  const sessions = client.session
+    .getAll()
+    .filter((session) => !isExpired(session.expiry))
+    .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry);
+
+  if (sessions[0]?.pairingTopic) {
+    return sessions[0].pairingTopic;
+  }
+
+  const pairings = client.core.pairing
+    .getPairings()
+    .filter((pairing) => pairing.active && !isExpired(pairing.expiry))
+    .sort((pairingA, pairingB) => pairingB.expiry - pairingA.expiry);
+
+  return pairings[0]?.topic;
+}
+
+function isExpired(expiry: number) {
+  return expiry <= Math.floor(Date.now() / 1000);
 }
