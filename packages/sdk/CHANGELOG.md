@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 4.6.14
+
+### Patch Changes
+
+- [#43](https://github.com/swapkit/wallets/pull/43) [`ccd24ef`](https://github.com/swapkit/wallets/commit/ccd24efef83af6b29f97e2cd8d39b78a24d491a0) Thanks [@towanTG](https://github.com/towanTG)! - Use workspace protocol for internal wallet package dependencies so changesets propagates version bumps from internal package releases.
+
+- Updated dependencies [[`ccd24ef`](https://github.com/swapkit/wallets/commit/ccd24efef83af6b29f97e2cd8d39b78a24d491a0)]:
+  - @swapkit/wallets@4.8.8
+
 ## 4.6.13
 
 ### Patch Changes
