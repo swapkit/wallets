@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.5.9
+
+### Patch Changes
+
+- [#41](https://github.com/swapkit/wallets/pull/41) [`b9d3c09`](https://github.com/swapkit/wallets/commit/b9d3c09a926188474664bc1b59c5b753498fa03e) Thanks [@towanTG](https://github.com/towanTG)! - Avoid parallel `eth_requestAccounts` calls when connecting EVM extension wallets across multiple chains.
+
 ## 4.5.8
 
 ### Patch Changes
