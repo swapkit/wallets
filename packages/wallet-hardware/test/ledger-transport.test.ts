@@ -6,6 +6,8 @@ import type Transport from "@ledgerhq/hw-transport";
 // rather than cross-contaminating via a shared outer closure.
 const bitcoinAppInvocations: Array<{ currency: string; transport: unknown }> = [];
 const psbtAppClientInvocations: Array<unknown> = [];
+const psbtExtendedPubkeyInvocations: string[] = [];
+const psbtWalletAddressInvocations: Array<{ addressIndex: number; change: number }> = [];
 
 mock.module("@ledgerhq/hw-app-btc", () => ({
   default: class MockBitcoinApp {
@@ -21,6 +23,14 @@ mock.module("ledger-bitcoin", () => ({
       psbtAppClientInvocations.push(transport);
     }
     getMasterFingerprint = async () => "deadbeef";
+    getExtendedPubkey = async (path: string) => {
+      psbtExtendedPubkeyInvocations.push(path);
+      return "xpub661MyMwAqRbcF8SxkT6wT9y6rL4n9wBEmc6kAMPxQ4vYXvyfZ87Z84qxdjQbaAWkj2rW6zGyFNR7fsRG3Gzdhvj1io8GZF1dgNpTiFqouBZ";
+    };
+    getWalletAddress = async (_policy: unknown, _hmac: unknown, change: number, addressIndex: number) => {
+      psbtWalletAddressInvocations.push({ addressIndex, change });
+      return "bc1qtestaddress";
+    };
   },
   DefaultWalletPolicy: class MockDefaultWalletPolicy {
     // biome-ignore lint/complexity/noUselessConstructor: skip for tests
@@ -35,6 +45,8 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
   beforeEach(() => {
     bitcoinAppInvocations.length = 0;
     psbtAppClientInvocations.length = 0;
+    psbtExtendedPubkeyInvocations.length = 0;
+    psbtWalletAddressInvocations.length = 0;
   });
 
   it("BitcoinLedger: two invocations with different transports get their own BitcoinApp each", async () => {
@@ -65,6 +77,16 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(psbtAppClientInvocations).toHaveLength(2);
     expect(psbtAppClientInvocations[0]).toBe(transportA);
     expect(psbtAppClientInvocations[1]).toBe(transportB);
+  });
+
+  it("BitcoinPsbtLedger: normalizes m/ derivation paths before requesting account xpubs", async () => {
+    const transport = { id: "A" } as unknown as Transport;
+    const client = BitcoinPsbtLedger("m/84'/0'/0'/0/0", transport);
+
+    await client.getAddress();
+
+    expect(psbtExtendedPubkeyInvocations).toEqual(["m/84'/0'/0'"]);
+    expect(psbtWalletAddressInvocations).toEqual([{ addressIndex: 0, change: 0 }]);
   });
 
   it("BitcoinLedger: reusing the same transport across calls does not deduplicate state", async () => {

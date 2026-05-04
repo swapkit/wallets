@@ -27,6 +27,10 @@ function pathToString(path: DerivationPathArray | string): string {
   return typeof path === "string" ? path : derivationPathToString(path);
 }
 
+function normalizeLedgerPath(path: string): string {
+  return path.replace(/^m\//, "").replace(/^\/+/, "");
+}
+
 function pathToNumberArray(path: string): number[] {
   return path
     .replace(/^m\//, "")
@@ -37,6 +41,12 @@ function pathToNumberArray(path: string): number[] {
       const num = Number.parseInt(hardened ? p.slice(0, -1) : p, 10);
       return hardened ? (num | 0x80000000) >>> 0 : num;
     });
+}
+
+function hasBip32Derivation(tx: Transaction, inputIndex: number) {
+  const input = tx.getInput(inputIndex) as { bip32Derivation?: Array<unknown> };
+
+  return Boolean(input.bip32Derivation?.length);
 }
 
 const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
@@ -65,9 +75,10 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
     }
 
     // Single-address account: change == index == 0 by default.
-    const derivationPath = derivationPathArray ? pathToString(derivationPathArray) : "84'/0'/0'/0/0";
-    const accountPath = derivationPath.split("/").slice(0, 3).join("/");
-    const leafSegments = derivationPath.split("/").slice(3);
+    const derivationPath = normalizeLedgerPath(derivationPathArray ? pathToString(derivationPathArray) : "84'/0'/0'/0/0");
+    const pathSegments = derivationPath.split("/").filter(Boolean);
+    const accountPath = pathSegments.slice(0, 3).join("/");
+    const leafSegments = pathSegments.slice(3);
     const change = Number(leafSegments[0] ?? 0);
     const addressIndex = Number(leafSegments[1] ?? 0);
     const format = getWalletFormatFor(derivationPath);
@@ -118,17 +129,25 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
       },
       getExtendedPublicKey: async (path = `m/${accountPath}`) => {
         const app = await getAppClient();
-        return app.getExtendedPubkey(path);
+        return app.getExtendedPubkey(`m/${normalizeLedgerPath(path)}`);
       },
       signTransaction: async (tx: Transaction): Promise<Transaction> => {
         const { app, policy, fpr } = await buildPolicy();
         const fingerprintBE = Number.parseInt(fpr, 16) >>> 0;
         const pathNumbers = pathToNumberArray(derivationPath);
-        const leafPubkey = await getLeafPubkey();
+        const missingDerivationIndexes = Array.from({ length: tx.inputsLength }, (_, inputIndex) => inputIndex).filter(
+          (inputIndex) => !hasBip32Derivation(tx, inputIndex),
+        );
 
-        // Single-address account: every input is owned by the same key + path.
-        for (let i = 0; i < tx.inputsLength; i++) {
-          tx.updateInput(i, { bip32Derivation: [[leafPubkey, { fingerprint: fingerprintBE, path: pathNumbers }]] });
+        if (missingDerivationIndexes.length > 0) {
+          const leafPubkey = await getLeafPubkey();
+
+          // Fallback for PSBTs that do not include per-input HD key origins.
+          for (const inputIndex of missingDerivationIndexes) {
+            tx.updateInput(inputIndex, {
+              bip32Derivation: [[leafPubkey, { fingerprint: fingerprintBE, path: pathNumbers }]],
+            });
+          }
         }
 
         const psbtB64 = base64.encode(tx.toPSBT(0));
@@ -138,7 +157,6 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
           tx.updateInput(idx, { partialSig: [[new Uint8Array(partial.pubkey), new Uint8Array(partial.signature)]] });
         }
 
-        tx.finalize();
         return tx;
       },
     };
