@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.6
+
+### Patch Changes
+
+- [#46](https://github.com/swapkit/wallets/pull/46) [`3c4e059`](https://github.com/swapkit/wallets/commit/3c4e05940bc735f95648e746dd706944294102b0) Thanks [@towanTG](https://github.com/towanTG)! - Fix Ledger BTC/LTC PSBT signing by normalizing derivation paths, preserving existing input derivation metadata, and avoiding premature transaction finalization inside the Ledger signer.
+
 ## 4.9.5
 
 ### Patch Changes
