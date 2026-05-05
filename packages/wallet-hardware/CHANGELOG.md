@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.7
+
+### Patch Changes
+
+- [#48](https://github.com/swapkit/wallets/pull/48) [`6feb513`](https://github.com/swapkit/wallets/commit/6feb51351cc54514ba6362d790987cb3b77d0812) Thanks [@towanTG](https://github.com/towanTG)! - Add Trezor BTC/LTC PSBT signing support for V3 direct UTXO swaps, and dispose Trezor sessions on wallet disconnect.
+
 ## 4.9.6
 
 ### Patch Changes
