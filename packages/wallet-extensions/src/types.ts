@@ -22,6 +22,20 @@ export type VultisigCosmosProvider = {
   request(request: { method: string; params?: any[] | Record<string, any> }, callback?: Callback): Promise<any>;
 };
 
+type CtrlInjectedProviders = {
+  binance: Eip1193Provider;
+  bitcoin: Eip1193Provider;
+  bitcoincash: Eip1193Provider;
+  dogecoin: Eip1193Provider;
+  ethereum: Eip1193Provider;
+  keplr: Keplr;
+  litecoin: Eip1193Provider;
+  thorchain: Eip1193Provider;
+  mayachain: Eip1193Provider;
+  solana: SolanaProvider & { isXDEFI: boolean };
+  near: NearBrowserWalletProvider;
+};
+
 declare global {
   interface Window {
     injectedWeb3?: SubstrateInjectedExtension;
@@ -35,19 +49,8 @@ declare global {
     trustwallet: EthereumWindowProvider & { ton?: import("./trustwallet").TrustWalletTonProvider };
     phantom: { solana: SolanaProvider };
 
-    ctrl?: {
-      binance: Eip1193Provider;
-      bitcoin: Eip1193Provider;
-      bitcoincash: Eip1193Provider;
-      dogecoin: Eip1193Provider;
-      ethereum: Eip1193Provider;
-      keplr: Keplr;
-      litecoin: Eip1193Provider;
-      thorchain: Eip1193Provider;
-      mayachain: Eip1193Provider;
-      solana: SolanaProvider & { isXDEFI: boolean };
-      near: NearBrowserWalletProvider;
-    };
+    ctrl?: CtrlInjectedProviders;
+    xfi?: CtrlInjectedProviders;
 
     vultisig?: {
       bitcoin: Eip1193Provider;

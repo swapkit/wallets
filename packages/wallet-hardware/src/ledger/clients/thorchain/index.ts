@@ -1,3 +1,4 @@
+import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
 import { type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
@@ -72,6 +73,42 @@ export class THORChainLedger extends CosmosLedgerInterface {
         signature: getSignature(signature),
       },
     ];
+  };
+
+  signAmino = async (signerAddress: string, signDoc: StdSignDoc): Promise<AminoSignResponse> => {
+    await this.checkOrCreateTransportAndLedger(true);
+
+    const account = (await this.getAccounts()).find((item) => item.address === signerAddress);
+    if (!account) {
+      throw new SwapKitError("wallet_ledger_address_not_found", { address: signerAddress });
+    }
+
+    const importedAmino = await import("@cosmjs/amino");
+    const encodeSecp256k1Signature =
+      importedAmino.encodeSecp256k1Signature ?? importedAmino.default?.encodeSecp256k1Signature;
+    const serializeSignDoc = importedAmino.serializeSignDoc ?? importedAmino.default?.serializeSignDoc;
+
+    const { return_code, error_message, signature } = await this.ledgerApp.sign(
+      this.derivationPath,
+      serializeSignDoc(signDoc),
+    );
+
+    this.validateResponse(return_code, error_message);
+
+    return {
+      signature: encodeSecp256k1Signature(account.pubkey, base64.decode(getSignature(signature))),
+      signed: signDoc,
+    };
+  };
+
+  getAccounts = async (): Promise<readonly AccountData[]> => {
+    await this.checkOrCreateTransportAndLedger(true);
+
+    const { bech32_address, compressed_pk }: GetAddressAndPubKeyResponse = await this.getAddressAndPubKey();
+
+    this.pubKey = base64.encode(compressed_pk);
+
+    return [{ address: bech32_address, algo: "secp256k1", pubkey: compressed_pk }];
   };
 
   sign = async (message: string) => {

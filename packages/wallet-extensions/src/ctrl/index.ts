@@ -1,14 +1,7 @@
-import {
-  Chain,
-  ChainToChainId,
-  filterSupportedChains,
-  type GenericTransferParams,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit/helpers";
+import { Chain, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { ExtensionWallet } from "../walletTypes";
-import { getCtrlAddress, getCtrlProvider, walletTransfer } from "./walletHelpers";
+import { getCtrlAddress, getCtrlProvider, signCtrlThorchainTransaction, walletTransfer } from "./walletHelpers";
 
 export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
@@ -38,14 +31,16 @@ export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
     [Chain.Kujira]: true,
+    [Chain.Maya]: true,
     [Chain.Monad]: true,
     [Chain.Near]: true,
     [Chain.Noble]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.Solana]: true,
+    [Chain.THORChain]: true,
     [Chain.XLayer]: true,
-    // BCH/DOGE/LTC/THORChain/Maya: blocked on CTRL provider — no raw signing RPC
+    // BCH/DOGE/LTC: blocked on CTRL provider — no raw signing RPC
   },
   name: "connectCtrl",
   supportedChains: [
@@ -93,15 +88,25 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
 
     case Chain.Maya:
     case Chain.THORChain: {
-      const { getCosmosToolbox, THORCHAIN_GAS_VALUE, MAYA_GAS_VALUE } = await import("@swapkit/toolboxes/cosmos");
+      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
 
-      const gasLimit = chain === Chain.Maya ? MAYA_GAS_VALUE : THORCHAIN_GAS_VALUE;
       const toolbox = await getCosmosToolbox(chain);
 
       return {
         ...toolbox,
-        deposit: (tx: GenericTransferParams) => walletTransfer({ ...tx, recipient: "" }, "deposit"),
-        transfer: (tx: GenericTransferParams) => walletTransfer({ ...tx, gasLimit }, "transfer"),
+        signAndBroadcastTransaction: (tx: Parameters<typeof signCtrlThorchainTransaction>[0]) =>
+          signCtrlThorchainTransaction(tx, chain),
+        signTransaction: () =>
+          Promise.reject(
+            new SwapKitError({
+              errorKey: "wallet_walletconnect_method_not_supported",
+              info: {
+                method: "signTransaction",
+                reason: "CTRL THORChain provider only supports signAndBroadcastTransaction",
+                wallet: WalletOption.CTRL,
+              },
+            }),
+          ),
       };
     }
 
@@ -152,28 +157,96 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
           }
         });
 
+      type SignPsbtResponse = {
+        error?: unknown;
+        hash?: string;
+        psbt?: string;
+        result?: SignPsbtResponse | string;
+        status?: string;
+        transactionHash?: string;
+        txid?: string;
+        txId?: string;
+      };
+
+      const getSignPsbtResult = (response: SignPsbtResponse): SignPsbtResponse =>
+        typeof response.result === "object" && response.result ? response.result : response;
+
+      const getSignedPsbt = (response: SignPsbtResponse) => {
+        const result = getSignPsbtResult(response);
+        return result.psbt || response.psbt || (typeof response.result === "string" ? response.result : undefined);
+      };
+
+      const getBroadcastTxId = (response: SignPsbtResponse) => {
+        const result = getSignPsbtResult(response);
+        return (
+          result.txid ||
+          result.txId ||
+          result.hash ||
+          result.transactionHash ||
+          response.txid ||
+          response.txId ||
+          response.hash ||
+          response.transactionHash ||
+          (typeof response.result === "string" ? response.result : undefined)
+        );
+      };
+
+      const getSignPsbtResponseShape = (response: SignPsbtResponse) => {
+        const result = getSignPsbtResult(response);
+        return {
+          nestedStatus: result.status,
+          resultKeys: typeof response.result === "object" && response.result ? Object.keys(response.result) : undefined,
+          rootKeys: Object.keys(response),
+          status: response.status,
+        };
+      };
+
+      const signPsbt = (tx: InstanceType<typeof Transaction>, broadcast: boolean) => {
+        const psbt = Buffer.from(tx.toPSBT()).toString("base64");
+        const signingIndexes = Array.from({ length: tx.inputsLength }, (_, i) => i);
+
+        return ctrlRequest<SignPsbtResponse>({
+          method: "sign_psbt",
+          params: [{ allowedSignHash: 1, broadcast, psbt, signInputs: { [address]: signingIndexes } }],
+        });
+      };
+
       const signer = {
         getAddress: async () => address,
         signTransaction: async (tx: InstanceType<typeof Transaction>) => {
-          const psbtB64 = Buffer.from(tx.toPSBT()).toString("base64");
-          const signingIndexes = Array.from({ length: tx.inputsLength }, (_, i) => i);
+          const response = await signPsbt(tx, false);
+          const signedPsbt = getSignedPsbt(response);
 
-          const response = await ctrlRequest<{ status: string; result: { psbt: string } }>({
-            method: "sign_psbt",
-            params: { allowedSignHash: 1, broadcast: false, psbt: psbtB64, signInputs: { [address]: signingIndexes } },
-          });
-
-          if (response?.status !== "success" || !response.result?.psbt) {
-            throw new SwapKitError("plugin_swapkit_invalid_transaction", { chain: Chain.Bitcoin });
+          if (!signedPsbt) {
+            throw new SwapKitError("plugin_swapkit_invalid_transaction", {
+              chain: Chain.Bitcoin,
+              response: getSignPsbtResponseShape(response),
+            });
           }
 
-          return Transaction.fromPSBT(new Uint8Array(Buffer.from(response.result.psbt, "base64")));
+          return Transaction.fromPSBT(new Uint8Array(Buffer.from(signedPsbt, "base64")));
         },
       };
 
       const toolbox = await getUtxoToolbox(Chain.Bitcoin, { signer });
 
-      return { ...toolbox, address };
+      return {
+        ...toolbox,
+        address,
+        signAndBroadcastTransaction: async (tx: InstanceType<typeof Transaction>) => {
+          const response = await signPsbt(tx, true);
+          const txid = getBroadcastTxId(response);
+
+          if (!txid) {
+            throw new SwapKitError("plugin_swapkit_invalid_transaction", {
+              chain: Chain.Bitcoin,
+              response: getSignPsbtResponseShape(response),
+            });
+          }
+
+          return txid;
+        },
+      };
     }
 
     case Chain.BitcoinCash:

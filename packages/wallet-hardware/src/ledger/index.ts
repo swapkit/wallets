@@ -10,11 +10,9 @@ import {
   getRPCUrl,
   NetworkDerivationPath,
   SwapKitError,
-  THORConfig,
   type UTXOChain,
   WalletOption,
 } from "@swapkit/helpers";
-import type { ThorchainDepositParams } from "@swapkit/toolboxes/cosmos";
 import {
   addInputsAndOutputs,
   assertDerivationIndex,
@@ -80,10 +78,10 @@ export const ledgerWallet = createWallet({
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
     [Chain.Sui]: true,
+    [Chain.THORChain]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     // ZEC: still on bespoke signPCZT path
-    // THORChain: needs signAmino added to THORChainLedger (V3 plan PR)
   },
   name: "connectLedger",
   supportedChains: [
@@ -124,32 +122,6 @@ function reduceMemo(memo?: string, affiliateAddress = "t") {
   const removedAffiliate = memo.includes(`:${affiliateAddress}:`) ? memo.split(`:${affiliateAddress}:`)[0] : memo;
 
   return removedAffiliate?.substring(0, removedAffiliate.lastIndexOf(":"));
-}
-
-function recursivelyOrderKeys(unordered: any) {
-  // If it's an array - recursively order any
-  // dictionary items within the array
-  if (Array.isArray(unordered)) {
-    unordered.forEach((item, index) => {
-      unordered[index] = recursivelyOrderKeys(item);
-    });
-    return unordered;
-  }
-
-  // If it's an object - let's order the keys
-  if (typeof unordered !== "object") return unordered;
-  const ordered: any = {};
-  const sortedKeys = Object.keys(unordered).sort();
-
-  for (const key of sortedKeys) {
-    ordered[key] = recursivelyOrderKeys(unordered[key]);
-  }
-
-  return ordered;
-}
-
-function stringifyKeysInOrder(data: any) {
-  return JSON.stringify(recursivelyOrderKeys(data));
 }
 
 async function getWalletMethods({
@@ -444,85 +416,13 @@ async function getWalletMethods({
     }
 
     case Chain.THORChain: {
-      const { SignMode } = await import("cosmjs-types/cosmos/tx/signing/v1beta1/signing.js");
-      const { TxRaw } = await import("cosmjs-types/cosmos/tx/v1beta1/tx.js");
-      const importedSigning = await import("@cosmjs/proto-signing");
-      const encodePubkey = importedSigning.encodePubkey ?? importedSigning.default?.encodePubkey;
-      const makeAuthInfoBytes = importedSigning.makeAuthInfoBytes ?? importedSigning.default?.makeAuthInfoBytes;
-      const {
-        createStargateClient,
-        buildEncodedTxBody,
-        getCosmosToolbox,
-        buildAminoMsg,
-        getDefaultChainFee,
-        fromBase64,
-        parseAminoMessageForDirectSigning,
-      } = await import("@swapkit/toolboxes/cosmos");
-      const toolbox = getCosmosToolbox(chain);
       const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
+      const toolbox = getCosmosToolbox(chain, { signer });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
+      const { sign: signMessage } = signer;
 
-      const fee = getDefaultChainFee(chain);
-      const { pubkey: value, signTransaction, sign: signMessage } = signer;
-
-      // ANCHOR (@Chillios): Same parts in methods + can extract StargateClient init to toolbox
-      const thorchainTransfer = async ({
-        memo = "",
-        assetValue,
-        ...rest
-      }: GenericTransferParams | ThorchainDepositParams) => {
-        const account = await toolbox.getAccount(address);
-        if (!account) throw new SwapKitError("wallet_ledger_invalid_account");
-        if (!assetValue) throw new SwapKitError("wallet_ledger_invalid_asset");
-        if (!value) throw new SwapKitError("wallet_ledger_pubkey_not_found");
-
-        const { accountNumber, sequence: sequenceNumber } = account;
-        const sequence = (sequenceNumber || 0).toString();
-
-        const orderedMessages = recursivelyOrderKeys([buildAminoMsg({ assetValue, memo, sender: address, ...rest })]);
-
-        // get tx signing msg
-        const rawSendTx = stringifyKeysInOrder({
-          account_number: accountNumber?.toString(),
-          chain_id: THORConfig.chainId,
-          fee,
-          memo,
-          msgs: orderedMessages,
-          sequence,
-        });
-
-        const signatures = await signTransaction(rawSendTx, sequence);
-        if (!signatures) throw new SwapKitError("wallet_ledger_signing_error");
-
-        const pubkey = encodePubkey({ type: "tendermint/PubKeySecp256k1", value });
-        const msgs = orderedMessages.map(parseAminoMessageForDirectSigning);
-        const bodyBytes = await buildEncodedTxBody({ chain, memo, msgs });
-
-        const authInfoBytes = makeAuthInfoBytes(
-          [{ pubkey, sequence: Number(sequence) }],
-          fee.amount,
-          Number.parseInt(fee.gas, 10),
-          undefined,
-          undefined,
-          SignMode.SIGN_MODE_LEGACY_AMINO_JSON,
-        );
-
-        const signature = signatures?.[0]?.signature ? fromBase64(signatures[0].signature) : Uint8Array.from([]);
-
-        const txRaw = TxRaw.fromPartial({ authInfoBytes, bodyBytes, signatures: [signature] });
-        const txBytes = TxRaw.encode(txRaw).finish();
-        const rpcUrl = await getRPCUrl(Chain.THORChain);
-
-        const broadcaster = await createStargateClient(rpcUrl);
-        const { transactionHash } = await broadcaster.broadcastTx(txBytes);
-
-        return transactionHash;
-      };
-
-      const transfer = (params: GenericTransferParams) => thorchainTransfer(params);
-      const deposit = (params: ThorchainDepositParams) => thorchainTransfer(params);
-
-      return { ...toolbox, address, deposit, signMessage, transfer };
+      return { ...toolbox, address, signMessage };
     }
 
     case Chain.Near: {
