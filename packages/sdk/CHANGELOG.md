@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 4.6.17
+
+### Patch Changes
+
+- [`ec5af35`](https://github.com/swapkit/wallets/commit/ec5af3585d793bcaa6abe61c1bf4b4d50d85953e) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - Add default Trezor Connect manifest and WebUSB popup fallbacks, and fix wallet declaration builds after provider type updates.
+
+- Updated dependencies [[`ec5af35`](https://github.com/swapkit/wallets/commit/ec5af3585d793bcaa6abe61c1bf4b4d50d85953e)]:
+  - @swapkit/wallets@4.8.11
+
 ## 4.6.16
 
 ### Patch Changes
