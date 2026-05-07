@@ -306,7 +306,7 @@ export async function getCtrlAddress(chain: Chain) {
 }
 
 export async function walletTransfer(
-  { assetValue, recipient, memo, gasLimit }: WalletTxParams,
+  { assetValue, from: providedFrom, recipient, memo, gasLimit }: WalletTxParams,
   method: TransactionMethod = "transfer",
 ) {
   if (!assetValue) {
@@ -318,7 +318,7 @@ export async function walletTransfer(
    * UTXO/Cosmos requires amount to be number
    */
 
-  const from = await getCtrlAddress(assetValue.chain);
+  const from = providedFrom || (await getCtrlAddress(assetValue.chain));
   const params = [
     {
       amount: { amount: assetValue.getBaseValue("number"), decimals: assetValue.decimal },

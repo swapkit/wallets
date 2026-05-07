@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type Transport from "@ledgerhq/hw-transport";
+import { Chain } from "@swapkit/helpers";
 
 // Registries that capture constructor invocations on the mocked Ledger apps.
 // Tests assert that each inner-factory call wires through its own transport
 // rather than cross-contaminating via a shared outer closure.
 const bitcoinAppInvocations: Array<{ currency: string; transport: unknown }> = [];
+const bitcoinAppXpubInvocations: Array<{ path: string; xpubVersion?: number }> = [];
 const psbtAppClientInvocations: Array<unknown> = [];
 const psbtExtendedPubkeyInvocations: string[] = [];
 const psbtWalletAddressInvocations: Array<{ addressIndex: number; change: number }> = [];
@@ -14,6 +16,11 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
     constructor(opts: { currency: string; transport: unknown }) {
       bitcoinAppInvocations.push(opts);
     }
+    getWalletPublicKey = async () => ({ bitcoinAddress: "ltc1qtestaddress" });
+    getWalletXpub = ({ path, xpubVersion }: { path: string; xpubVersion?: number }) => {
+      bitcoinAppXpubInvocations.push({ path, xpubVersion });
+      return "Ltub2SSUS19CirucV6jZg6pTzmtZtxhX1JZJYK7Uq16czQkfFb5m1zf6KV24enP679G9gYHDBYSjbgHn6CJK7VTqDEEnRSsUgJGQWhhmLQV5foV";
+    };
   },
 }));
 
@@ -40,10 +47,12 @@ mock.module("ledger-bitcoin", () => ({
 
 import { BitcoinLedger } from "../src/ledger/clients/utxo";
 import { BitcoinPsbtLedger } from "../src/ledger/clients/utxo-psbt";
+import { ledgerWallet } from "../src/ledger/index";
 
 describe("wallet-hardware/ledger — closure isolation with injected transport", () => {
   beforeEach(() => {
     bitcoinAppInvocations.length = 0;
+    bitcoinAppXpubInvocations.length = 0;
     psbtAppClientInvocations.length = 0;
     psbtExtendedPubkeyInvocations.length = 0;
     psbtWalletAddressInvocations.length = 0;
@@ -103,5 +112,20 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(bitcoinAppInvocations).toHaveLength(2);
     expect(bitcoinAppInvocations[0]?.transport).toBe(transport);
     expect(bitcoinAppInvocations[1]?.transport).toBe(transport);
+  });
+
+  it("connectLedger: requests Litecoin account xpubs with the Litecoin version byte", async () => {
+    const addChain = mock(() => {});
+    const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
+    const transport = { id: "LTC" } as unknown as Transport;
+
+    await connectLedger([Chain.Litecoin], undefined, { transport });
+    const walletMethods = addChain.mock.calls[0]?.[0] as
+      | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
+      | undefined;
+    await walletMethods?.getExtendedPublicKey?.({ accountIndex: 0 });
+
+    expect(bitcoinAppXpubInvocations).toEqual([{ path: "m/84'/2'/0'", xpubVersion: 27108450 }]);
+    expect(psbtAppClientInvocations).toHaveLength(0);
   });
 });

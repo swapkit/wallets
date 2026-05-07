@@ -7,6 +7,42 @@ import { CosmosLedgerInterface } from "../../interfaces/CosmosLedgerInterface";
 import type { GetAddressAndPubKeyResponse } from "../../types";
 import { getSignature } from "./utils";
 
+type ThorchainAssetObject = { chain?: string; symbol?: string; synth?: boolean; ticker?: string };
+
+type ThorchainDepositCoin = { amount: string; asset: string | ThorchainAssetObject };
+
+function getAminoAssetDenom(asset: string | ThorchainAssetObject) {
+  if (typeof asset === "string") return asset;
+
+  const chain = asset.chain?.toUpperCase();
+  const symbol = (asset.symbol || asset.ticker || "").toUpperCase();
+
+  if (!(chain && symbol)) return symbol || chain || "";
+  if (asset.synth) return `${chain}/${symbol}`;
+
+  return `${chain}.${symbol}`;
+}
+
+export function normalizeThorchainLedgerSignDoc(signDoc: StdSignDoc): StdSignDoc {
+  return {
+    ...signDoc,
+    msgs: signDoc.msgs.map((msg) => {
+      if (!msg.type.includes("MsgDeposit")) return msg;
+
+      const coins = msg.value.coins;
+      if (!Array.isArray(coins)) return msg;
+
+      return {
+        ...msg,
+        value: {
+          ...msg.value,
+          coins: coins.map((coin: ThorchainDepositCoin) => ({ ...coin, asset: getAminoAssetDenom(coin.asset) })),
+        },
+      };
+    }),
+  };
+}
+
 export class THORChainLedger extends CosmosLedgerInterface {
   private pubKey: string | null = null;
 
@@ -87,16 +123,20 @@ export class THORChainLedger extends CosmosLedgerInterface {
     const encodeSecp256k1Signature =
       importedAmino.encodeSecp256k1Signature ?? importedAmino.default?.encodeSecp256k1Signature;
     const serializeSignDoc = importedAmino.serializeSignDoc ?? importedAmino.default?.serializeSignDoc;
+    const normalizedSignDoc = normalizeThorchainLedgerSignDoc(signDoc);
 
     const { return_code, error_message, signature } = await this.ledgerApp.sign(
       this.derivationPath,
-      serializeSignDoc(signDoc),
+      serializeSignDoc(normalizedSignDoc),
     );
 
     this.validateResponse(return_code, error_message);
 
     return {
       signature: encodeSecp256k1Signature(account.pubkey, base64.decode(getSignature(signature))),
+      // CosmJS rebuilds bodyBytes from the returned `signed` doc. Keep the
+      // original direct-shaped doc there so MsgDeposit protobuf assets do not
+      // get round-tripped through the incomplete Amino converter.
       signed: signDoc,
     };
   };

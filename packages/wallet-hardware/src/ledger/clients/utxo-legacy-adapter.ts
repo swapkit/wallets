@@ -1,5 +1,5 @@
 import { hex } from "@scure/base";
-import type { UTXOChain } from "@swapkit/helpers";
+import { SwapKitError, type UTXOChain } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
 
@@ -7,15 +7,15 @@ import type { Transaction } from "@swapkit/utxo-signer";
  * Extract per-input metadata from a V3 PSBT in the shape the legacy
  * `@ledgerhq/hw-app-btc.createPaymentTransaction` adapter expects.
  *
- * For segwit inputs the SwapKit V3 API populates `witnessUtxo`; for legacy
- * (BCH/DOGE/DASH) it populates `nonWitnessUtxo` with the full prior-tx bytes.
- * We re-encode the parsed `nonWitnessUtxo` back to hex via `RawTx.encode` so
- * `btcApp.splitTransaction(hex)` can consume it.
+ * The legacy Ledger signer still needs the full previous tx hex for
+ * `btcApp.splitTransaction(hex)`. Some V3 PSBTs only include `witnessUtxo`,
+ * so we fetch the previous raw tx when `nonWitnessUtxo` is absent.
  *
  * Single-address account assumption: all inputs share our derivation path.
  */
-export async function extractInputsFromPsbt(tx: Transaction): Promise<UTXOType[]> {
+export async function extractInputsFromPsbt(tx: Transaction, chain: UTXOChain): Promise<UTXOType[]> {
   const { RawTx } = await import("@swapkit/utxo-signer");
+  const { getUtxoApi } = await import("@swapkit/toolboxes/utxo");
   const inputs: UTXOType[] = [];
 
   for (let i = 0; i < tx.inputsLength; i++) {
@@ -25,31 +25,53 @@ export async function extractInputsFromPsbt(tx: Transaction): Promise<UTXOType[]
       throw new Error(`PSBT input ${i} is missing txid/index`);
     }
 
-    const txHex = input.nonWitnessUtxo ? hex.encode(RawTx.encode(input.nonWitnessUtxo)) : "";
+    const txid = hex.encode(input.txid);
+    const txHex = input.nonWitnessUtxo
+      ? hex.encode(RawTx.encode(input.nonWitnessUtxo))
+      : await getUtxoApi(chain).getRawTx(txid);
+    if (!txHex) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        chain,
+        inputIndex: i,
+        reason: "Unable to resolve previous transaction hex for Ledger signing",
+        txid,
+      });
+    }
     const witnessUtxo = input.witnessUtxo
       ? { script: input.witnessUtxo.script, value: Number(input.witnessUtxo.amount) }
       : undefined;
+    const nonWitnessPrevout = input.index !== undefined ? input.nonWitnessUtxo?.outputs?.[input.index] : undefined;
+    const value = witnessUtxo?.value ?? (nonWitnessPrevout ? Number(nonWitnessPrevout.amount) : 0);
 
-    inputs.push({
-      hash: hex.encode(input.txid),
-      index: input.index,
-      txHex,
-      value: witnessUtxo?.value ?? 0,
-      witnessUtxo,
-    } as UTXOType);
+    inputs.push({ hash: txid, index: input.index, txHex, value, witnessUtxo } as UTXOType);
   }
 
   return inputs;
 }
 
+export async function signLegacyPsbtTransaction({
+  legacyClient,
+  chain,
+  tx,
+}: {
+  legacyClient: { signTransaction: (tx: Transaction, inputUtxos: UTXOType[]) => Promise<string> };
+  chain: UTXOChain;
+  tx: Transaction;
+}): Promise<string> {
+  const inputUtxos = await extractInputsFromPsbt(tx, chain);
+  return legacyClient.signTransaction(tx, inputUtxos);
+}
+
 /**
  * Build a toolbox-compatible signer from the existing legacy Ledger UTXO
- * client. The toolbox synthesizes `signAndBroadcastTransaction` on top of
- * `signer.signTransaction(tx) → Transaction`.
+ * client. Callers that need sign-and-broadcast should broadcast the raw hex
+ * from `signLegacyPsbtTransaction` directly; the legacy Ledger app returns an
+ * already-finalized transaction that should not be passed back to toolbox
+ * finalization.
  */
 export function createLegacyPsbtSigner({
   legacyClient,
-  chain: _chain,
+  chain,
   address,
 }: {
   legacyClient: { signTransaction: (tx: Transaction, inputUtxos: UTXOType[]) => Promise<string> };
@@ -59,8 +81,7 @@ export function createLegacyPsbtSigner({
   return {
     getAddress: async () => address,
     signTransaction: async (tx: Transaction): Promise<Transaction> => {
-      const inputUtxos = await extractInputsFromPsbt(tx);
-      const signedTxHex = await legacyClient.signTransaction(tx, inputUtxos);
+      const signedTxHex = await signLegacyPsbtTransaction({ chain, legacyClient, tx });
 
       const { Transaction: TxClass } = await import("@swapkit/utxo-signer");
       // `Transaction.fromRaw` parses a serialised tx (no PSBT envelope) — exactly

@@ -12,6 +12,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
   getVultisigAddress,
@@ -60,11 +61,15 @@ export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
     [Chain.BinanceSmartChain]: true,
+    [Chain.BitcoinCash]: true,
+    [Chain.Dash]: true,
+    [Chain.Dogecoin]: true,
     [Chain.Ethereum]: true,
+    [Chain.Litecoin]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.XLayer]: true,
-    // BTC/BCH/DASH/DOGE/LTC/ZEC/Cosmos/Kujira/THORChain/Maya/Solana/Ripple: blocked on Vultisig provider — no raw-sign RPC
+    // BTC/ZEC/Cosmos/Kujira/THORChain/Maya/Solana/Ripple: blocked on Vultisig provider — no raw-sign RPC
   },
   name: "connectVultisig",
   supportedChains: [
@@ -127,7 +132,27 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
     .with(...UTXOChains, async () => {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const toolbox = await getUtxoToolbox(chain as UTXOChain);
-      return { ...toolbox, transfer: walletTransfer };
+      if (chain === Chain.Zcash || chain === Chain.Bitcoin) {
+        return { ...toolbox, transfer: walletTransfer };
+      }
+
+      const utxoChain = chain as Exclude<UTXOChain, typeof Chain.Zcash>;
+      const address = await getVultisigAddress(chain);
+
+      return {
+        ...toolbox,
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractUtxoTransferIntent>[0]["tx"]) => {
+          const intent = extractUtxoTransferIntent({ chain: utxoChain, senderAddress: address, tx });
+          return walletTransfer({
+            assetValue: intent.assetValue,
+            from: intent.from,
+            memo: intent.memo,
+            recipient: intent.recipient,
+          });
+        },
+        signTransaction: () => unsupportedUtxoSignTransaction(WalletOption.VULTISIG),
+        transfer: walletTransfer,
+      };
     })
 
     .with(

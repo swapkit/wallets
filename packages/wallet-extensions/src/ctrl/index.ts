@@ -1,5 +1,6 @@
 import { Chain, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import { getCtrlAddress, getCtrlProvider, signCtrlThorchainTransaction, walletTransfer } from "./walletHelpers";
 
@@ -27,10 +28,13 @@ export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
     [Chain.Berachain]: true,
     [Chain.BinanceSmartChain]: true,
     [Chain.Bitcoin]: true,
+    [Chain.BitcoinCash]: true,
     [Chain.Cosmos]: true,
+    [Chain.Dogecoin]: true,
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
     [Chain.Kujira]: true,
+    [Chain.Litecoin]: true,
     [Chain.Maya]: true,
     [Chain.Monad]: true,
     [Chain.Near]: true,
@@ -40,7 +44,6 @@ export const ctrlWallet: ExtensionWallet<"connectCtrl"> = createWallet({
     [Chain.Solana]: true,
     [Chain.THORChain]: true,
     [Chain.XLayer]: true,
-    // BCH/DOGE/LTC: blocked on CTRL provider — no raw signing RPC
   },
   name: "connectCtrl",
   supportedChains: [
@@ -254,8 +257,22 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
     case Chain.Litecoin: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const toolbox = await getUtxoToolbox(chain);
+      const address = await getCtrlAddress(chain);
 
-      return { ...toolbox, transfer: walletTransfer };
+      return {
+        ...toolbox,
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractUtxoTransferIntent>[0]["tx"]) => {
+          const intent = extractUtxoTransferIntent({ chain, senderAddress: address, tx });
+          return walletTransfer({
+            assetValue: intent.assetValue,
+            from: intent.from,
+            memo: intent.memo,
+            recipient: intent.recipient,
+          });
+        },
+        signTransaction: () => unsupportedUtxoSignTransaction(WalletOption.CTRL),
+        transfer: walletTransfer,
+      };
     }
 
     case Chain.Arbitrum:

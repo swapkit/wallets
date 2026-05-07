@@ -1,6 +1,7 @@
 import { AssetValue, Chain, ChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
   getKEEPKEYAddress,
@@ -32,13 +33,18 @@ export const keepkeyBexWallet: ExtensionWallet<"connectKeepkeyBex"> = createWall
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
     [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
+    [Chain.BitcoinCash]: true,
     [Chain.Cosmos]: true,
+    [Chain.Dash]: true,
+    [Chain.Dogecoin]: true,
     [Chain.Ethereum]: true,
     [Chain.Kujira]: true,
+    [Chain.Litecoin]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.XLayer]: true,
-    // BTC/BCH/DASH/DOGE/LTC/Ripple/Solana/THORChain/Maya: provider lacks raw-sign RPC
+    // Ripple/Solana/THORChain/Maya: provider lacks raw-sign RPC
   },
   name: "connectKeepkeyBex",
   supportedChains: [
@@ -107,6 +113,7 @@ async function getWalletMethods(chain: (typeof KEEPKEY_BEX_SUPPORTED_CHAINS)[num
     case Chain.Litecoin: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const toolbox = await getUtxoToolbox(chain);
+      const address = await getKEEPKEYAddress(chain);
 
       const getBalance = async () => {
         const providerChain = getProviderNameFromChain(chain);
@@ -116,7 +123,21 @@ async function getWalletMethods(chain: (typeof KEEPKEY_BEX_SUPPORTED_CHAINS)[num
         return [assetValue];
       };
 
-      return { ...toolbox, getBalance, transfer: walletTransfer };
+      return {
+        ...toolbox,
+        getBalance,
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractUtxoTransferIntent>[0]["tx"]) => {
+          const intent = extractUtxoTransferIntent({ chain, senderAddress: address, tx });
+          return walletTransfer({
+            assetValue: intent.assetValue,
+            from: intent.from,
+            memo: intent.memo,
+            recipient: intent.recipient,
+          });
+        },
+        signTransaction: () => unsupportedUtxoSignTransaction(WalletOption.KEEPKEY_BEX),
+        transfer: walletTransfer,
+      };
     }
 
     case Chain.Ethereum:

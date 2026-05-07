@@ -18,6 +18,7 @@ import {
   assertDerivationIndex,
   compileMemo,
   createHDWalletHelpers,
+  getNetworkForChain,
   getUTXOAccountIndexFromPath,
   getUTXOAccountPath,
   getUTXOAddressPath,
@@ -144,28 +145,38 @@ async function getWalletMethods({
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
 
       // V3 toolbox signer:
-      //  - BTC/LTC use the modern `ledger-bitcoin` AppClient with native PSBT signing.
-      //  - BCH/DOGE/DASH use the legacy `hw-app-btc` adapter that pulls
+      //  - BTC uses the modern `ledger-bitcoin` AppClient with native PSBT signing.
+      //  - LTC/BCH/DOGE/DASH use the legacy `hw-app-btc` adapter that pulls
       //    `nonWitnessUtxo` (full prev-tx hex) out of the API PSBT.
+      //    The Litecoin Ledger app does not support the `ledger-bitcoin`
+      //    policy APDUs and returns CLA_NOT_SUPPORTED.
       //  - ZEC stays on the bespoke `signPCZT` flow for now.
       let toolboxSigner:
         | { getAddress: () => Promise<string>; signTransaction: (tx: Transaction) => Promise<Transaction> }
         | undefined;
-      if (chain === Chain.Bitcoin || chain === Chain.Litecoin) {
-        const { BitcoinPsbtLedger, LitecoinPsbtLedger } = await import("./clients/utxo-psbt");
-        const psbtClient =
-          chain === Chain.Bitcoin
-            ? BitcoinPsbtLedger(derivationPath, transport)
-            : LitecoinPsbtLedger(derivationPath, transport);
+      let signAndBroadcastLegacyPsbtTransaction: ((tx: Transaction) => Promise<string>) | undefined;
+      if (chain === Chain.Bitcoin) {
+        const { BitcoinPsbtLedger } = await import("./clients/utxo-psbt");
+        const psbtClient = BitcoinPsbtLedger(derivationPath, transport);
         toolboxSigner = { getAddress: psbtClient.getAddress, signTransaction: psbtClient.signTransaction };
-      } else if (chain === Chain.BitcoinCash || chain === Chain.Dogecoin || chain === Chain.Dash) {
-        const { createLegacyPsbtSigner } = await import("./clients/utxo-legacy-adapter");
+      } else if (
+        chain === Chain.BitcoinCash ||
+        chain === Chain.Dogecoin ||
+        chain === Chain.Dash ||
+        chain === Chain.Litecoin
+      ) {
+        const { createLegacyPsbtSigner, signLegacyPsbtTransaction } = await import("./clients/utxo-legacy-adapter");
         toolboxSigner = createLegacyPsbtSigner({ address, chain: utxoChain, legacyClient: signer });
+        signAndBroadcastLegacyPsbtTransaction = async (tx) => {
+          const signedTxHex = await signLegacyPsbtTransaction({ chain: utxoChain, legacyClient: signer, tx });
+          return toolbox.broadcastTx(signedTxHex);
+        };
       }
 
       const toolbox = toolboxSigner
         ? await getUtxoToolbox(utxoChain, { signer: toolboxSigner })
         : getUtxoToolbox(utxoChain);
+      const signAndBroadcastTransaction = signAndBroadcastLegacyPsbtTransaction ?? toolbox.signAndBroadcastTransaction;
 
       const transfer = async (params: UTXOBuildTxParams) => {
         const feeRate = params.feeRate || (await toolbox.getFeeRates())[FeeOption.Average];
@@ -179,8 +190,8 @@ async function getWalletMethods({
           sender: address,
         });
 
-        // Cast tx to Transaction - signTransaction handles both Transaction and ZcashTransaction
-        // via tx.unsignedTx which exists on both types
+        // Legacy Ledger UTXO signing returns finalized raw tx hex, so transfer
+        // broadcasts directly instead of routing through toolbox finalization.
         const txHex = await signer.signTransaction(tx as Transaction, inputs);
         const txHash = await toolbox.broadcastTx(txHex);
 
@@ -193,7 +204,8 @@ async function getWalletMethods({
         const accountPath = getUTXOAccountPath({ accountIndex, chain: utxoChain, derivationPath });
         const path = derivationPathToString(accountPath);
         const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
-        const xpub = await signer.getExtendedPublicKey(ledgerPath);
+        const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
+        const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
 
         return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
       }
@@ -352,6 +364,7 @@ async function getWalletMethods({
         deriveAddresses,
         getExtendedPublicKey,
         getExtendedPublicKeyInfo,
+        signAndBroadcastTransaction,
         transfer,
         transferFromMultipleAddresses,
       };

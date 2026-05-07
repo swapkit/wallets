@@ -153,14 +153,14 @@ export async function getKEEPKEYAddress(chain: Chain) {
 }
 
 export async function walletTransfer(
-  { assetValue, recipient, memo, gasLimit }: WalletTxParams & { assetValue: AssetValue },
+  { assetValue, from: providedFrom, recipient, memo, gasLimit }: WalletTxParams & { assetValue: AssetValue },
   method: TransactionMethod = "transfer",
 ) {
   if (!assetValue) {
     throw new SwapKitError("wallet_keepkey_asset_not_defined");
   }
 
-  const from = await getKEEPKEYAddress(assetValue.chain);
+  const from = providedFrom || (await getKEEPKEYAddress(assetValue.chain));
   const params = [
     {
       amount: { amount: assetValue.getValue("string"), decimals: assetValue.decimal },

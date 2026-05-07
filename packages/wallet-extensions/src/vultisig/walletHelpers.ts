@@ -147,7 +147,7 @@ export async function getVultisigAddress(chain: Chain) {
 }
 
 export async function walletTransfer(
-  { assetValue, recipient, memo, gasLimit }: WalletTxParams,
+  { assetValue, from: providedFrom, recipient, memo, gasLimit }: WalletTxParams,
   method: TransactionMethod = "send_transaction",
 ) {
   if (!assetValue) {
@@ -159,7 +159,7 @@ export async function walletTransfer(
    * UTXO/Cosmos requires amount to be number
    */
 
-  const from = await getVultisigAddress(assetValue.chain);
+  const from = providedFrom || (await getVultisigAddress(assetValue.chain));
   const params = [
     {
       amount: { amount: assetValue.getBaseValue("number"), decimals: assetValue.decimal },
