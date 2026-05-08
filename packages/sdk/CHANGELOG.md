@@ -1,5 +1,16 @@
 # @swapkit/sdk
 
+## 4.6.19
+
+### Patch Changes
+
+- [#53](https://github.com/swapkit/wallets/pull/53) [`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84) Thanks [@towanTG](https://github.com/towanTG)! - Request Ledger Litecoin account xpubs with the Litecoin xpub version so hardware address derivation can decode the key correctly.
+
+- [#53](https://github.com/swapkit/wallets/pull/53) [`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84) Thanks [@towanTG](https://github.com/towanTG)! - Add UTXO transfer intent extraction for extension wallets that can only sign and broadcast high-level transfer requests, enabling Vultisig BCH/DASH/DOGE/LTC, KeepKey BEX BTC/BCH/DASH/DOGE/LTC, and CTRL BCH/DOGE/LTC direct swap submission from provided UTXO transactions.
+
+- Updated dependencies [[`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84), [`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84)]:
+  - @swapkit/wallets@4.8.13
+
 ## 4.6.18
 
 ### Patch Changes

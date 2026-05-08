@@ -1,5 +1,13 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.10
+
+### Patch Changes
+
+- [#53](https://github.com/swapkit/wallets/pull/53) [`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84) Thanks [@towanTG](https://github.com/towanTG)! - Expose Ledger and Trezor UTXO extended public key lookup through the shared wallet-core hook and allow connecting hardware UTXO wallets with a preselected address.
+
+- [#53](https://github.com/swapkit/wallets/pull/53) [`471c5c3`](https://github.com/swapkit/wallets/commit/471c5c34fdbbce88ee12ce666456ad4c05f2cf84) Thanks [@towanTG](https://github.com/towanTG)! - Request Ledger Litecoin account xpubs with the Litecoin xpub version so hardware address derivation can decode the key correctly.
+
 ## 4.9.9
 
 ### Patch Changes
