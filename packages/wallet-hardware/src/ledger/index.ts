@@ -27,7 +27,7 @@ import {
   type UTXOForMultiAddressTransfer,
 } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
 import { getLedgerAddress, getLedgerClient } from "./helpers";
 
 /**
@@ -40,7 +40,7 @@ import { getLedgerAddress, getLedgerClient } from "./helpers";
  */
 export type ConnectLedgerOptions = { address?: string; transport?: Transport };
 
-const ledgerWalletBase = createWallet({
+export const ledgerWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectLedger(
       chains: Chain[],
@@ -84,6 +84,7 @@ const ledgerWalletBase = createWallet({
     [Chain.XLayer]: true,
     // ZEC: still on bespoke signPCZT path
   },
+  getExtendedPublicKey: getLedgerExtendedPublicKey,
   name: "connectLedger",
   supportedChains: [
     Chain.Arbitrum,
@@ -114,15 +115,7 @@ const ledgerWalletBase = createWallet({
   walletType: WalletOption.LEDGER,
 });
 
-const ledgerDiscoveryMethod = {
-  connectWallet: () => getLedgerDiscovery,
-  directSigningSupport: {},
-  supportedChains: [Chain.BitcoinCash, Chain.Bitcoin, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash],
-};
-
-export const ledgerWallet = { ...ledgerWalletBase, getLedgerDiscovery: ledgerDiscoveryMethod };
-
-export const LEDGER_SUPPORTED_CHAINS = getWalletSupportedChains(ledgerWalletBase);
+export const LEDGER_SUPPORTED_CHAINS = getWalletSupportedChains(ledgerWallet);
 
 // reduce memo length by removing trade limit
 function reduceMemo(memo?: string, affiliateAddress = "t") {
@@ -133,37 +126,26 @@ function reduceMemo(memo?: string, affiliateAddress = "t") {
   return removedAffiliate?.substring(0, removedAffiliate.lastIndexOf(":"));
 }
 
-export async function getLedgerDiscovery(
+export async function getLedgerExtendedPublicKey(
   chain: Chain,
   derivationPath?: DerivationPathArray,
-  { transport }: ConnectLedgerOptions = {},
-) {
+  { accountIndex }: { accountIndex?: number } = {},
+): Promise<HardwareExtendedPublicKeyInfo | undefined> {
   if (![Chain.BitcoinCash, Chain.Bitcoin, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash].includes(chain)) {
     throw new SwapKitError("wallet_chain_not_supported", { chain, wallet: WalletOption.LEDGER });
   }
 
-  const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
   const utxoChain = chain as UTXOChain;
-  const signer = await getLedgerClient({ chain: utxoChain, derivationPath, transport });
-  const toolbox = getUtxoToolbox(utxoChain);
+  const signer = await getLedgerClient({ chain: utxoChain, derivationPath });
+  if (!signer.getExtendedPublicKey) return undefined;
 
-  async function getExtendedPublicKeyInfo({ accountIndex }: { accountIndex?: number } = {}) {
-    if (!signer.getExtendedPublicKey) return undefined;
+  const accountPath = getUTXOAccountPath({ accountIndex, chain: utxoChain, derivationPath });
+  const path = derivationPathToString(accountPath);
+  const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
+  const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
+  const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
 
-    const accountPath = getUTXOAccountPath({ accountIndex, chain: utxoChain, derivationPath });
-    const path = derivationPathToString(accountPath);
-    const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
-    const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
-    const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
-
-    return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
-  }
-
-  function getExtendedPublicKey(params: { accountIndex?: number } = {}) {
-    return getExtendedPublicKeyInfo(params);
-  }
-
-  return { getBalance: toolbox.getBalance, getExtendedPublicKey, getExtendedPublicKeyInfo };
+  return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
 }
 
 async function getWalletMethods({
