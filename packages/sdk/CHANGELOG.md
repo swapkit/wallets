@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 4.6.21
+
+### Patch Changes
+
+- [#58](https://github.com/swapkit/wallets/pull/58) [`39128e4`](https://github.com/swapkit/wallets/commit/39128e42df687b3bb1d765ae149a8297afc16a1c) Thanks [@towanTG](https://github.com/towanTG)! - Enable Trezor DASH direct signing through the serialized UTXO signing path.
+
+- Updated dependencies [[`39128e4`](https://github.com/swapkit/wallets/commit/39128e42df687b3bb1d765ae149a8297afc16a1c)]:
+  - @swapkit/wallets@4.8.15
+
 ## 4.6.20
 
 ### Patch Changes
