@@ -36,8 +36,9 @@ describe("Trezor Litecoin xpub handling", () => {
     );
   });
 
-  it("marks BCH and DOGE direct signing as available for testing", () => {
+  it("marks BCH, DASH, and DOGE direct signing as available for testing", () => {
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.BitcoinCash]).toBe(true);
+    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dash]).toBe(true);
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dogecoin]).toBe(true);
   });
 });

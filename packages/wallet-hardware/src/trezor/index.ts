@@ -462,7 +462,7 @@ function shouldUseTrezorPsbtSigner(chain: Chain) {
 }
 
 function shouldUseTrezorSerializedSigner(chain: Chain) {
-  return chain === Chain.BitcoinCash || chain === Chain.Dogecoin;
+  return chain === Chain.BitcoinCash || chain === Chain.Dash || chain === Chain.Dogecoin;
 }
 
 async function getTrezorWallet<T extends Chain>({
@@ -1337,6 +1337,7 @@ export const trezorWallet = createWallet({
     [Chain.BinanceSmartChain]: true,
     [Chain.Bitcoin]: true,
     [Chain.BitcoinCash]: true,
+    [Chain.Dash]: true,
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
     [Chain.Dogecoin]: true,
@@ -1345,7 +1346,7 @@ export const trezorWallet = createWallet({
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.XLayer]: true,
-    // DASH/ZEC: pending PSBT→TrezorConnect converter validation (V3 plan PR)
+    // ZEC: pending PCZT/TrezorConnect validation
   },
   getExtendedPublicKey: getTrezorExtendedPublicKey,
   name: "connectTrezor",
