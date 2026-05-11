@@ -1,5 +1,12 @@
 # @swapkit-dev/wallets
 
+## 4.8.14
+
+### Patch Changes
+
+- Updated dependencies [[`232e0c0`](https://github.com/swapkit/wallets/commit/232e0c040087f639348dc2b237f586c246f9ca78)]:
+  - @swapkit/wallet-extensions@4.5.13
+
 ## 4.8.13
 
 ### Patch Changes

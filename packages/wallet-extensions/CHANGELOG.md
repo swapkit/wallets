@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.5.13
+
+### Patch Changes
+
+- [#56](https://github.com/swapkit/wallets/pull/56) [`232e0c0`](https://github.com/swapkit/wallets/commit/232e0c040087f639348dc2b237f586c246f9ca78) Thanks [@towanTG](https://github.com/towanTG)! - Fix CTRL Solana connection parameters and allow multi-chain CTRL connections to continue when one optional chain provider fails.
+
 ## 4.5.12
 
 ### Patch Changes
