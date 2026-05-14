@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.5.14
+
+### Patch Changes
+
+- [#62](https://github.com/swapkit/wallets/pull/62) [`b9bd479`](https://github.com/swapkit/wallets/commit/b9bd4796395e5a0120e1309b67c08a68d831998e) Thanks [@towanTG](https://github.com/towanTG)! - Preserve Phantom Solana transfer memos when creating transactions.
+
 ## 4.5.13
 
 ### Patch Changes
