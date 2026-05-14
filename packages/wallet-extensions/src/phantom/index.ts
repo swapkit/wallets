@@ -97,6 +97,7 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
         recipient,
         assetValue,
         isProgramDerivedAddress,
+        memo,
       }: GenericTransferParams & { assetValue: AssetValue; isProgramDerivedAddress?: boolean }) => {
         const { PublicKey } = await import("@solana/web3.js");
 
@@ -110,6 +111,7 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
         const transaction = await toolbox.createTransaction({
           assetValue,
           isProgramDerivedAddress,
+          memo,
           recipient,
           sender: address,
         });
