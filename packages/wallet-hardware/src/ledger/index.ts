@@ -143,9 +143,12 @@ export async function getLedgerExtendedPublicKey(
   const path = derivationPathToString(accountPath);
   const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
   const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
-  const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
-
-  return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
+  try {
+    const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
+    return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
+  } finally {
+    await (signer as { disconnect?: () => Promise<void> }).disconnect?.();
+  }
 }
 
 async function getWalletMethods({

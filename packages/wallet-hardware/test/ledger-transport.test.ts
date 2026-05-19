@@ -114,6 +114,31 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(bitcoinAppInvocations[1]?.transport).toBe(transport);
   });
 
+  it("BitcoinLedger: getExtendedPublicKey initializes the Bitcoin app before connect", async () => {
+    const transport = { id: "xpub" } as unknown as Transport;
+    const client = BitcoinLedger("84'/0'/0'/0/0", transport);
+
+    const xpub = await client.getExtendedPublicKey("84'/0'/0'", 76067358);
+
+    expect(xpub).toBe(
+      "Ltub2SSUS19CirucV6jZg6pTzmtZtxhX1JZJYK7Uq16czQkfFb5m1zf6KV24enP679G9gYHDBYSjbgHn6CJK7VTqDEEnRSsUgJGQWhhmLQV5foV",
+    );
+    expect(bitcoinAppInvocations).toHaveLength(1);
+    expect(bitcoinAppInvocations[0]?.transport).toBe(transport);
+    expect(bitcoinAppXpubInvocations).toEqual([{ path: "84'/0'/0'", xpubVersion: 76067358 }]);
+  });
+
+  it("BitcoinLedger: connect reuses the app initialized by getExtendedPublicKey", async () => {
+    const transport = { id: "reused-xpub" } as unknown as Transport;
+    const client = BitcoinLedger("84'/0'/0'/0/0", transport);
+
+    await client.getExtendedPublicKey("84'/0'/0'", 76067358);
+    await client.connect();
+
+    expect(bitcoinAppInvocations).toHaveLength(1);
+    expect(bitcoinAppInvocations[0]?.transport).toBe(transport);
+  });
+
   it("connectLedger: requests Litecoin account xpubs with the Litecoin version byte", async () => {
     const addChain = mock(() => {});
     const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });

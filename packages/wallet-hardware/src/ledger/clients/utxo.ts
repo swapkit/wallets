@@ -106,24 +106,25 @@ const BaseLedgerUTXO = ({
     // Per-call state — each BitcoinLedger/LitecoinLedger/... invocation has its own
     // transport + btcApp so different consumers (e.g. concurrent MCP sessions) cannot
     // cross-contaminate each other's Ledger device handle.
-    let btcApp: InstanceType<typeof BitcoinApp>;
+    let btcApp: InstanceType<typeof BitcoinApp> | undefined;
     let transport: any = null;
 
-    async function checkBtcAppAndCreateTransportWebUSB(checkBtcApp = true) {
-      if (checkBtcApp && !btcApp) {
-        new SwapKitError("wallet_ledger_connection_error", {
-          message: `Ledger connection failed:\n${JSON.stringify({ btcApp, checkBtcApp })}`,
-        });
-      }
-
-      transport ||= injectedTransport ?? (await getLedgerTransport());
-    }
-
     async function createTransportWebUSB() {
-      transport = injectedTransport ?? (await getLedgerTransport());
+      transport ||= injectedTransport ?? (await getLedgerTransport());
       const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
 
-      btcApp = new BitcoinApp({ currency: chain, transport });
+      btcApp ||= new BitcoinApp({ currency: chain, transport });
+      return btcApp;
+    }
+
+    async function getBtcApp() {
+      return btcApp || createTransportWebUSB();
+    }
+
+    async function disconnect() {
+      if (!injectedTransport) await transport?.close?.();
+      btcApp = undefined;
+      transport = null;
     }
 
     const derivationPath =
@@ -135,17 +136,15 @@ const BaseLedgerUTXO = ({
 
     return {
       connect: async () => {
-        await checkBtcAppAndCreateTransportWebUSB(false);
-        const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
-
-        btcApp = new BitcoinApp({ currency: chain, transport });
+        await getBtcApp();
       },
+      disconnect,
       getAddress: async () => {
         const { toCashAddress } = await import("@swapkit/toolboxes/utxo");
 
-        await checkBtcAppAndCreateTransportWebUSB(false);
+        const app = await getBtcApp();
 
-        const { bitcoinAddress: address } = await btcApp.getWalletPublicKey(derivationPath, { format });
+        const { bitcoinAddress: address } = await app.getWalletPublicKey(derivationPath, { format });
 
         if (!address) {
           throw new SwapKitError("wallet_ledger_get_address_error", {
@@ -158,9 +157,9 @@ const BaseLedgerUTXO = ({
           : address;
       },
       getExtendedPublicKey: async (path = "84'/0'/0'", xpubVersion = 76067358) => {
-        await checkBtcAppAndCreateTransportWebUSB(false);
+        const app = await getBtcApp();
 
-        return btcApp.getWalletXpub({ path, xpubVersion });
+        return app.getWalletXpub({ path, xpubVersion });
       },
 
       signPCZT: async (pczt: PCZT): Promise<PCZT> => {
@@ -170,7 +169,7 @@ const BaseLedgerUTXO = ({
           });
         }
 
-        await createTransportWebUSB();
+        const app = await getBtcApp();
 
         const { ZcashTransaction, Script } = await import("@swapkit/utxo-signer");
 
@@ -212,7 +211,7 @@ const BaseLedgerUTXO = ({
         }
 
         const signedTxHex = await signUTXOTransaction(
-          { btcApp, chain, derivationPath, inputUtxos, tx: unsignedTx as unknown as Transaction },
+          { btcApp: app, chain, derivationPath, inputUtxos, tx: unsignedTx as unknown as Transaction },
           {
             ...additionalSignParams,
             expiryHeight: (() => {
@@ -240,9 +239,9 @@ const BaseLedgerUTXO = ({
         return signedPczt;
       },
       signTransaction: async (tx: Transaction, inputUtxos: UTXOType[]) => {
-        await createTransportWebUSB();
+        const app = await getBtcApp();
 
-        return signUTXOTransaction({ btcApp, chain, derivationPath, inputUtxos, tx }, additionalSignParams);
+        return signUTXOTransaction({ btcApp: app, chain, derivationPath, inputUtxos, tx }, additionalSignParams);
       },
 
       /**
@@ -250,10 +249,10 @@ const BaseLedgerUTXO = ({
        * Each input can be signed with its own derivation path.
        */
       signTransactionWithMultiplePaths: async (tx: Transaction, inputUtxos: UTXOType[], derivationPaths: string[]) => {
-        await createTransportWebUSB();
+        const app = await getBtcApp();
 
         return signUTXOTransactionWithMultiplePaths(
-          { btcApp, chain, derivationPaths, inputUtxos, tx },
+          { btcApp: app, chain, derivationPaths, inputUtxos, tx },
           additionalSignParams,
         );
       },
