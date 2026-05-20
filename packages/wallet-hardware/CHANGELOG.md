@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.12
+
+### Patch Changes
+
+- [#66](https://github.com/swapkit/wallets/pull/66) [`0f68485`](https://github.com/swapkit/wallets/commit/0f684855cd5b75759cf073bf29414fa5755ba1fa) Thanks [@towanTG](https://github.com/towanTG)! - Initialize the Ledger Bitcoin app when requesting UTXO extended public keys before wallet connect.
+
 ## 4.9.11
 
 ### Patch Changes
