@@ -17,6 +17,13 @@ import {
 
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
+function parseLedgerSignatureV(v: number | string) {
+  if (typeof v === "number") return v;
+
+  const hex = v.startsWith("0x") ? v.slice(2) : v;
+  return Number.parseInt(hex || "0", 16);
+}
+
 class EVMLedgerInterface extends AbstractSigner {
   chainId: ChainId = ChainId.Ethereum;
   derivationPath = "";
@@ -174,7 +181,8 @@ class EVMLedgerInterface extends AbstractSigner {
 
     const { r, s, v } = signature;
 
-    return Transaction.from({ ...baseTx, signature: { r: `0x${r}`, s: `0x${s}`, v: Number(BigInt(v)) } }).serialized;
+    return Transaction.from({ ...baseTx, signature: { r: `0x${r}`, s: `0x${s}`, v: parseLedgerSignatureV(v) } })
+      .serialized;
   };
 }
 
