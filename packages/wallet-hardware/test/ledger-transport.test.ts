@@ -10,6 +10,8 @@ const bitcoinAppXpubInvocations: Array<{ path: string; xpubVersion?: number }> =
 const psbtAppClientInvocations: Array<unknown> = [];
 const psbtExtendedPubkeyInvocations: string[] = [];
 const psbtWalletAddressInvocations: Array<{ addressIndex: number; change: number }> = [];
+const ethereumAppInvocations: Array<unknown> = [];
+const ethereumSignTransactionInvocations: string[] = [];
 
 mock.module("@ledgerhq/hw-app-btc", () => ({
   default: class MockBitcoinApp {
@@ -45,6 +47,21 @@ mock.module("ledger-bitcoin", () => ({
   },
 }));
 
+mock.module("@ledgerhq/hw-app-eth", () => ({
+  default: class MockEthereumApp {
+    constructor(transport: unknown) {
+      ethereumAppInvocations.push(transport);
+    }
+    getAddress = async () => ({ address: "0x0000000000000000000000000000000000000001" });
+    signTransaction = (_path: string, unsignedTx: string) => {
+      ethereumSignTransactionInvocations.push(unsignedTx);
+      return { r: "1".padStart(64, "0"), s: "2".padStart(64, "0"), v: "27" };
+    };
+  },
+  ledgerService: { resolveTransaction: async () => null },
+}));
+
+import { ArbitrumLedger } from "../src/ledger/clients/evm";
 import { BitcoinLedger } from "../src/ledger/clients/utxo";
 import { BitcoinPsbtLedger } from "../src/ledger/clients/utxo-psbt";
 import { ledgerWallet } from "../src/ledger/index";
@@ -56,6 +73,8 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     psbtAppClientInvocations.length = 0;
     psbtExtendedPubkeyInvocations.length = 0;
     psbtWalletAddressInvocations.length = 0;
+    ethereumAppInvocations.length = 0;
+    ethereumSignTransactionInvocations.length = 0;
   });
 
   it("BitcoinLedger: two invocations with different transports get their own BitcoinApp each", async () => {
@@ -126,6 +145,26 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(bitcoinAppInvocations).toHaveLength(1);
     expect(bitcoinAppInvocations[0]?.transport).toBe(transport);
     expect(bitcoinAppXpubInvocations).toEqual([{ path: "84'/0'/0'", xpubVersion: 76067358 }]);
+  });
+
+  it("ArbitrumLedger: reuses the Ethereum app initialized during connect for later transaction signing", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const transport = { id: "ARB" } as unknown as Transport;
+    const client = ArbitrumLedger({ provider, transport });
+
+    await client.getAddress();
+    await client.signTransaction({
+      data: "0x",
+      gasLimit: 21000n,
+      gasPrice: 1n,
+      nonce: 0,
+      to: "0x0000000000000000000000000000000000000002",
+      type: 0,
+      value: 0n,
+    });
+
+    expect(ethereumAppInvocations).toEqual([transport]);
+    expect(ethereumSignTransactionInvocations).toHaveLength(1);
   });
 
   it("BitcoinLedger: connect reuses the app initialized by getExtendedPublicKey", async () => {
