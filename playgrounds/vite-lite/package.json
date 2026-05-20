@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@swapkit/sdk": "workspace:*",
-    "@swapkit/ui": "0.17.0",
+    "@swapkit/ui": "0.18.0",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
     "@swapkit/wallet-mobile": "workspace:*",
