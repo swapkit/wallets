@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-mobile
 
+## 4.3.9
+
+### Patch Changes
+
+- [`ab59810`](https://github.com/swapkit/wallets/commit/ab5981024e748822c261882b1dc5cf51e3ddf1ab) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - Fix Ledger EVM approval signing by reusing the Ledger transport during signing and parsing legacy EIP-155 signature values correctly. Also refresh SwapKit package dependencies used by the wallet packages.
+
 ## 4.3.8
 
 ### Patch Changes
