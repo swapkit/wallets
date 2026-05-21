@@ -34,6 +34,8 @@ type TransactionParams = {
   asset: string | { chain: string; symbol: string; ticker: string };
   amount: number | string | { amount: string | number; decimals?: number };
   decimal?: number;
+  from?: string;
+  gasLimit?: string | bigint;
   recipient: string;
   memo?: string;
 };
@@ -114,7 +116,7 @@ export function getKEEPKEYProvider<T extends Chain>(chain: T) {
   }
 }
 
-function transaction({
+export function submitKeepkeyBexTransaction({
   method,
   params,
   chain,
@@ -176,7 +178,7 @@ export async function walletTransfer(
     },
   ];
 
-  return transaction({ chain: assetValue.chain, method, params });
+  return submitKeepkeyBexTransaction({ chain: assetValue.chain, method, params });
 }
 
 export function getKEEPKEYMethods(provider: BrowserProvider, chain: EVMChain) {

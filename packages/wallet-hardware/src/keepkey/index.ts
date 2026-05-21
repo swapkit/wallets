@@ -58,14 +58,19 @@ export const keepkeyWallet = createWallet({
     [Chain.Base]: true,
     [Chain.Berachain]: true,
     [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
+    [Chain.BitcoinCash]: true,
+    [Chain.Dash]: true,
+    [Chain.Dogecoin]: true,
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
+    [Chain.Litecoin]: true,
     [Chain.Monad]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
     [Chain.XLayer]: true,
-    // BTC/BCH/DASH/DOGE/LTC/Cosmos/THORChain/Maya: pending KeepKey SDK signer wrappers (V3 plan PRs)
+    // Cosmos/THORChain/Maya: pending KeepKey SDK signer wrappers (V3 plan PRs)
   },
   name: "connectKeepkey",
   supportedChains: [

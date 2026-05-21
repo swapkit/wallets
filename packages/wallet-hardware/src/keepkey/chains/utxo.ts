@@ -1,4 +1,5 @@
 import type { KeepKeySdk } from "@keepkey/keepkey-sdk";
+import { hex } from "@scure/base";
 import {
   Chain,
   DerivationPath,
@@ -23,7 +24,7 @@ import {
 import type { Transaction } from "@swapkit/utxo-signer";
 import { bip32ToAddressNList, ChainToKeepKeyName } from "../coins";
 
-interface KeepKeyInputObject {
+export interface KeepKeyInputObject {
   addressNList: number[];
   scriptType: string;
   amount: string;
@@ -33,6 +34,213 @@ interface KeepKeyInputObject {
 }
 
 type KeepKeyUTXOWalletMethods = Record<string, unknown> & { address: string };
+
+type Bip32Derivation = [Uint8Array, { fingerprint: number; path: number[] }];
+
+function isBip32Derivation(value: unknown): value is Bip32Derivation {
+  return (
+    Array.isArray(value) &&
+    value[0] instanceof Uint8Array &&
+    typeof value[1] === "object" &&
+    value[1] !== null &&
+    Array.isArray((value[1] as { path?: unknown }).path)
+  );
+}
+
+function getFirstBip32Derivation(input: { bip32Derivation?: unknown }) {
+  if (!Array.isArray(input.bip32Derivation)) return undefined;
+
+  const [derivation] = input.bip32Derivation;
+  return isBip32Derivation(derivation) ? derivation : undefined;
+}
+
+function decodeOpReturnMemo(script: Uint8Array) {
+  if (script.length < 2 || script[0] !== 0x6a) return undefined;
+
+  let offset = 1;
+  const pushOpcode = script[offset];
+  if (pushOpcode === undefined) return undefined;
+
+  let dataLength = pushOpcode;
+  offset += 1;
+
+  if (pushOpcode === 0x4c) {
+    const length = script[offset];
+    if (length === undefined) return undefined;
+    dataLength = length;
+    offset += 1;
+  } else if (pushOpcode === 0x4d) {
+    const first = script[offset];
+    const second = script[offset + 1];
+    if (first === undefined || second === undefined) return undefined;
+    dataLength = first | (second << 8);
+    offset += 2;
+  } else if (pushOpcode === 0x4e) {
+    const first = script[offset];
+    const second = script[offset + 1];
+    const third = script[offset + 2];
+    const fourth = script[offset + 3];
+    if (first === undefined || second === undefined || third === undefined || fourth === undefined) return undefined;
+    dataLength = first | (second << 8) | (third << 16) | (fourth << 24);
+    offset += 4;
+  } else if (pushOpcode > 0x4e) {
+    return undefined;
+  }
+
+  if (dataLength < 0 || script.length < offset + dataLength) return undefined;
+
+  return Buffer.from(script.slice(offset, offset + dataLength)).toString("utf8");
+}
+
+function getPrevoutAmount(input: {
+  index?: number;
+  nonWitnessUtxo?: { outputs?: Array<{ amount?: bigint | number }> };
+  witnessUtxo?: { amount?: bigint | number };
+}) {
+  if (input.witnessUtxo?.amount !== undefined) return input.witnessUtxo.amount.toString();
+
+  const prevout = input.index !== undefined ? input.nonWitnessUtxo?.outputs?.[input.index] : undefined;
+  if (prevout?.amount !== undefined) return prevout.amount.toString();
+
+  return undefined;
+}
+
+export function extractMemoFromKeepKeyUtxoTransaction(tx: Transaction, network: ReturnType<typeof getNetworkForChain>) {
+  const memos: string[] = [];
+
+  for (let index = 0; index < tx.outputsLength; index++) {
+    const output = tx.getOutput(index);
+    const outputAddress = tx.getOutputAddress(index, network);
+    if (outputAddress) continue;
+
+    const memo = output.script ? decodeOpReturnMemo(output.script) : undefined;
+    if (memo !== undefined && (output.amount ?? 0n) === 0n) {
+      memos.push(memo);
+      continue;
+    }
+
+    throw new SwapKitError("wallet_keepkey_invalid_params", {
+      outputIndex: index,
+      reason: "Unable to decode UTXO output address",
+    });
+  }
+
+  if (memos.length > 1) {
+    throw new SwapKitError("wallet_keepkey_invalid_params", { reason: "Multiple OP_RETURN outputs are not supported" });
+  }
+
+  return memos[0] || "";
+}
+
+export async function extractKeepKeyInputsFromTransaction({
+  chain,
+  fallbackAddressNList,
+  scriptType,
+  tx,
+}: {
+  chain: Exclude<UTXOChain, typeof Chain.Zcash>;
+  fallbackAddressNList: number[];
+  scriptType: string;
+  tx: Transaction;
+}): Promise<KeepKeyInputObject[]> {
+  const { RawTx } = await import("@swapkit/utxo-signer");
+  const inputs: KeepKeyInputObject[] = [];
+
+  for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
+    const input = tx.getInput(inputIndex);
+
+    if (!input.txid || input.index === undefined) {
+      throw new SwapKitError("wallet_keepkey_invalid_params", {
+        inputIndex,
+        reason: "PSBT input is missing txid/index",
+      });
+    }
+
+    const txid = hex.encode(input.txid);
+    const txHex = input.nonWitnessUtxo
+      ? hex.encode(RawTx.encode(input.nonWitnessUtxo))
+      : await getUtxoApi(chain).getRawTx(txid);
+    const amount = getPrevoutAmount(input);
+
+    if (!(txHex && amount)) {
+      throw new SwapKitError("wallet_keepkey_invalid_params", {
+        chain,
+        inputIndex,
+        reason: "Unable to resolve previous output info for KeepKey signing",
+        txid,
+      });
+    }
+
+    const derivation = getFirstBip32Derivation(input);
+
+    inputs.push({
+      addressNList: derivation?.[1].path || fallbackAddressNList,
+      amount,
+      hex: txHex,
+      scriptType,
+      txid,
+      vout: input.index,
+    });
+  }
+
+  return inputs;
+}
+
+function buildKeepKeyOutputsFromTransaction({
+  chain,
+  fallbackAddressNList,
+  network,
+  scriptType,
+  tx,
+  walletAddress,
+}: {
+  chain: Exclude<UTXOChain, typeof Chain.Zcash>;
+  fallbackAddressNList: number[];
+  network: ReturnType<typeof getNetworkForChain>;
+  scriptType: string;
+  tx: Transaction;
+  walletAddress: string;
+}) {
+  const outputs: any[] = [];
+
+  for (let i = 0; i < tx.outputsLength; i++) {
+    const output = tx.getOutput(i);
+    const address = tx.getOutputAddress(i, network);
+    const value = Number(output.amount);
+
+    if (!address) {
+      const outputMemo = output.script ? decodeOpReturnMemo(output.script) : undefined;
+      if (outputMemo !== undefined && (output.amount ?? 0n) === 0n) continue;
+
+      throw new SwapKitError("wallet_keepkey_invalid_params", {
+        outputIndex: i,
+        reason: "Unable to decode UTXO output address",
+      });
+    }
+
+    const outputDerivation = getFirstBip32Derivation(output);
+    const changeAddressNList =
+      outputDerivation?.[1].path || (address === walletAddress ? fallbackAddressNList : undefined);
+
+    if (changeAddressNList) {
+      outputs.push({
+        addressNList: changeAddressNList,
+        addressType: "change",
+        amount: value,
+        isChange: true,
+        scriptType,
+      });
+      continue;
+    }
+
+    const outputAddress = chain === Chain.BitcoinCash ? stripToCashAddress(address) : address;
+    if (outputAddress) {
+      outputs.push({ address: outputAddress, addressType: "spend", amount: value });
+    }
+  }
+
+  return outputs.filter((item) => item !== null && typeof item === "object" && Object.keys(item).length > 0);
+}
 
 export async function utxoWalletMethods({
   sdk,
@@ -62,42 +270,44 @@ export async function utxoWalletMethods({
   const network = getNetworkForChain(chain);
 
   const signTransaction = async (tx: Transaction, inputs: KeepKeyInputObject[], memo = "") => {
-    const outputs: any[] = [];
-
-    for (let i = 0; i < tx.outputsLength; i++) {
-      const output = tx.getOutput(i);
-      const address = tx.getOutputAddress(i, network);
-      const value = Number(output.amount);
-
-      if (address === walletAddress) {
-        outputs.push({
-          addressNList: addressInfo.address_n,
-          addressType: "change",
-          amount: value,
-          isChange: true,
-          scriptType,
-        });
-      } else if (address) {
-        const outputAddress = chain === Chain.BitcoinCash ? stripToCashAddress(address) : address;
-
-        if (outputAddress) {
-          outputs.push({ address: outputAddress, addressType: "spend", amount: value });
-        }
-      }
-    }
-
-    const removeNullAndEmptyObjectsFromArray = (arr: any[]) => {
-      return arr.filter((item) => item !== null && typeof item === "object" && Object.keys(item).length > 0);
-    };
+    const outputs = buildKeepKeyOutputsFromTransaction({
+      chain,
+      fallbackAddressNList: addressInfo.address_n,
+      network,
+      scriptType,
+      tx,
+      walletAddress,
+    });
 
     const responseSign = await sdk.utxo.utxoSignTransaction({
       coin: ChainToKeepKeyName[chain],
       inputs,
       opReturnData: memo,
-      outputs: removeNullAndEmptyObjectsFromArray(outputs),
+      outputs,
     });
 
     return responseSign.serializedTx?.toString();
+  };
+
+  const signAndBroadcastTransaction = async (tx: Transaction) => {
+    const inputs = await extractKeepKeyInputsFromTransaction({
+      chain,
+      fallbackAddressNList: addressInfo.address_n,
+      scriptType,
+      tx,
+    });
+    const memo = extractMemoFromKeepKeyUtxoTransaction(tx, network);
+    const txHex = await signTransaction(tx, inputs, memo);
+
+    if (!txHex) {
+      // TODO: Replace wallet-specific signing failures with generic wallet error keys.
+      throw new SwapKitError("wallet_keepkey_invalid_params", {
+        chain,
+        reason: "KeepKey SDK did not return a serialized transaction",
+      });
+    }
+
+    return toolbox.broadcastTx(txHex);
   };
 
   const transfer = async ({ recipient, feeOptionKey, feeRate, memo, ...rest }: GenericTransferParams) => {
@@ -356,6 +566,7 @@ export async function utxoWalletMethods({
     deriveAddresses,
     getExtendedPublicKey,
     getExtendedPublicKeyInfo,
+    signAndBroadcastTransaction,
     signTransaction,
     signTransactionWithMultipleInputs,
     transfer,

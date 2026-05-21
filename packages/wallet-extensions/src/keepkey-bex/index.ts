@@ -1,6 +1,7 @@
 import { AssetValue, Chain, ChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import { extractTCLikeTransferIntent } from "../helpers/tclikeTransferIntent";
 import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
@@ -8,6 +9,7 @@ import {
   getKEEPKEYMethods,
   getKEEPKEYProvider,
   getProviderNameFromChain,
+  submitKeepkeyBexTransaction,
   type WalletTxParams,
   walletTransfer,
 } from "./walletHelpers";
@@ -41,10 +43,11 @@ export const keepkeyBexWallet: ExtensionWallet<"connectKeepkeyBex"> = createWall
     [Chain.Ethereum]: true,
     [Chain.Kujira]: true,
     [Chain.Litecoin]: true,
+    [Chain.Maya]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
+    [Chain.THORChain]: true,
     [Chain.XLayer]: true,
-    // Ripple/Solana/THORChain/Maya: provider lacks raw-sign RPC
   },
   name: "connectKeepkeyBex",
   supportedChains: [
@@ -63,8 +66,6 @@ export const keepkeyBexWallet: ExtensionWallet<"connectKeepkeyBex"> = createWall
     Chain.Maya,
     Chain.Optimism,
     Chain.Polygon,
-    Chain.Ripple,
-    Chain.Solana,
     Chain.THORChain,
     Chain.XLayer,
   ],
@@ -85,6 +86,31 @@ async function getWalletMethods(chain: (typeof KEEPKEY_BEX_SUPPORTED_CHAINS)[num
       return {
         ...toolbox,
         deposit: (tx: WalletTxParams) => walletTransfer({ ...tx, recipient: "" }, "deposit"),
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractTCLikeTransferIntent>[0]["tx"]) => {
+          const intent = extractTCLikeTransferIntent({ chain, tx });
+          return submitKeepkeyBexTransaction({
+            chain,
+            method: intent.method,
+            params: [
+              {
+                amount: intent.amount,
+                asset: intent.asset,
+                from: intent.from,
+                gasLimit: intent.gasLimit,
+                memo: intent.memo,
+                recipient: intent.recipient,
+              },
+            ],
+          });
+        },
+        signTransaction: () =>
+          Promise.reject(
+            new SwapKitError("wallet_walletconnect_method_not_supported", {
+              method: "signTransaction",
+              reason: "KeepKey BEX THORChain/Maya provider only supports signAndBroadcastTransaction",
+              wallet: WalletOption.KEEPKEY_BEX,
+            }),
+          ),
         transfer: (tx: WalletTxParams) => walletTransfer({ ...tx, gasLimit }, "transfer"),
       };
     }

@@ -53,7 +53,6 @@ export const talismanWallet: ExtensionWallet<"connectTalisman"> = createWallet({
     Chain.BinanceSmartChain,
     Chain.Optimism,
     Chain.XLayer,
-    Chain.Polkadot,
     Chain.Chainflip,
   ],
   walletType: WalletOption.TALISMAN,

@@ -12,13 +12,19 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { extractTCLikeTransferIntent } from "../helpers/tclikeTransferIntent";
 import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
+import {
+  extractVultisigCosmosTransferIntent,
+  extractVultisigRippleTransferIntent,
+} from "../helpers/vultisigTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
   getVultisigAddress,
   getVultisigMethods,
   getVultisigProvider,
   prepareNetworkSwitchCosmos,
+  submitVultisigTransaction,
   walletTransfer,
 } from "./walletHelpers";
 
@@ -61,15 +67,22 @@ export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
     [Chain.BinanceSmartChain]: true,
+    [Chain.Bitcoin]: true,
     [Chain.BitcoinCash]: true,
+    [Chain.Cosmos]: true,
     [Chain.Dash]: true,
     [Chain.Dogecoin]: true,
     [Chain.Ethereum]: true,
+    [Chain.Kujira]: true,
     [Chain.Litecoin]: true,
+    [Chain.Maya]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
+    [Chain.Ripple]: true,
+    [Chain.Solana]: true,
+    [Chain.THORChain]: true,
     [Chain.XLayer]: true,
-    // BTC/ZEC/Cosmos/Kujira/THORChain/Maya/Solana/Ripple: blocked on Vultisig provider — no raw-sign RPC
+    // ZEC: blocked on Vultisig provider — no raw-sign RPC
   },
   name: "connectVultisig",
   supportedChains: [
@@ -87,7 +100,6 @@ export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
     Chain.Litecoin,
     Chain.Maya,
     Chain.Optimism,
-    Chain.Polkadot,
     Chain.Polygon,
     Chain.Ripple,
     Chain.Solana,
@@ -113,11 +125,37 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
 
     .with(Chain.Maya, Chain.THORChain, async () => {
       const { getCosmosToolbox, THORCHAIN_GAS_VALUE, MAYA_GAS_VALUE } = await import("@swapkit/toolboxes/cosmos");
-      const gasLimit = chain === Chain.Maya ? MAYA_GAS_VALUE : THORCHAIN_GAS_VALUE;
-      const toolbox = await getCosmosToolbox(chain as Exclude<CosmosChain, TCLikeChain | Chain.Harbor>);
+      const tclikeChain = chain as TCLikeChain;
+      const gasLimit = tclikeChain === Chain.Maya ? MAYA_GAS_VALUE : THORCHAIN_GAS_VALUE;
+      const toolbox = await getCosmosToolbox(tclikeChain as Exclude<CosmosChain, TCLikeChain | Chain.Harbor>);
       return {
         ...toolbox,
         deposit: (tx: GenericTransferParams) => walletTransfer({ ...tx, recipient: "" }, "deposit_transaction"),
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractTCLikeTransferIntent>[0]["tx"]) => {
+          const intent = extractTCLikeTransferIntent({ chain: tclikeChain, tx });
+          return submitVultisigTransaction({
+            chain: tclikeChain,
+            method: intent.method === "deposit" ? "deposit_transaction" : "send_transaction",
+            params: [
+              {
+                amount: intent.amount,
+                asset: intent.asset,
+                data: intent.memo,
+                from: intent.from,
+                gasLimit: intent.gasLimit,
+                to: intent.recipient,
+              },
+            ],
+          });
+        },
+        signTransaction: () =>
+          Promise.reject(
+            new SwapKitError("wallet_walletconnect_method_not_supported", {
+              method: "signTransaction",
+              reason: "Vultisig THORChain/Maya provider only supports signAndBroadcastTransaction",
+              wallet: WalletOption.VULTISIG,
+            }),
+          ),
         transfer: (tx: GenericTransferParams) => walletTransfer({ ...tx, gasLimit }, "send_transaction"),
       };
     })
@@ -126,13 +164,46 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
       const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
       const provider = await getVultisigProvider(chain as Exclude<CosmosChain, TCLikeChain>);
       const toolbox = await getCosmosToolbox(chain as Exclude<CosmosChain, TCLikeChain | Chain.Harbor>);
-      return prepareNetworkSwitchCosmos({ chain, provider, toolbox: { ...toolbox, transfer: walletTransfer } });
+      const cosmosChain = chain as Chain.Cosmos | Chain.Kujira;
+      return prepareNetworkSwitchCosmos({
+        chain,
+        methodNames: ["signAndBroadcastTransaction"],
+        provider,
+        toolbox: {
+          ...toolbox,
+          signAndBroadcastTransaction: (tx: Parameters<typeof extractVultisigCosmosTransferIntent>[0]["tx"]) => {
+            const intent = extractVultisigCosmosTransferIntent({ chain: cosmosChain, tx });
+            return submitVultisigTransaction({
+              chain: cosmosChain,
+              method: "send_transaction",
+              params: [
+                {
+                  amount: intent.amount,
+                  asset: intent.asset,
+                  data: intent.memo,
+                  from: intent.from,
+                  to: intent.recipient,
+                },
+              ],
+            });
+          },
+          signTransaction: () =>
+            Promise.reject(
+              new SwapKitError("wallet_walletconnect_method_not_supported", {
+                method: "signTransaction",
+                reason: "Vultisig Cosmos/Kujira provider only supports signAndBroadcastTransaction",
+                wallet: WalletOption.VULTISIG,
+              }),
+            ),
+          transfer: walletTransfer,
+        },
+      });
     })
 
     .with(...UTXOChains, async () => {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const toolbox = await getUtxoToolbox(chain as UTXOChain);
-      if (chain === Chain.Zcash || chain === Chain.Bitcoin) {
+      if (chain === Chain.Zcash) {
         return { ...toolbox, transfer: walletTransfer };
       }
 
@@ -186,7 +257,34 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
     .with(Chain.Ripple, async () => {
       const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
       const toolbox = await getRippleToolbox();
-      return { ...toolbox, transfer: walletTransfer };
+      return {
+        ...toolbox,
+        signAndBroadcastTransaction: (tx: Parameters<typeof extractVultisigRippleTransferIntent>[0]) => {
+          const intent = extractVultisigRippleTransferIntent(tx);
+          return submitVultisigTransaction({
+            chain: Chain.Ripple,
+            method: "send_transaction",
+            params: [
+              {
+                amount: intent.amount,
+                asset: intent.asset,
+                data: intent.memo,
+                from: intent.from,
+                to: intent.recipient,
+              },
+            ],
+          });
+        },
+        signTransaction: () =>
+          Promise.reject(
+            new SwapKitError("wallet_walletconnect_method_not_supported", {
+              method: "signTransaction",
+              reason: "Vultisig Ripple provider only supports signAndBroadcastTransaction",
+              wallet: WalletOption.VULTISIG,
+            }),
+          ),
+        transfer: walletTransfer,
+      };
     })
 
     .with(Chain.Polkadot, async () => {

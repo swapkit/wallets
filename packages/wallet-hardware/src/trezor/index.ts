@@ -1346,7 +1346,7 @@ export const trezorWallet = createWallet({
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.XLayer]: true,
-    // ZEC: pending PCZT/TrezorConnect validation
+    // ZEC: pending PCZT/Zcash converter validation (V3 plan PR)
   },
   getExtendedPublicKey: getTrezorExtendedPublicKey,
   name: "connectTrezor",

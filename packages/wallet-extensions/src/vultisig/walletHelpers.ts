@@ -29,6 +29,7 @@ type TransactionParams = {
   to: string;
   data?: string;
   from?: string;
+  gasLimit?: string | bigint;
 };
 
 export type WalletTxParams = {
@@ -49,6 +50,16 @@ type VultisigProviderType<T> = T extends typeof Chain.Solana
       : T extends typeof Chain.Maya | typeof Chain.THORChain | typeof Chain.Ripple | typeof Chain.Polkadot | UTXOChain
         ? Eip1193Provider
         : undefined;
+
+function getVultisigAccountAddress(account: unknown): string | undefined {
+  if (typeof account === "string") return account;
+  if (Array.isArray(account)) return getVultisigAccountAddress(account[0]);
+  if (account && typeof account === "object" && "address" in account && typeof account.address === "string") {
+    return account.address;
+  }
+
+  return undefined;
+}
 
 export async function getVultisigProvider<T extends Chain>(chain: T): Promise<VultisigProviderType<T>> {
   if (!window.vultisig) throw new SwapKitError("wallet_vultisig_not_found");
@@ -71,7 +82,7 @@ export async function getVultisigProvider<T extends Chain>(chain: T): Promise<Vu
     .otherwise(() => undefined) as VultisigProviderType<T>;
 }
 
-async function transaction({
+export async function submitVultisigTransaction({
   method,
   params,
   chain,
@@ -93,11 +104,32 @@ async function transaction({
   }
 
   return new Promise<string>((resolve, reject) => {
-    if (client && "request" in client) {
-      // @ts-expect-error
-      client.request({ method, params: finalParams }, (err: string, tx: string) => {
-        err ? reject(err) : resolve(tx);
-      });
+    if (!(client && "request" in client)) {
+      reject(new SwapKitError("wallet_vultisig_not_found", { chain }));
+      return;
+    }
+
+    let settled = false;
+    const settle = (error: unknown, tx?: string) => {
+      if (settled) return;
+      settled = true;
+      error ? reject(error) : resolve(tx as string);
+    };
+
+    try {
+      const request = client.request as (
+        payload: { method: TransactionMethod; params: typeof finalParams },
+        callback?: (error: unknown, tx?: string) => void,
+      ) => Promise<string> | undefined;
+      const result = request({ method, params: finalParams }, settle);
+      if (result && typeof (result as Promise<string>).then === "function") {
+        (result as Promise<string>).then(
+          (tx) => settle(null, tx),
+          (error) => settle(error),
+        );
+      }
+    } catch (error) {
+      settle(error);
     }
   });
 }
@@ -116,10 +148,13 @@ export async function getVultisigAddress(chain: Chain) {
 
       let account = await windowProvider.request({ method: "get_accounts" });
       if (!account || (Array.isArray(account) && account.length === 0)) {
-        const connectedAcount = await windowProvider.request({ method: "request_accounts" });
-        account = connectedAcount[0].address;
+        account = await windowProvider.request({ method: "request_accounts" });
       }
-      return account;
+
+      const address = getVultisigAccountAddress(account);
+      if (!address) throw new SwapKitError("wallet_vultisig_not_found", { chain });
+
+      return address;
     }
 
     if (EVMChains.includes(chain as EVMChain)) {
@@ -175,7 +210,7 @@ export async function walletTransfer(
     },
   ];
 
-  return transaction({ chain: assetValue.chain, method, params });
+  return submitVultisigTransaction({ chain: assetValue.chain, method, params });
 }
 
 export function getVultisigMethods(provider: BrowserProvider, chain: EVMChain) {
