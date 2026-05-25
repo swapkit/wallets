@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 4.6.27
+
+### Patch Changes
+
+- [`2051d7a`](https://github.com/swapkit/wallets/commit/2051d7ad0e435e329bc3b5d57f4e05e895b745f9) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - Trigger an SDK patch release for the latest wallet package updates.
+
+- Updated dependencies [[`888e661`](https://github.com/swapkit/wallets/commit/888e661b9a73899bbf5e096a1664d2b7d44d8800)]:
+  - @swapkit/wallets@4.8.21
+
 ## 4.6.26
 
 ### Patch Changes

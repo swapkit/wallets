@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.16
+
+### Patch Changes
+
+- [`888e661`](https://github.com/swapkit/wallets/commit/888e661b9a73899bbf5e096a1664d2b7d44d8800) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - Broadcast Trezor's exact serialized Zcash transfer transaction instead of reserializing through the toolbox.
+
 ## 4.9.15
 
 ### Patch Changes
