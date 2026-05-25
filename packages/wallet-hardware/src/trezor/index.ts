@@ -578,7 +578,7 @@ async function getTrezorWallet<T extends Chain>({
         return ZcashTx.fromHex(signedTxHex, { allowUnknownOutputs: true });
       };
 
-      const signZcashTransaction = async (tx: ZcashTransaction) => {
+      const signZcashTransactionWithSerializedTx = async (tx: ZcashTransaction) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const { hex: hexEncode } = await import("@scure/base");
         const address_n = hardenDerivationPath(derivationPath);
@@ -599,7 +599,10 @@ async function getTrezorWallet<T extends Chain>({
         });
 
         if (result.success) {
-          return parseSignedZcashTransaction(result.payload.serializedTx);
+          return {
+            serializedTx: result.payload.serializedTx,
+            signedTx: await parseSignedZcashTransaction(result.payload.serializedTx),
+          };
         }
 
         throw new SwapKitError({
@@ -626,7 +629,7 @@ async function getTrezorWallet<T extends Chain>({
             return parseSignedZcashTransaction(serializedTx);
           }
 
-          return signZcashTransaction(tx);
+          return (await signZcashTransactionWithSerializedTx(tx)).signedTx;
         },
       };
 
@@ -643,10 +646,32 @@ async function getTrezorWallet<T extends Chain>({
           return toolbox.broadcastTx(serializedTx);
         }
 
-        return toolbox.signAndBroadcastTransaction(tx);
+        const { serializedTx } = await signZcashTransactionWithSerializedTx(tx);
+        return toolbox.broadcastTx(serializedTx);
       };
 
-      return { ...toolbox, address, signAndBroadcastTransaction, signPCZT: signer.signPCZT };
+      const transfer = async ({ recipient, feeOptionKey, feeRate: paramFeeRate, ...rest }: GenericTransferParams) => {
+        if (!(address && recipient)) {
+          throw new SwapKitError({
+            errorKey: "wallet_missing_params",
+            info: { address, recipient, wallet: WalletOption.TREZOR },
+          });
+        }
+
+        const feeRate = paramFeeRate || (await toolbox.getFeeRates())[feeOptionKey || FeeOption.Fast];
+        const { tx } = await toolbox.createTransaction({
+          ...rest,
+          feeRate,
+          fetchTxHex: false,
+          recipient,
+          sender: address,
+        });
+        const { serializedTx } = await signZcashTransactionWithSerializedTx(tx);
+
+        return toolbox.broadcastTx(serializedTx);
+      };
+
+      return { ...toolbox, address, signAndBroadcastTransaction, signPCZT: signer.signPCZT, transfer };
     }
 
     case Chain.Bitcoin:
