@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.15
+
+### Patch Changes
+
+- [#74](https://github.com/swapkit/wallets/pull/74) [`7d6830d`](https://github.com/swapkit/wallets/commit/7d6830da9f6cd9eb0fba47486d4c281e8dcefd7f) Thanks [@towanTG](https://github.com/towanTG)! - Fix Trezor Zcash PSBT signing by preserving route transaction ids and broadcasting the signed Trezor transaction.
+
 ## 4.9.14
 
 ### Patch Changes
