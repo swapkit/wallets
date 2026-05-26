@@ -1,5 +1,11 @@
 # @swapkit/sdk
 
+## 4.6.29
+
+### Patch Changes
+
+- [`4d730dd`](https://github.com/swapkit/wallets/commit/4d730dde18fe04423c8438eda7663b7e1472abfa) Thanks [@github-actions[bot]](https://github.com/github-actions%5Bbot%5D)! - Trigger an SDK patch release after bumping the playground to SwapKit UI 0.19.0.
+
 ## 4.6.28
 
 ### Patch Changes
