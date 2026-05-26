@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.17
+
+### Patch Changes
+
+- [#78](https://github.com/swapkit/wallets/pull/78) [`e02506a`](https://github.com/swapkit/wallets/commit/e02506a46f206844d307a66c20d23656f9795091) Thanks [@towanTG](https://github.com/towanTG)! - Sign Ledger Tron transactions using raw_data_hex instead of the JSON transaction object.
+
 ## 4.9.16
 
 ### Patch Changes
