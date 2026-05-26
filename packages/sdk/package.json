@@ -2,13 +2,13 @@
   "author": "swapkit-dev",
   "dependencies": {
     "@stricahq/typhonjs": "~3.0.1",
-    "@swapkit/core": "^4.4.29",
-    "@swapkit/helpers": "^4.13.11",
-    "@swapkit/plugins": "^4.6.43",
-    "@swapkit/server": "^4.2.54",
-    "@swapkit/toolboxes": "^4.16.0",
-    "@swapkit/wallet-core": "^4.3.2",
-    "@swapkit/wallet-keystore": "^4.3.35",
+    "@swapkit/core": "^4.4.31",
+    "@swapkit/helpers": "^4.13.13",
+    "@swapkit/plugins": "^4.6.45",
+    "@swapkit/server": "^4.2.56",
+    "@swapkit/toolboxes": "^4.16.2",
+    "@swapkit/wallet-core": "^4.3.4",
+    "@swapkit/wallet-keystore": "^4.3.37",
     "@swapkit/wallets": "workspace:*",
     "cosmjs-types": "0.10.1"
   },
@@ -45,21 +45,12 @@
       "types": "./dist/types/wallets.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/sdk",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/sdk",
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git"
-  },
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/sdk", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
