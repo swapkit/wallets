@@ -1,5 +1,15 @@
 # @swapkit-dev/wallets
 
+## 4.8.23
+
+### Patch Changes
+
+- [#82](https://github.com/swapkit/wallets/pull/82) [`198943e`](https://github.com/swapkit/wallets/commit/198943e244b02bde58d20054da710a5e4943190c) Thanks [@towanTG](https://github.com/towanTG)! - Bump SwapKit runtime dependencies to the latest published versions.
+
+- Updated dependencies [[`198943e`](https://github.com/swapkit/wallets/commit/198943e244b02bde58d20054da710a5e4943190c)]:
+  - @swapkit/wallet-hardware@4.9.18
+  - @swapkit/wallet-extensions@4.5.17
+
 ## 4.8.22
 
 ### Patch Changes
