@@ -2,13 +2,13 @@
   "author": "swapkit-dev",
   "dependencies": {
     "@stricahq/typhonjs": "~3.0.1",
-    "@swapkit/core": "^4.4.32",
+    "@swapkit/core": "^4.4.33",
     "@swapkit/helpers": "^4.14.0",
-    "@swapkit/plugins": "^4.6.46",
-    "@swapkit/server": "^4.3.0",
-    "@swapkit/toolboxes": "^4.17.0",
+    "@swapkit/plugins": "^4.6.47",
+    "@swapkit/server": "^4.3.1",
+    "@swapkit/toolboxes": "^4.17.1",
     "@swapkit/wallet-core": "^4.3.5",
-    "@swapkit/wallet-keystore": "^4.4.0",
+    "@swapkit/wallet-keystore": "^4.4.1",
     "@swapkit/wallets": "workspace:*",
     "cosmjs-types": "0.10.1"
   },

@@ -12,7 +12,7 @@
     "@scure/base": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
     "@swapkit/helpers": "^4.14.0",
-    "@swapkit/toolboxes": "^4.17.0",
+    "@swapkit/toolboxes": "^4.17.1",
     "@swapkit/utxo-signer": "^2.2.0",
     "@swapkit/wallet-core": "^4.3.5",
     "cosmjs-types": "0.10.1",
