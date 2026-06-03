@@ -1,5 +1,11 @@
 # @swapkit/sdk
 
+## 4.6.31
+
+### Patch Changes
+
+- [#84](https://github.com/swapkit/wallets/pull/84) [`0893f52`](https://github.com/swapkit/wallets/commit/0893f5236c36952a583b04dba1a997d111d31b3b) Thanks [@towanTG](https://github.com/towanTG)! - Bump the Vite playground to @swapkit/ui 0.20.0.
+
 ## 4.6.30
 
 ### Patch Changes
