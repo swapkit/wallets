@@ -67,6 +67,17 @@ function changelogCovers(changelog: string, version: string): boolean {
   return new RegExp(`^## ${version.replace(/\./g, "\\.")}(?:\\s|$)`, "m").test(changelog);
 }
 
+// Stable identity for a changelog bullet so the same change isn't listed twice
+// when it appears in both its origin package and a dependent's enriched note.
+// The changeset-github format leads with a PR link and a `commit` backtick.
+function dedupeKey(bullet: string): string {
+  const commit = bullet.match(/\[`([0-9a-f]{7,40})`\]/)?.[1];
+  if (commit) return `c:${commit}`;
+  const pr = bullet.match(/\[#(\d+)\]/)?.[1];
+  if (pr) return `pr:${pr}`;
+  return bullet.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 async function sdkChangelog(name: string, newVersion: string): Promise<string | null> {
   const dir = name.replace("@swapkit/", "");
 
@@ -159,10 +170,14 @@ for (const [name, { old, new: newV }] of [...changed].sort(([a], [b]) => a.local
     continue;
   }
   for (const bullet of bulletsInRange(changelog, old, newV)) {
-    const key = bullet.toLowerCase().replace(/\s+/g, " ").trim();
+    // The same change shows up both in its origin package's changelog and in a
+    // dependent's enriched changelog (suffixed `(via @swapkit/x@y)`). Dedupe on
+    // the commit hash (stable across both), then PR number, then text; and drop
+    // the `(via …)` annotation so the kept line reads cleanly.
+    const key = dedupeKey(bullet);
     if (seen.has(key)) continue;
     seen.add(key);
-    bullets.push(bullet);
+    bullets.push(bullet.replace(/\s*\(via @swapkit\/[^)]+\)\s*$/, ""));
   }
 }
 
