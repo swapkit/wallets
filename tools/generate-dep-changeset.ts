@@ -23,6 +23,7 @@
 //   SDK_REPO_PATH  local SDK checkout — read files from disk (testing only)
 
 import { $, Glob } from "bun";
+import { bulletsInRange, changelogCovers, dedupeKey, stripViaSuffix } from "./changelog";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const BASE_REF = process.env.BASE_REF || "origin/develop";
@@ -32,16 +33,6 @@ const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies"] as co
 type Json = { name?: string } & Partial<Record<(typeof DEP_FIELDS)[number], Record<string, string>>>;
 
 const stripRange = (v: string) => v.replace(/^[^\d]*/, ""); // ^4.4.35 -> 4.4.35
-
-function semverCmp(a: string, b: string): number {
-  const pa = a.split(/[.-]/).map((n) => Number.parseInt(n, 10));
-  const pb = b.split(/[.-]/).map((n) => Number.parseInt(n, 10));
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (!Number.isNaN(d) && d !== 0) return Math.sign(d);
-  }
-  return 0;
-}
 
 // External @swapkit/* deps in a package.json (excludes this repo's own workspace packages).
 function externalSwapkitDeps(json: Json, workspace: Set<string>): Record<string, string> {
@@ -60,22 +51,6 @@ async function gitShow(ref: string, path: string): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-// True if the changelog has a section for exactly this version (`## x.y.z`).
-function changelogCovers(changelog: string, version: string): boolean {
-  return new RegExp(`^## ${version.replace(/\./g, "\\.")}(?:\\s|$)`, "m").test(changelog);
-}
-
-// Stable identity for a changelog bullet so the same change isn't listed twice
-// when it appears in both its origin package and a dependent's enriched note.
-// The changeset-github format leads with a PR link and a `commit` backtick.
-function dedupeKey(bullet: string): string {
-  const commit = bullet.match(/\[`([0-9a-f]{7,40})`\]/)?.[1];
-  if (commit) return `c:${commit}`;
-  const pr = bullet.match(/\[#(\d+)\]/)?.[1];
-  if (pr) return `pr:${pr}`;
-  return bullet.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 async function sdkChangelog(name: string, newVersion: string): Promise<string | null> {
@@ -98,40 +73,6 @@ async function sdkChangelog(name: string, newVersion: string): Promise<string | 
     if (changelogCovers(text, newVersion)) return text;
   }
   return null;
-}
-
-// Real (non-"Updated dependencies") bullets of every changelog section whose
-// version is in (oldVersion, newVersion]. If oldVersion is empty, take only newVersion.
-function bulletsInRange(changelog: string, oldVersion: string, newVersion: string): string[] {
-  const bullets: string[] = [];
-  let take = false;
-  let inDepBlock = false;
-  for (const line of changelog.split("\n")) {
-    const heading = line.match(/^## (.+)$/)?.[1]?.trim();
-    if (heading) {
-      if (!/^\d+\.\d+\.\d+/.test(heading)) continue; // ignore non-version ## headings
-      if (semverCmp(heading, newVersion) > 0) {
-        take = false; // newer than what we bumped to
-      } else if (oldVersion ? semverCmp(heading, oldVersion) <= 0 : semverCmp(heading, newVersion) < 0) {
-        break; // reached the old boundary (exclusive)
-      } else {
-        take = true;
-      }
-      inDepBlock = false;
-      continue;
-    }
-    if (!take) continue;
-    if (/^- Updated dependencies/.test(line)) {
-      inDepBlock = true;
-      continue;
-    }
-    if (inDepBlock && /^\s+- /.test(line)) continue; // nested dep ref
-    if (/^- /.test(line)) {
-      inDepBlock = false;
-      bullets.push(line.trim());
-    }
-  }
-  return bullets;
 }
 
 // --- Main ---------------------------------------------------------------------
@@ -177,7 +118,7 @@ for (const [name, { old, new: newV }] of [...changed].sort(([a], [b]) => a.local
     const key = dedupeKey(bullet);
     if (seen.has(key)) continue;
     seen.add(key);
-    bullets.push(bullet.replace(/\s*\(via @swapkit\/[^)]+\)\s*$/, ""));
+    bullets.push(stripViaSuffix(bullet));
   }
 }
 

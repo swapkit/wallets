@@ -87,6 +87,19 @@ jobs:
           setupGitUser: false
           createGithubReleases: false
 
+      # Only when packages were actually published to npm (not on the Version
+      # Packages PR, not on a failed publish). No-op until the secret is set.
+      - name: Announce release to Discord
+        if: github.ref_name == 'develop' && steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_LABEL: SwapKit Wallets
+          EMBED_COLOR: "3066993"
+        run: bun run tools/announce-release.ts
+
       - name: Publish Nightly to npm
         if: github.ref_name == 'nightly'
         uses: changesets/action@v1.4.10

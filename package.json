@@ -31,6 +31,7 @@
     "build:ci": "bun run build && bun run build:dts",
     "build:clean": "bun run --filter './packages/*' build:clean",
     "build:dts": "bun run ./tools/builder/dts.ts",
+    "announce:release": "bun run ./tools/announce-release.ts",
     "changeset": "bunx changeset",
     "generate:dep-changeset": "bun run ./tools/generate-dep-changeset.ts",
     "lint": "bun biome check --fix .",
