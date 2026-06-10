@@ -2,20 +2,28 @@
 //
 // Generates a RICH changeset describing the real SwapKit SDK changes pulled in by
 // an @swapkit/* dependency bump. It diffs the external @swapkit/* dep versions in
-// this branch against a base ref, fetches the (already-enriched) SDK CHANGELOGs
-// for each bumped range, and writes one changeset listing the actual changes —
+// this branch against a base ref, reads the (already-enriched) SDK CHANGELOGs for
+// each bumped range, and writes one changeset listing the actual changes —
 // instead of a generic "deps got bumped".
+//
+// Changelog source: the SDK ships CHANGELOG.md inside the published npm tarball
+// (swapkit/sdk #274), so after `bun install` the installed (new) version's
+// cumulative changelog is on disk and already covers the whole (old, new] range.
+// We read that first — no token, no network. GitHub is only a fallback for
+// versions published before the SDK started shipping the changelog in-package.
 //
 // Bump-path-agnostic: works for the dispatch auto-update, the scheduled update,
 // and a human manually editing package.json. Deterministic output (no timestamps)
-// so a CI check can regenerate-and-compare to enforce it.
+// so a CI check can regenerate-and-compare to enforce it. Run `bun install`
+// before this script so the installed changelogs are present.
 //
 // Env:
-//   BASE_REF        git ref to diff dep versions against        (default: origin/develop)
-//   SDK_REPO        owner/name of the SDK repo on GitHub        (default: swapkit/sdk)
-//   SDK_REF         ref to read SDK CHANGELOGs from             (default: develop)
-//   SDK_READ_TOKEN  token with read access to the private SDK   (or GITHUB_TOKEN)
-//   SDK_REPO_PATH   local SDK checkout — read files from disk instead of GitHub (testing)
+//   BASE_REF        git ref to diff dep versions against            (default: origin/develop)
+//   SDK_REPO        owner/name of the SDK repo on GitHub            (default: swapkit/sdk)
+//   SDK_REF         ref to read SDK CHANGELOGs from (GitHub fallback) (default: develop)
+//   SDK_READ_TOKEN  token for the GitHub fallback to the private SDK (or GITHUB_TOKEN)
+//                   — only needed for versions not yet republished with an in-package changelog
+//   SDK_REPO_PATH   local SDK checkout — read files from disk (testing)
 
 import { $, Glob } from "bun";
 
@@ -60,15 +68,39 @@ async function gitShow(ref: string, path: string): Promise<string | null> {
   }
 }
 
-async function sdkChangelog(name: string): Promise<string | null> {
+// True if the changelog has a section for exactly this version (`## x.y.z`).
+function changelogCovers(changelog: string, version: string): boolean {
+  return new RegExp(`^## ${version.replace(/\./g, "\\.")}(?:\\s|$)`, "m").test(changelog);
+}
+
+async function sdkChangelog(name: string, newVersion: string): Promise<string | null> {
   const dir = name.replace("@swapkit/", "");
+
+  // Local SDK checkout — testing only.
   if (SDK_REPO_PATH) {
     const file = Bun.file(`${SDK_REPO_PATH}/packages/${dir}/CHANGELOG.md`);
     return (await file.exists()) ? file.text() : null;
   }
+
+  // Preferred: the installed package's own changelog (no token, no network).
+  // The new version's changelog is cumulative, so it covers the full (old, new]
+  // range. Only trust it if it actually has the version we bumped to — otherwise
+  // node_modules is stale / not installed and we fall through to GitHub.
+  const installed = Bun.file(`node_modules/${name}/CHANGELOG.md`);
+  if (await installed.exists()) {
+    const text = await installed.text();
+    if (changelogCovers(text, newVersion)) return text;
+  }
+
+  // Fallback: fetch from the (private) SDK repo for versions published before the
+  // changelog shipped in-package. Requires SDK_READ_TOKEN.
   const url = `https://raw.githubusercontent.com/${SDK_REPO}/${SDK_REF}/packages/${dir}/CHANGELOG.md`;
   const res = await fetch(url, SDK_TOKEN ? { headers: { Authorization: `token ${SDK_TOKEN}` } } : undefined);
-  return res.ok ? res.text() : null;
+  if (res.ok) return res.text();
+  if (!SDK_TOKEN) {
+    console.warn(`⚠ ${name}@${newVersion}: no in-package changelog and no SDK_READ_TOKEN for the GitHub fallback`);
+  }
+  return null;
 }
 
 // Real (non-"Updated dependencies") bullets of every changelog section whose
@@ -80,6 +112,7 @@ function bulletsInRange(changelog: string, oldVersion: string, newVersion: strin
   for (const line of changelog.split("\n")) {
     const heading = line.match(/^## (.+)$/)?.[1]?.trim();
     if (heading) {
+      if (!/^\d+\.\d+\.\d+/.test(heading)) continue; // ignore non-version ## headings
       if (semverCmp(heading, newVersion) > 0) {
         take = false; // newer than what we bumped to
       } else if (oldVersion ? semverCmp(heading, oldVersion) <= 0 : semverCmp(heading, newVersion) < 0) {
@@ -134,7 +167,7 @@ if (changed.size === 0) {
 const seen = new Set<string>();
 const bullets: string[] = [];
 for (const [name, { old, new: newV }] of [...changed].sort(([a], [b]) => a.localeCompare(b))) {
-  const changelog = await sdkChangelog(name);
+  const changelog = await sdkChangelog(name, newV);
   if (!changelog) {
     console.warn(`⚠ could not read SDK CHANGELOG for ${name} — skipping`);
     continue;

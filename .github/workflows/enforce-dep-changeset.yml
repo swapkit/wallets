@@ -22,9 +22,16 @@ jobs:
       - name: Ensure base ref is available
         run: git fetch --no-tags origin "${{ github.base_ref }}"
 
+      # Installs the bumped @swapkit/* versions so the generator can read each
+      # package's in-package CHANGELOG.md from node_modules (no token needed).
+      - name: Install dependencies
+        run: bun install
+
       - name: Regenerate the dep changeset
         env:
           BASE_REF: origin/${{ github.base_ref }}
+          # GitHub fallback, only used for versions published before the changelog
+          # shipped in-package. Optional once all bumped versions carry it.
           SDK_REF: ${{ github.base_ref }}
           SDK_READ_TOKEN: ${{ secrets.SDK_READ_TOKEN }}
         run: bun run tools/generate-dep-changeset.ts
