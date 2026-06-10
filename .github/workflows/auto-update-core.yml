@@ -70,11 +70,10 @@ jobs:
       - name: Type check
         run: bun type-check:ci
 
+      # Reads each bumped @swapkit/* package's in-package CHANGELOG.md from
+      # node_modules (installed above) to describe the real underlying changes.
       - name: Create changeset
         shell: bash
-        env:
-          # Read the (enriched) SDK CHANGELOGs to describe the real underlying changes.
-          SDK_READ_TOKEN: ${{ secrets.SDK_READ_TOKEN }}
         run: bun run tools/generate-dep-changeset.ts
 
       - name: Check for changes

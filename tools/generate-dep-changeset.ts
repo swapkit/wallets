@@ -9,8 +9,9 @@
 // Changelog source: the SDK ships CHANGELOG.md inside the published npm tarball
 // (swapkit/sdk #274), so after `bun install` the installed (new) version's
 // cumulative changelog is on disk and already covers the whole (old, new] range.
-// We read that first — no token, no network. GitHub is only a fallback for
-// versions published before the SDK started shipping the changelog in-package.
+// We read it straight from node_modules — no token, no network. If a bumped
+// version predates the in-package changelog (so it isn't on disk), that bump
+// falls back to a generic "Update SwapKit SDK dependencies" line.
 //
 // Bump-path-agnostic: works for the dispatch auto-update, the scheduled update,
 // and a human manually editing package.json. Deterministic output (no timestamps)
@@ -18,21 +19,14 @@
 // before this script so the installed changelogs are present.
 //
 // Env:
-//   BASE_REF        git ref to diff dep versions against            (default: origin/develop)
-//   SDK_REPO        owner/name of the SDK repo on GitHub            (default: swapkit/sdk)
-//   SDK_REF         ref to read SDK CHANGELOGs from (GitHub fallback) (default: develop)
-//   SDK_READ_TOKEN  token for the GitHub fallback to the private SDK (or GITHUB_TOKEN)
-//                   — only needed for versions not yet republished with an in-package changelog
-//   SDK_REPO_PATH   local SDK checkout — read files from disk (testing)
+//   BASE_REF       git ref to diff dep versions against     (default: origin/develop)
+//   SDK_REPO_PATH  local SDK checkout — read files from disk (testing only)
 
 import { $, Glob } from "bun";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const BASE_REF = process.env.BASE_REF || "origin/develop";
-const SDK_REPO = process.env.SDK_REPO || "swapkit/sdk";
-const SDK_REF = process.env.SDK_REF || "develop";
 const SDK_REPO_PATH = process.env.SDK_REPO_PATH;
-const SDK_TOKEN = process.env.SDK_READ_TOKEN || process.env.GITHUB_TOKEN;
 
 const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies"] as const;
 type Json = { name?: string } & Partial<Record<(typeof DEP_FIELDS)[number], Record<string, string>>>;
@@ -82,23 +76,15 @@ async function sdkChangelog(name: string, newVersion: string): Promise<string | 
     return (await file.exists()) ? file.text() : null;
   }
 
-  // Preferred: the installed package's own changelog (no token, no network).
-  // The new version's changelog is cumulative, so it covers the full (old, new]
-  // range. Only trust it if it actually has the version we bumped to — otherwise
-  // node_modules is stale / not installed and we fall through to GitHub.
+  // The installed package's own changelog (no token, no network). The new
+  // version's changelog is cumulative, so it covers the full (old, new] range.
+  // Only trust it if it actually has the version we bumped to — otherwise
+  // node_modules is stale, install didn't run, or the version predates the
+  // in-package changelog; in all those cases we degrade to a generic line.
   const installed = Bun.file(`node_modules/${name}/CHANGELOG.md`);
   if (await installed.exists()) {
     const text = await installed.text();
     if (changelogCovers(text, newVersion)) return text;
-  }
-
-  // Fallback: fetch from the (private) SDK repo for versions published before the
-  // changelog shipped in-package. Requires SDK_READ_TOKEN.
-  const url = `https://raw.githubusercontent.com/${SDK_REPO}/${SDK_REF}/packages/${dir}/CHANGELOG.md`;
-  const res = await fetch(url, SDK_TOKEN ? { headers: { Authorization: `token ${SDK_TOKEN}` } } : undefined);
-  if (res.ok) return res.text();
-  if (!SDK_TOKEN) {
-    console.warn(`⚠ ${name}@${newVersion}: no in-package changelog and no SDK_READ_TOKEN for the GitHub fallback`);
   }
   return null;
 }
@@ -169,7 +155,7 @@ const bullets: string[] = [];
 for (const [name, { old, new: newV }] of [...changed].sort(([a], [b]) => a.localeCompare(b))) {
   const changelog = await sdkChangelog(name, newV);
   if (!changelog) {
-    console.warn(`⚠ could not read SDK CHANGELOG for ${name} — skipping`);
+    console.warn(`⚠ no in-package CHANGELOG for ${name}@${newV} — it will fall back to a generic line`);
     continue;
   }
   for (const bullet of bulletsInRange(changelog, old, newV)) {
