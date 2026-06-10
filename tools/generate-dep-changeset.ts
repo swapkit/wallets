@@ -1,33 +1,26 @@
 // tools/generate-dep-changeset.ts
 //
-// Generates a RICH changeset describing the real SwapKit SDK changes pulled in by
-// an @swapkit/* dependency bump. It diffs the external @swapkit/* dep versions in
-// this branch against a base ref, reads the (already-enriched) SDK CHANGELOGs for
-// each bumped range, and writes one changeset listing the actual changes —
-// instead of a generic "deps got bumped".
+// Emits a SIMPLE, deterministic changeset when external @swapkit/* dependency
+// versions change vs a base ref. It diffs the versions and records each bumped
+// dep as an `old → new` marker — it does NOT read any changelog here.
 //
-// Changelog source: the SDK ships CHANGELOG.md inside the published npm tarball
-// (swapkit/sdk #274), so after `bun install` the installed (new) version's
-// cumulative changelog is on disk and already covers the whole (old, new] range.
-// We read it straight from node_modules — no token, no network. If a bumped
-// version predates the in-package changelog (so it isn't on disk), that bump
-// falls back to a generic "Update SwapKit SDK dependencies" line.
+// The real underlying changes are inlined later, at release time, by
+// tools/enrich-dep-changelogs.ts (run from `version-bump`, after
+// `changeset version`), which reads the bumped deps' changelogs from the
+// installed packages. Keeping this step changelog-free makes it deterministic
+// (no node_modules dependency, no network) so the enforce-dep-changeset CI check
+// can regenerate-and-compare reliably.
 //
 // Bump-path-agnostic: works for the dispatch auto-update, the scheduled update,
-// and a human manually editing package.json. Deterministic output (no timestamps)
-// so a CI check can regenerate-and-compare to enforce it. Run `bun install`
-// before this script so the installed changelogs are present.
+// and a human manually editing package.json.
 //
 // Env:
-//   BASE_REF       git ref to diff dep versions against     (default: origin/develop)
-//   SDK_REPO_PATH  local SDK checkout — read files from disk (testing only)
+//   BASE_REF  git ref to diff dep versions against (default: origin/develop)
 
 import { $, Glob } from "bun";
-import { bulletsInRange, changelogCovers, dedupeKey, stripViaSuffix } from "./changelog";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const BASE_REF = process.env.BASE_REF || "origin/develop";
-const SDK_REPO_PATH = process.env.SDK_REPO_PATH;
 
 const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies"] as const;
 type Json = { name?: string } & Partial<Record<(typeof DEP_FIELDS)[number], Record<string, string>>>;
@@ -51,28 +44,6 @@ async function gitShow(ref: string, path: string): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-async function sdkChangelog(name: string, newVersion: string): Promise<string | null> {
-  const dir = name.replace("@swapkit/", "");
-
-  // Local SDK checkout — testing only.
-  if (SDK_REPO_PATH) {
-    const file = Bun.file(`${SDK_REPO_PATH}/packages/${dir}/CHANGELOG.md`);
-    return (await file.exists()) ? file.text() : null;
-  }
-
-  // The installed package's own changelog (no token, no network). The new
-  // version's changelog is cumulative, so it covers the full (old, new] range.
-  // Only trust it if it actually has the version we bumped to — otherwise
-  // node_modules is stale, install didn't run, or the version predates the
-  // in-package changelog; in all those cases we degrade to a generic line.
-  const installed = Bun.file(`node_modules/${name}/CHANGELOG.md`);
-  if (await installed.exists()) {
-    const text = await installed.text();
-    if (changelogCovers(text, newVersion)) return text;
-  }
-  return null;
 }
 
 // --- Main ---------------------------------------------------------------------
@@ -101,28 +72,7 @@ if (changed.size === 0) {
   process.exit(0);
 }
 
-// 2. Slice the SDK changelogs for each bumped range, aggregate + dedupe bullets.
-const seen = new Set<string>();
-const bullets: string[] = [];
-for (const [name, { old, new: newV }] of [...changed].sort(([a], [b]) => a.localeCompare(b))) {
-  const changelog = await sdkChangelog(name, newV);
-  if (!changelog) {
-    console.warn(`⚠ no in-package CHANGELOG for ${name}@${newV} — it will fall back to a generic line`);
-    continue;
-  }
-  for (const bullet of bulletsInRange(changelog, old, newV)) {
-    // The same change shows up both in its origin package's changelog and in a
-    // dependent's enriched changelog (suffixed `(via @swapkit/x@y)`). Dedupe on
-    // the commit hash (stable across both), then PR number, then text; and drop
-    // the `(via …)` annotation so the kept line reads cleanly.
-    const key = dedupeKey(bullet);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    bullets.push(stripViaSuffix(bullet));
-  }
-}
-
-// 3. Which of THIS repo's packages depend on a changed dep → patch bump.
+// 2. Which of THIS repo's packages depend on a changed dep → patch bump.
 const bumps = new Set<string>();
 for (const f of pkgFiles) {
   const json = (await Bun.file(f).json()) as Json;
@@ -136,22 +86,22 @@ if (bumps.size === 0) {
   process.exit(0);
 }
 
-// 4. Build the changeset (deterministic filename from the bumped versions).
-const summary = [...changed].sort(([a], [b]) => a.localeCompare(b)).map(([n, v]) => `${n}@${v.new}`);
-const id = `swapkit-sdk-${Bun.hash(summary.join(",")).toString(36)}`;
+// 3. Build the changeset: one `old → new` marker per bumped dep. The release-time
+//    enricher (tools/enrich-dep-changelogs.ts) parses these markers and replaces
+//    them with the real underlying changes. Deterministic filename from the bumps.
+const sorted = [...changed].sort(([a], [b]) => a.localeCompare(b));
+const id = `swapkit-sdk-${Bun.hash(sorted.map(([n, v]) => `${n}@${v.new}`).join(",")).toString(36)}`;
 const frontmatter = [...bumps]
   .sort()
   .map((n) => `"${n}": patch`)
   .join("\n");
-const body =
-  bullets.length > 0
-    ? ["Update SwapKit SDK dependencies. Underlying changes:", "", ...bullets].join("\n")
-    : `Update SwapKit SDK dependencies: ${summary.join(", ")}.`;
+const markers = sorted.map(([n, v]) => `- ${n}: ${v.old ? `${v.old} → ${v.new}` : v.new}`);
+const body = ["Update SwapKit SDK dependencies:", "", ...markers].join("\n");
 const content = `---\n${frontmatter}\n---\n\n${body}\n`;
 
 if (DRY_RUN) {
   console.info(`# .changeset/${id}.md\n\n${content}`);
 } else {
   await Bun.write(`.changeset/${id}.md`, content);
-  console.info(`📝 wrote .changeset/${id}.md (${bumps.size} packages, ${bullets.length} change notes)`);
+  console.info(`📝 wrote .changeset/${id}.md (${bumps.size} packages, ${changed.size} deps)`);
 }
