@@ -1,7 +1,9 @@
 {
   "dependencies": {
+    "@noble/curves": "2.2.0",
+    "@noble/hashes": "~2.2.0",
     "@swapkit/sdk": "workspace:*",
-    "@swapkit/ui": "0.20.1",
+    "@swapkit/ui": "0.21.0",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
     "@swapkit/wallet-mobile": "workspace:*",

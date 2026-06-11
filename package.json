@@ -37,6 +37,7 @@
     "generate:dep-changeset": "bun run ./tools/generate-dep-changeset.ts",
     "lint": "bun biome check --fix .",
     "lint:ws": "bunx sherif@latest",
+    "playground:vite-lite:start": "bun run --cwd=./playgrounds/vite-lite build && bun run --cwd=./playgrounds/vite-lite dev",
     "postinstall": "bun lint:ws",
     "publish-packages": "bun run build:ci && bun run ./tools/builder/set-versions.ts && bunx changeset publish",
     "test": "bun test",
