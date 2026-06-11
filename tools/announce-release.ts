@@ -60,23 +60,24 @@ for (const { name, version } of published) {
   const file = Bun.file(path);
   if (!(await file.exists())) continue;
   const changelog = await file.text();
-  for (const bullet of bulletsInRange(changelog, "", version)) {
+  for (const bullet of bulletsInRange(changelog, "", version, { includeNested: true })) {
+    const nested = /^\s/.test(bullet);
     const key = dedupeKey(bullet);
     if (seen.has(key)) continue;
     seen.add(key);
-    notes.push(formatNote(stripViaSuffix(bullet)));
+    notes.push(formatNote(stripViaSuffix(bullet.trim()), nested));
   }
 }
 
 // Turn a changeset-github bullet into a compact Discord line: message first,
-// PR link trailing, dropping the commit hash and "Thanks @user!".
-function formatNote(bullet: string): string {
-  const m = bullet.match(
-    /^-\s*(\[#\d+\]\([^)]+\))?\s*(?:\[`[0-9a-f]+`\]\([^)]+\))?\s*(?:Thanks[^!]*!)?\s*-?\s*(.*)$/s,
-  );
+// PR link trailing, dropping the commit hash and "Thanks @user!". Nested bullets
+// (the enriched underlying dep changes) are indented under their parent note —
+// non-breaking spaces so Discord doesn't collapse the indent.
+function formatNote(bullet: string, nested = false): string {
+  const m = bullet.match(/^-\s*(\[#\d+\]\([^)]+\))?\s*(?:\[`[0-9a-f]+`\]\([^)]+\))?\s*(?:Thanks[^!]*!)?\s*-?\s*(.*)$/s);
   const pr = m?.[1];
   const msg = (m?.[2] || bullet.replace(/^-\s*/, "")).trim().replace(/\s+/g, " ");
-  return `• ${msg}${pr ? ` (${pr})` : ""}`;
+  return `${nested ? "   ↳ " : "• "}${msg}${pr ? ` (${pr})` : ""}`;
 }
 
 // Build the description, truncating to Discord's limit with an overflow link.
@@ -111,14 +112,14 @@ function buildPackageField(): string {
 
 const embed = {
   author: { name: RELEASE_LABEL },
-  title: `📦 ${RELEASE_LABEL} — Release`,
   color: EMBED_COLOR,
   description: buildDescription(),
   fields: [{ name: `Packages (${published.length})`, value: buildPackageField() }],
+  title: `📦 ${RELEASE_LABEL} — Release`,
   ...(RUN_URL ? { url: RUN_URL } : {}),
 };
 
-const payload = { username: "SwapKit Releases", embeds: [embed] };
+const payload = { embeds: [embed], username: "SwapKit Releases" };
 
 if (DRY_RUN || !WEBHOOK) {
   if (!WEBHOOK && !DRY_RUN) console.info("DISCORD_RELEASE_WEBHOOK unset — skipping Discord post.");
@@ -127,9 +128,9 @@ if (DRY_RUN || !WEBHOOK) {
 }
 
 const res = await fetch(WEBHOOK, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
   body: JSON.stringify(payload),
+  headers: { "Content-Type": "application/json" },
+  method: "POST",
 });
 
 if (!res.ok) {

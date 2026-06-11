@@ -37,7 +37,15 @@ export function stripViaSuffix(bullet: string): string {
 
 // Real (non-"Updated dependencies") bullets of every changelog section whose
 // version is in (oldVersion, newVersion]. If oldVersion is empty, take only newVersion.
-export function bulletsInRange(changelog: string, oldVersion: string, newVersion: string): string[] {
+// With includeNested, sub-bullets of a real bullet (how enrich-dep-changelogs inlines
+// the underlying dep changes) are returned too, keeping a two-space indent marker so
+// callers can tell parent from child.
+export function bulletsInRange(
+  changelog: string,
+  oldVersion: string,
+  newVersion: string,
+  { includeNested = false } = {},
+): string[] {
   const bullets: string[] = [];
   let take = false;
   let inDepBlock = false;
@@ -60,7 +68,12 @@ export function bulletsInRange(changelog: string, oldVersion: string, newVersion
       inDepBlock = true;
       continue;
     }
-    if (inDepBlock && /^\s+- /.test(line)) continue; // nested dep ref
+    if (/^\s+- /.test(line)) {
+      if (includeNested && !inDepBlock && bullets.length > 0) {
+        bullets.push(`  ${line.trim()}`);
+      }
+      continue;
+    }
     if (/^- /.test(line)) {
       inDepBlock = false;
       bullets.push(line.trim());
