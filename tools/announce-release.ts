@@ -6,8 +6,10 @@
 // Packages" PR or a failed publish.
 //
 // For each published package it slices that version's section from the package's
-// CHANGELOG.md, aggregates + dedupes the notes (shared changelog helpers), and
-// sends one embed listing the changes and the package@versions.
+// CHANGELOG.md (its changes since the last released version) and sends one embed
+// listing every bumped package with its notes. Packages whose sections carry the
+// same changes (the usual case for a dep-bump release) are grouped under one
+// heading instead of repeating the notes per package.
 //
 // Env:
 //   DISCORD_RELEASE_WEBHOOK  Discord channel webhook URL (no-op if unset)
@@ -51,22 +53,29 @@ for await (const f of new Glob("packages/*/package.json").scan(".")) {
   if (name) changelogByName.set(name, f.replace(/package\.json$/, "CHANGELOG.md"));
 }
 
-// Aggregate + dedupe the released version's notes across all published packages.
-const seen = new Set<string>();
-const notes: string[] = [];
-for (const { name, version } of published) {
-  const path = changelogByName.get(name);
-  if (!path) continue;
-  const file = Bun.file(path);
-  if (!(await file.exists())) continue;
-  const changelog = await file.text();
-  for (const bullet of bulletsInRange(changelog, "", version, { includeNested: true })) {
+// Per-package notes from the released version's changelog section, then group
+// packages whose sections carry the exact same changes (keyed by the notes'
+// dedupe identities) so shared dep-bump notes appear once.
+const groups = new Map<string, { pkgs: Pkg[]; notes: string[] }>();
+for (const pkg of published) {
+  const path = changelogByName.get(pkg.name);
+  const file = path ? Bun.file(path) : null;
+  const changelog = file && (await file.exists()) ? await file.text() : "";
+
+  const seen = new Set<string>();
+  const notes: string[] = [];
+  for (const bullet of bulletsInRange(changelog, "", pkg.version, { includeNested: true })) {
     const nested = /^\s/.test(bullet);
-    const key = dedupeKey(bullet);
+    const key = `${nested ? ">" : ""}${dedupeKey(bullet)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     notes.push(formatNote(stripViaSuffix(bullet.trim()), nested));
   }
+
+  const signature = [...seen].join("|");
+  const group = groups.get(signature);
+  if (group) group.pkgs.push(pkg);
+  else groups.set(signature, { notes, pkgs: [pkg] });
 }
 
 // Turn a changeset-github bullet into a compact Discord line: message first,
@@ -80,22 +89,29 @@ function formatNote(bullet: string, nested = false): string {
   return `${nested ? "   ↳ " : "• "}${msg}${pr ? ` (${pr})` : ""}`;
 }
 
-// Build the description, truncating to Discord's limit with an overflow link.
+// Build the description: one section per group — the bumped package@versions as
+// a heading, their changes underneath — truncated to Discord's limit with an
+// overflow link.
 function buildDescription(): string {
-  if (notes.length === 0) return "_No notable changes recorded._";
+  const lines: string[] = [];
+  for (const { pkgs, notes } of groups.values()) {
+    if (lines.length > 0) lines.push("");
+    lines.push(pkgs.map((p) => `**\`${p.name}@${p.version}\`**`).join(" · "));
+    lines.push(...(notes.length > 0 ? notes : ["_Dependency updates only._"]));
+  }
   const kept: string[] = [];
   let len = 0;
-  for (let i = 0; i < notes.length; i++) {
-    const line = notes[i];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (len + line.length + 1 > DESC_LIMIT) {
-      const more = notes.length - i;
-      kept.push(RUN_URL ? `…and ${more} more — [release run](${RUN_URL})` : `…and ${more} more`);
+      const more = lines.length - i;
+      kept.push(RUN_URL ? `…and ${more} more lines — [release run](${RUN_URL})` : `…and ${more} more lines`);
       break;
     }
     kept.push(line);
     len += line.length + 1;
   }
-  return kept.join("\n");
+  return kept.join("\n") || "_No notable changes recorded._";
 }
 
 function buildPackageField(): string {
@@ -137,4 +153,4 @@ if (!res.ok) {
   console.error(`Discord webhook failed: ${res.status} ${await res.text().catch(() => "")}`);
   process.exit(1);
 }
-console.info(`📣 announced ${published.length} packages, ${notes.length} change notes to Discord.`);
+console.info(`📣 announced ${published.length} packages in ${groups.size} groups to Discord.`);
