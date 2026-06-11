@@ -143,7 +143,13 @@ if (DRY_RUN || !WEBHOOK) {
   process.exit(0);
 }
 
-const res = await fetch(WEBHOOK, {
+// wait=true makes Discord validate and create the message synchronously and
+// return it. Without it the API acks with 204 immediately and a message that
+// fails afterwards is dropped with no error at all.
+const url = new URL(WEBHOOK);
+url.searchParams.set("wait", "true");
+
+const res = await fetch(url, {
   body: JSON.stringify(payload),
   headers: { "Content-Type": "application/json" },
   method: "POST",
@@ -153,4 +159,7 @@ if (!res.ok) {
   console.error(`Discord webhook failed: ${res.status} ${await res.text().catch(() => "")}`);
   process.exit(1);
 }
-console.info(`📣 announced ${published.length} packages in ${groups.size} groups to Discord.`);
+const message = (await res.json().catch(() => null)) as { id?: string } | null;
+console.info(
+  `📣 announced ${published.length} packages in ${groups.size} groups to Discord (message ${message?.id ?? "unknown"}).`,
+);
