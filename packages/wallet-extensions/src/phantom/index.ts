@@ -7,6 +7,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { getWallets as getStandardWallets } from "@wallet-standard/app";
 import type { ExtensionWallet } from "../walletTypes";
 
 export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
@@ -39,24 +40,104 @@ export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
 export const PHANTOM_SUPPORTED_CHAINS = getWalletSupportedChains(phantomWallet);
 export type PhantomSupportedChain = (typeof PHANTOM_SUPPORTED_CHAINS)[number];
 
+type BitcoinAccess = { address: string; signPsbt: (psbt: Uint8Array, signingIndexes: number[]) => Promise<Uint8Array> };
+
+type WalletStandardWallet = ReturnType<ReturnType<typeof getStandardWallets>["get"]>[number];
+type WalletStandardAccount = WalletStandardWallet["accounts"][number];
+type BitcoinStandardWallet = WalletStandardWallet & {
+  readonly features: WalletStandardWallet["features"] & {
+    "bitcoin:connect"?: {
+      connect: (input: {
+        purposes: ("payment" | "ordinals")[];
+      }) => Promise<{ accounts: readonly WalletStandardAccount[] }>;
+    };
+    "bitcoin:signTransaction"?: {
+      signTransaction: (
+        ...inputs: { psbt: Uint8Array; inputsToSign: { account: WalletStandardAccount; signingIndexes: number[] }[] }[]
+      ) => Promise<readonly { signedPsbt: Uint8Array }[]>;
+    };
+  };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isBitcoinStandardWallet(candidate: WalletStandardWallet): candidate is BitcoinStandardWallet {
+  const connectFeature = candidate.features["bitcoin:connect"];
+  const signFeature = candidate.features["bitcoin:signTransaction"];
+
+  return (
+    candidate.name === "Phantom" &&
+    isRecord(connectFeature) &&
+    typeof connectFeature.connect === "function" &&
+    isRecord(signFeature) &&
+    typeof signFeature.signTransaction === "function"
+  );
+}
+
+/**
+ * Resolves a Bitcoin signing surface for Phantom.
+ *
+ * Phantom has deprecated the injected `window.phantom.bitcoin` provider and newer builds expose
+ * Bitcoin only through the Wallet Standard registry (Solana/EVM are still injected, which is why
+ * those chains keep working). We therefore prefer the legacy injected provider when present to
+ * avoid changing behaviour for existing users, and fall back to Wallet Standard discovery.
+ */
+export async function getBitcoinAccess(phantom: any): Promise<BitcoinAccess> {
+  const injected = phantom?.bitcoin;
+  if (injected?.isPhantom) {
+    const [{ address }] = await injected.requestAccounts();
+
+    return {
+      address,
+      signPsbt: async (psbt, signingIndexes) =>
+        new Uint8Array(await injected.signPSBT(psbt, { inputsToSign: [{ address, signingIndexes }] })),
+    };
+  }
+
+  const { getWallets } = await import("@wallet-standard/app");
+  const wallet = getWallets().get().find(isBitcoinStandardWallet);
+
+  const connectFeature = wallet?.features["bitcoin:connect"];
+  const signFeature = wallet?.features["bitcoin:signTransaction"];
+  if (!(connectFeature && signFeature)) {
+    throw new SwapKitError("wallet_phantom_not_found");
+  }
+
+  const { accounts } = await connectFeature.connect({ purposes: ["payment"] });
+  const [account] = accounts;
+  if (!account) {
+    throw new SwapKitError("wallet_phantom_not_found");
+  }
+
+  return {
+    address: account.address,
+    signPsbt: async (psbt, signingIndexes) => {
+      const [result] = await signFeature.signTransaction({ inputsToSign: [{ account, signingIndexes }], psbt });
+      if (!result) {
+        throw new SwapKitError("core_transaction_failed");
+      }
+
+      return result.signedPsbt;
+    },
+  };
+}
+
 async function getWalletMethods(chain: PhantomSupportedChain) {
   const phantom: any = window?.phantom;
 
   switch (chain) {
     case Chain.Bitcoin: {
-      const provider = phantom?.bitcoin;
-      if (!provider?.isPhantom) {
-        throw new SwapKitError("wallet_phantom_not_found");
-      }
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const { Transaction } = await import("@swapkit/utxo-signer");
-      const [{ address }] = await provider.requestAccounts();
+      const { address, signPsbt } = await getBitcoinAccess(phantom);
 
       async function signTransaction(tx: InstanceType<typeof Transaction>) {
-        const psbtBytes = tx.toPSBT();
-        const signedPsbtBytes = await provider.signPSBT(psbtBytes, {
-          inputsToSign: [{ address, signingIndexes: Array.from({ length: tx.inputsLength }, (_, i) => i) }],
-        });
+        const signedPsbtBytes = await signPsbt(
+          tx.toPSBT(),
+          Array.from({ length: tx.inputsLength }, (_, i) => i),
+        );
 
         return Transaction.fromPSBT(new Uint8Array(signedPsbtBytes));
       }
