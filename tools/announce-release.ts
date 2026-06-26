@@ -14,7 +14,8 @@
 // Env:
 //   DISCORD_RELEASE_WEBHOOK  Discord channel webhook URL (no-op if unset)
 //   PUBLISHED_PACKAGES       JSON [{ name, version }] from changesets action
-//   RUN_URL                  link back to the GitHub Actions run (optional)
+//   GITHUB_REPOSITORY        owner/repo, used for GitHub release links
+//   GITHUB_SERVER_URL        GitHub base URL (default: https://github.com)
 //   RELEASE_LABEL            embed title label   (default: "SwapKit Wallets")
 //   EMBED_COLOR              embed color int      (default: blurple)
 
@@ -23,7 +24,8 @@ import { bulletsInRange, dedupeKey, stripViaSuffix } from "./changelog";
 
 const WEBHOOK = process.env.DISCORD_RELEASE_WEBHOOK;
 const PUBLISHED = process.env.PUBLISHED_PACKAGES || "[]";
-const RUN_URL = process.env.RUN_URL || "";
+const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "swapkit/wallets";
+const GITHUB_SERVER_URL = process.env.GITHUB_SERVER_URL || "https://github.com";
 const RELEASE_LABEL = process.env.RELEASE_LABEL || "SwapKit Wallets";
 const EMBED_COLOR = Number(process.env.EMBED_COLOR || 0x5865f2);
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -45,6 +47,10 @@ if (published.length === 0) {
   console.info("No published packages — nothing to announce.");
   process.exit(0);
 }
+
+const releasesUrl = `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases`;
+const packageReleaseUrl = ({ name, version }: Pkg) => `${releasesUrl}/tag/${encodeURIComponent(`${name}@${version}`)}`;
+const primaryReleaseUrl = published[0] ? packageReleaseUrl(published[0]) : releasesUrl;
 
 // Map workspace package name -> its CHANGELOG.md path.
 const changelogByName = new Map<string, string>();
@@ -105,7 +111,7 @@ function buildDescription(): string {
     const line = lines[i];
     if (len + line.length + 1 > DESC_LIMIT) {
       const more = lines.length - i;
-      kept.push(RUN_URL ? `…and ${more} more lines — [release run](${RUN_URL})` : `…and ${more} more lines`);
+      kept.push(`…and ${more} more lines — [GitHub releases](${releasesUrl})`);
       break;
     }
     kept.push(line);
@@ -115,7 +121,7 @@ function buildDescription(): string {
 }
 
 function buildPackageField(): string {
-  const lines = published.map((p) => `\`${p.name}@${p.version}\``);
+  const lines = published.map((p) => `[\`${p.name}@${p.version}\`](${packageReleaseUrl(p)})`);
   let out = "";
   for (let i = 0; i < lines.length; i++) {
     if (out.length + lines[i].length + 1 > FIELD_LIMIT) {
@@ -132,7 +138,7 @@ const embed = {
   description: buildDescription(),
   fields: [{ name: `Packages (${published.length})`, value: buildPackageField() }],
   title: `📦 ${RELEASE_LABEL} — Release`,
-  ...(RUN_URL ? { url: RUN_URL } : {}),
+  url: primaryReleaseUrl,
 };
 
 const payload = { embeds: [embed], username: "SwapKit Releases" };
