@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.22
+
+### Patch Changes
+
+- [#102](https://github.com/swapkit/wallets/pull/102) [`ce62c4d`](https://github.com/swapkit/wallets/commit/ce62c4d952760117ee2fa4def058b51bf47f0ce4) Thanks [@towanTG](https://github.com/towanTG)! - Default Trezor Connect to auto core mode and use Trezor's serialized EVM transaction output.
+
 ## 4.9.21
 
 ### Patch Changes

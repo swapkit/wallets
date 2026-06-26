@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.5.21
+
+### Patch Changes
+
+- [#102](https://github.com/swapkit/wallets/pull/102) [`ce62c4d`](https://github.com/swapkit/wallets/commit/ce62c4d952760117ee2fa4def058b51bf47f0ce4) Thanks [@towanTG](https://github.com/towanTG)! - Refresh connected EVM extension chains when the active wallet account changes.
+
 ## 4.5.20
 
 ### Patch Changes
