@@ -102,7 +102,7 @@ const makeEip1193ForScope = (client: MultichainClient, scope: string, address: s
         case "wallet_addEthereumChain":
           return Promise.resolve(null);
         default:
-          return client.invokeMethod({ scope, request: { method, params: params as unknown[] } });
+          return client.invokeMethod({ request: { method, params: params as unknown[] }, scope });
       }
     },
   } as unknown as Eip1193Provider;
@@ -116,15 +116,17 @@ const makeSolanaSigner = async (client: MultichainClient, scope: string, address
   const { PublicKey, Transaction, VersionedTransaction } = await import("@solana/web3.js");
   const publicKey = new PublicKey(address);
 
-  const signTransaction = async <T extends import("@solana/web3.js").Transaction | import("@solana/web3.js").VersionedTransaction>(
+  const signTransaction = async <
+    T extends import("@solana/web3.js").Transaction | import("@solana/web3.js").VersionedTransaction,
+  >(
     transaction: T,
   ): Promise<T> => {
     const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
     const base64Transaction = Buffer.from(serialized).toString("base64");
 
     const result = (await client.invokeMethod({
-      scope,
       request: { method: "solana_signTransaction", params: { transaction: base64Transaction } },
+      scope,
     })) as { transaction: string };
 
     const signedBuffer = Buffer.from(result.transaction, "base64");
@@ -136,9 +138,9 @@ const makeSolanaSigner = async (client: MultichainClient, scope: string, address
   };
 
   return {
-    publicKey,
     connect: () => Promise.resolve({ publicKey }),
     disconnect: () => client.disconnect([scope]),
+    publicKey,
     signTransaction,
   };
 };
@@ -161,8 +163,8 @@ export const metamaskWallet = createWallet({
         );
 
       const client = (await createMultichainClient({
-        dapp: options?.dapp ?? { name: "SwapKit", url: globalThis.location?.href },
         api: { supportedNetworks },
+        dapp: options?.dapp ?? { name: "SwapKit", url: globalThis.location?.href },
       })) as unknown as MultichainClient;
 
       try {
