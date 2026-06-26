@@ -33,7 +33,9 @@
     "build:dts": "bun run ./tools/builder/dts.ts",
     "announce:release": "bun run ./tools/announce-release.ts",
     "changeset": "bunx changeset",
+    "enrich:changelogs": "bun run ./tools/enrich-dep-changelogs.ts && bun run ./tools/enrich-internal-changelogs.ts",
     "enrich:dep-changelogs": "bun run ./tools/enrich-dep-changelogs.ts",
+    "enrich:internal-changelogs": "bun run ./tools/enrich-internal-changelogs.ts",
     "generate:dep-changeset": "bun run ./tools/generate-dep-changeset.ts",
     "lint": "bun biome check --fix .",
     "lint:ws": "bunx sherif@latest",
@@ -43,7 +45,7 @@
     "test": "bun test",
     "type-check": "bun run --filter './packages/*' type-check",
     "type-check:ci": "bun run --filter './packages/*' type-check",
-    "version-bump": "bunx changeset version && bun run ./tools/enrich-dep-changelogs.ts && bun install"
+    "version-bump": "bunx changeset version && bun run enrich:changelogs && bun install"
   },
   "workspaces": [
     "packages/*",
