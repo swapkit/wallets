@@ -4,7 +4,6 @@ import {
   type DerivationPathArray,
   derivationPathToString,
   SwapKitError,
-  SwapKitNumber,
   WalletOption,
 } from "@swapkit/helpers";
 import type { JsonRpcProvider, Provider, TransactionRequest, TypedDataDomain, TypedDataField } from "ethers";
@@ -16,7 +15,7 @@ type TrezorEVMSignerParams = {
 };
 
 export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEVMSignerParams) {
-  const { AbstractSigner, Signature } = await import("ethers");
+  const { AbstractSigner } = await import("ethers");
 
   class TrezorSigner extends AbstractSigner {
     address: string;
@@ -138,7 +137,6 @@ export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEV
 
       const TrezorConnect = (await import("@trezor/connect-web")).default;
       const { toHexString } = await import("@swapkit/toolboxes/evm");
-      const { Transaction } = await import("ethers");
 
       const additionalFields = isEIP1559
         ? {
@@ -173,16 +171,11 @@ export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEV
         });
       }
 
-      const { r, s, v } = payload;
-
-      const signature = Signature.from({ r, s, v: new SwapKitNumber(BigInt(v)).getBaseValue("number") });
-
-      const serializedTx = Transaction.from({
-        ...formattedTx,
-        nonce: Number.parseInt(formattedTx.nonce, 16),
-        signature,
-        type: isEIP1559 ? 2 : 0,
-      }).serialized;
+      const serializedTx = payload.serializedTx
+        ? payload.serializedTx.startsWith("0x")
+          ? payload.serializedTx
+          : `0x${payload.serializedTx}`
+        : undefined;
 
       if (!serializedTx) {
         throw new SwapKitError({

@@ -45,6 +45,7 @@ type TrezorExtendedPublicKeyInfo = {
 
 const TREZOR_CORE_MODES = new Set<TrezorCoreMode>(["auto", "iframe", "popup", "suite-desktop", "suite-web"]);
 const TREZOR_TRANSPORTS = new Set<TrezorTransport>(["BridgeTransport", "WebUsbTransport", "NodeUsbTransport"]);
+const DEFAULT_TREZOR_CORE_MODE: TrezorCoreMode = "auto";
 const DEFAULT_TREZOR_MANIFEST = { appName: "SwapKit", appUrl: "https://swapkit.dev", email: "support@swapkit.dev" };
 const DEFAULT_TREZOR_TRANSPORTS = ["WebUsbTransport" as const];
 const TREZOR_KEEP_SESSION_PARAMS = { keepSession: true } as const;
@@ -129,7 +130,7 @@ async function initTrezorConnect() {
   };
   const isLocalhost =
     typeof globalThis.location !== "undefined" && ["localhost", "127.0.0.1"].includes(globalThis.location.hostname);
-  const resolvedCoreMode = normalizeTrezorCoreMode(coreMode) ?? "popup";
+  const resolvedCoreMode = normalizeTrezorCoreMode(coreMode) ?? DEFAULT_TREZOR_CORE_MODE;
   const resolvedTransports = normalizeTrezorTransports(transports) ?? DEFAULT_TREZOR_TRANSPORTS;
 
   if (trezorSessionDispose) {
@@ -1325,7 +1326,7 @@ export const trezorWallet = createWallet({
       };
       const isLocalhost =
         typeof globalThis.location !== "undefined" && ["localhost", "127.0.0.1"].includes(globalThis.location.hostname);
-      const resolvedCoreMode = normalizeTrezorCoreMode(coreMode) ?? "popup";
+      const resolvedCoreMode = normalizeTrezorCoreMode(coreMode) ?? DEFAULT_TREZOR_CORE_MODE;
       const resolvedTransports = normalizeTrezorTransports(transports) ?? DEFAULT_TREZOR_TRANSPORTS;
 
       if (trezorSessionDispose) {

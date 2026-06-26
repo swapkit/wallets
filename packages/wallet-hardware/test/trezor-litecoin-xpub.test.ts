@@ -6,11 +6,20 @@ import { createPCZT, OutScript, Script, ZcashPSBT } from "@swapkit/utxo-signer";
 
 const trezorGetPublicKeyCalls: unknown[] = [];
 const trezorGetAddressCalls: unknown[] = [];
+const trezorInitCalls: unknown[] = [];
 const trezorSignTransactionCalls: unknown[] = [];
+const trezorEthereumSignTransactionCalls: unknown[] = [];
 const zcashAccountXpub = HDKey.fromMasterSeed(new Uint8Array(32).fill(2)).derive("m/44'/133'/0'").publicExtendedKey;
 const routeZcashPsbt =
   "cHNidP8BAIoEAACAhSAviQFQx1Hb7TFkJ6J9EbQ3uDto8aT/S60/wG2bXy0XBWG4OAAAAAAA/////wJAS0wAAAAAABl2qRRoqKahzhZ0kiXT/vsflZcYLfxA84is1MZLAAAAAAAZdqkUuvXrOS/H9mC5F9onqk57H6xqjouIrAAAAAAAAAAAAAAAAAAAAAAAAAAI/AVCSVRHTwAE8E3sTQABASKAlpgAAAAAABl2qRS69es5L8f2YLkX2ieqTnsfrGqOi4isAAAA";
 let trezorSerializedTx = "";
+const trezorEthereumSerializedTx = "0xf86c";
+const trezorEthereumSignedTxPayload = {
+  r: `0x${"11".repeat(32)}`,
+  s: `0x${"22".repeat(32)}`,
+  serializedTx: trezorEthereumSerializedTx,
+  v: "0x14985",
+};
 
 function uint32LE(value: number) {
   const buffer = Buffer.alloc(4);
@@ -42,6 +51,14 @@ function buildZcashSignedTx(inputScript: Uint8Array) {
 mock.module("@trezor/connect-web", () => ({
   default: {
     dispose: mock(() => Promise.resolve(undefined)),
+    ethereumGetAddress: mock(() =>
+      Promise.resolve({ payload: { address: "0x0000000000000000000000000000000000000001" }, success: true }),
+    ),
+    ethereumSignTransaction: mock((params: unknown) => {
+      trezorEthereumSignTransactionCalls.push(params);
+
+      return Promise.resolve({ payload: trezorEthereumSignedTxPayload, success: true });
+    }),
     getAddress: mock((params: unknown) => {
       trezorGetAddressCalls.push(params);
 
@@ -55,7 +72,11 @@ mock.module("@trezor/connect-web", () => ({
         success: true,
       });
     }),
-    init: mock(() => Promise.resolve(undefined)),
+    init: mock((params: unknown) => {
+      trezorInitCalls.push(params);
+
+      return Promise.resolve(undefined);
+    }),
     signTransaction: mock((params: unknown) => {
       trezorSignTransactionCalls.push(params);
 
@@ -70,8 +91,9 @@ import {
   normalizeTrezorSignature,
   trezorWallet,
 } from "../src/trezor";
+import { getEVMSigner } from "../src/trezor/evmSigner";
 
-describe("Trezor Litecoin xpub handling", () => {
+describe("Trezor wallet handling", () => {
   it("normalizes Bitcoin-version account xpubs to Litecoin before address derivation", () => {
     const seed = new Uint8Array(32).fill(1);
     const bitcoinVersionAccountXpub = HDKey.fromMasterSeed(seed).derive("m/84'/2'/0'").publicExtendedKey;
@@ -107,6 +129,47 @@ describe("Trezor Litecoin xpub handling", () => {
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dash]).toBe(true);
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dogecoin]).toBe(true);
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Zcash]).toBe(true);
+  });
+
+  it("defaults Trezor Connect coreMode to auto", async () => {
+    trezorInitCalls.length = 0;
+    const addChain = mock(() => undefined);
+    const connect = trezorWallet.connectTrezor.connectWallet({ addChain: addChain as never });
+
+    await connect([Chain.Zcash], [44, 133, 0, 0, 0], { address: "t1SelectedDerivedAddress" });
+
+    expect(trezorInitCalls.at(-1)).toMatchObject({ coreMode: "auto" });
+  });
+
+  it("returns Trezor's serialized EVM transaction for Arbitrum legacy token transfers", async () => {
+    trezorEthereumSignTransactionCalls.length = 0;
+    const signer = await getEVMSigner({
+      chain: Chain.Arbitrum,
+      derivationPath: [44, 60, 0, 0, 0],
+      provider: {} as never,
+    });
+
+    const signedTx = await signer.signTransaction({
+      data: `0xa9059cbb${"0".repeat(128)}`,
+      gasLimit: 21000n,
+      gasPrice: 100_000_000n,
+      nonce: 1,
+      to: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      value: 0n,
+    });
+
+    expect(signedTx).toBe(trezorEthereumSerializedTx);
+    expect(trezorEthereumSignTransactionCalls.at(-1)).toMatchObject({
+      path: "m/44'/60'/0'/0/0",
+      transaction: {
+        chainId: 42161,
+        gasLimit: "0x5208",
+        gasPrice: "0x5f5e100",
+        nonce: "0x1",
+        to: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        value: "0x0",
+      },
+    });
   });
 
   it("fetches Zcash xpubs with Trezor's zcash coin id", async () => {
