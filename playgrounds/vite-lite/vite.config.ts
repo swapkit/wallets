@@ -64,6 +64,7 @@ export default defineConfig({
       "hoist-non-react-statics",
       "is-my-json-valid",
       "jayson/lib/client/browser",
+      "lucide-react",
       "mustache",
       "rpc-websockets",
       "secp256k1",
