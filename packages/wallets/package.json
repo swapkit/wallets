@@ -3,6 +3,7 @@
     "@coinbase/wallet-sdk": "~4.3.7",
     "@cosmjs/amino": "~0.37.0",
     "@cosmjs/proto-signing": "~0.37.0",
+    "@metamask/connect-multichain": "~1.1.0",
     "@near-js/transactions": "~2.5.0",
     "@near-wallet-selector/bitget-wallet": "~10.1.4",
     "@near-wallet-selector/core": "~10.1.4",
@@ -14,6 +15,7 @@
     "@radixdlt/radix-dapp-toolkit": "~2.3.0",
     "@scure/base": "~2.2.0",
     "@scure/bip39": "~2.2.0",
+    "@solana/web3.js": "~1.98.4",
     "@swapkit/helpers": "^4.15.1",
     "@swapkit/toolboxes": "^4.19.0",
     "@swapkit/utxo-signer": "^2.2.2",
@@ -33,6 +35,7 @@
     "@coinbase/wallet-sdk": "4.3.7",
     "@cosmjs/amino": "0.37.0",
     "@cosmjs/proto-signing": "0.37.0",
+    "@metamask/connect-multichain": "1.1.0",
     "@near-js/transactions": "2.5.0",
     "@near-wallet-selector/bitget-wallet": "10.1.4",
     "@near-wallet-selector/core": "10.1.4",
@@ -42,6 +45,7 @@
     "@radixdlt/babylon-gateway-api-sdk": "1.10.1",
     "@radixdlt/radix-dapp-toolkit": "2.3.0",
     "@scure/base": "2.2.0",
+    "@solana/web3.js": "1.98.4",
     "@walletconnect/logger": "3.0.2",
     "@walletconnect/modal": "2.7.0",
     "@walletconnect/sign-client": "2.23.9",
@@ -125,6 +129,12 @@
       "default": "./dist/src/ledger.js",
       "require": "./dist/src/ledger.cjs",
       "types": "./dist/types/ledger.d.ts"
+    },
+    "./metamask": {
+      "bun": "./src/metamask/index.ts",
+      "default": "./dist/src/metamask/index.js",
+      "require": "./dist/src/metamask/index.cjs",
+      "types": "./dist/types/metamask/index.d.ts"
     },
     "./near-wallet-selector": {
       "bun": "./src/near-wallet-selector/index.ts",

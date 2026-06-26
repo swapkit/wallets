@@ -31,10 +31,10 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
       WalletOption.BRAVE,
       WalletOption.COINBASE_WEB,
       WalletOption.EIP6963,
-      WalletOption.METAMASK,
       WalletOption.OKX_MOBILE,
       async () => (await import("@swapkit/wallet-extensions/evm-extensions")).evmWallet,
     )
+    .with(WalletOption.METAMASK, async () => (await import("./metamask")).metamaskWallet)
     .with(
       WalletOption.TRUSTWALLET_WEB,
       async () => (await import("@swapkit/wallet-extensions/trustwallet")).trustwalletWallet,
