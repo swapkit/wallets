@@ -7,13 +7,13 @@
     "@cosmjs/proto-signing": "0.37.0",
     "@cosmjs/stargate": "0.37.0",
     "@scure/bip32": "2.2.0",
-    "@swapkit/core": "^4.4.40",
-    "@swapkit/helpers": "^4.15.1",
-    "@swapkit/plugins": "^4.6.54",
-    "@swapkit/server": "^4.3.8",
-    "@swapkit/toolboxes": "^4.19.0",
-    "@swapkit/wallet-core": "^4.3.8",
-    "@swapkit/wallet-keystore": "^4.4.8",
+    "@swapkit/core": "^4.4.42",
+    "@swapkit/helpers": "^4.15.3",
+    "@swapkit/plugins": "^4.6.56",
+    "@swapkit/server": "^4.3.10",
+    "@swapkit/toolboxes": "^4.20.1",
+    "@swapkit/wallet-core": "^4.3.10",
+    "@swapkit/wallet-keystore": "^4.4.10",
     "@types/bun": "1.3.13",
     "@types/node": "25.6.0",
     "ledger-bitcoin": "0.3.0",
@@ -21,17 +21,15 @@
     "zod": "4.4.3"
   },
   "name": "swapkit-wallets",
-  "overrides": {
-    "nuqs": "2.8.9"
-  },
+  "overrides": { "nuqs": "2.8.9" },
   "packageManager": "bun@1.3.13",
   "private": true,
   "scripts": {
+    "announce:release": "bun run ./tools/announce-release.ts",
     "build": "bun run --filter './packages/*' build",
     "build:ci": "bun run build && bun run build:dts",
     "build:clean": "bun run --filter './packages/*' build:clean",
     "build:dts": "bun run ./tools/builder/dts.ts",
-    "announce:release": "bun run ./tools/announce-release.ts",
     "changeset": "bunx changeset",
     "enrich:changelogs": "bun run ./tools/enrich-dep-changelogs.ts && bun run ./tools/enrich-internal-changelogs.ts",
     "enrich:dep-changelogs": "bun run ./tools/enrich-dep-changelogs.ts",
@@ -47,9 +45,5 @@
     "type-check:ci": "bun run --filter './packages/*' type-check",
     "version-bump": "bunx changeset version && bun run enrich:changelogs && bun install"
   },
-  "workspaces": [
-    "packages/*",
-    "playgrounds/*",
-    "tools/*"
-  ]
+  "workspaces": ["packages/*", "playgrounds/*", "tools/*"]
 }

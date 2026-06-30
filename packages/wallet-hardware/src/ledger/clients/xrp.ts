@@ -30,7 +30,7 @@ export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTr
   const { address, publicKey } = await xrpInstance.getAddress(path);
 
   async function signTransaction(transaction: Payment | RippleTransaction) {
-    const { hashes } = await import("@swapkit/toolboxes/ripple");
+    const { hashes } = await import("xrpl");
     const cleanedTxWithPubKey = cleanTransactionObject(transaction);
     const transactionJSON = {
       ...cleanedTxWithPubKey,
