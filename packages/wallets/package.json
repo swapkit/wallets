@@ -33,7 +33,7 @@
     "@coinbase/wallet-sdk": "4.3.7",
     "@cosmjs/amino": "0.37.0",
     "@cosmjs/proto-signing": "0.37.0",
-    "@near-js/transactions": "2.5.0",
+    "@near-js/transactions": "~2.5.0",
     "@near-wallet-selector/bitget-wallet": "10.1.4",
     "@near-wallet-selector/core": "10.1.4",
     "@near-wallet-selector/modal-ui-js": "10.1.4",
