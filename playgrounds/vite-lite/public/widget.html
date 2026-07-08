@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+      rel="icon"
+      href="https://swapkit.dev/wp-content/uploads/2024/04/cropped-swapkit-icon-192x192.jpg"
+      sizes="192x192">
+    <title>SwapKit Widget</title>
+    <script type="module" src="/widget-assets/swapkit-widget.js"></script>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: hsl(140 6% 8%);">
+    <div style="width: 100%; height: 100%; max-width: 560px; margin: 2rem auto;">
+      <h1
+        style="color: white; text-align: center; margin-bottom: 4rem; font-size: 1.5rem; font-weight: 500; font-family: sans-serif;">
+        Widget web component demo
+      </h1>
+
+      <swapkit-widget
+        api-key="16621042-80db-41ed-83be-3f0349e0d703"
+        api-base-url="https://dev-api.swapkit.dev"
+        api-quote-url="https://dev-api.swapkit.dev/v3/quote"
+        api-swap-url="https://dev-api.swapkit.dev/v3/swap"></swapkit-widget>
+    </div>
+  </body>
+</html>
