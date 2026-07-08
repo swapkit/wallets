@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.5 AS builder
+FROM oven/bun:1.3.13 AS builder
 RUN apt-get update && apt-get install -y \
     python3 make gcc g++ git \
     linux-libc-dev libudev-dev libusb-dev \
@@ -8,7 +8,7 @@ RUN git config --global user.email "docker@build.local" && \
 WORKDIR /app
 COPY . .
 RUN git init && git add -A && git commit -m "initial" || true
-RUN bun install || echo "Install completed with warnings"
+RUN bun install --frozen-lockfile
 RUN bun --cwd=packages/ui run build:widget
 RUN VITE_BASE_PATH=/studio/ bun --cwd=playgrounds/vite-lite run build
 RUN ls -la playgrounds/vite-lite/dist/ && \
