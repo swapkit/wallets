@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
@@ -88,6 +88,15 @@ export default defineConfig({
   },
   optimizeDeps: { include: ["@swapkit/helpers", "@swapkit/core", "@swapkit/plugins", "@swapkit/wallets"] },
   plugins: [
+    // Emit the standalone widget-host page (swap.swapkit.dev) alongside the
+    // bundle. Ships deploy-time placeholders (__CDN_BASE__/__WIDGET_ID__/
+    // __WIDGET_KEY__) that the private devops deploy substitutes per env.
+    {
+      closeBundle() {
+        copyFileSync(resolve(__dirname, "widget-host/index.html"), resolve(__dirname, "dist/widget/index.html"));
+      },
+      name: "emit-widget-host",
+    },
     wasm(),
     react(),
     nodePolyfills({ globals: { Buffer: true, global: true, process: true } }),

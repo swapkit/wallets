@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="SwapKit cross-chain swap widget — drop-in self-custody swaps across 30+ chains.">
+    <title>SwapKit Widget</title>
+    <link
+      rel="icon"
+      href="https://swapkit.dev/wp-content/uploads/2024/04/cropped-swapkit-icon-192x192.jpg"
+      sizes="192x192">
+    <style>
+    :root {
+      font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+      color: hsl(0 0% 100% / 0.92);
+      color-scheme: dark;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+    html,
+    body {
+      min-height: 100svh;
+      padding: 0;
+      margin: 0;
+    }
+    body {
+      display: grid;
+      /* Top-aligned on phones so the widget doesn't sit in the dead zone of
+                 a tall screen; vertically centered once there's room overhead. */
+      place-items: start center;
+    }
+    @media (min-height: 720px) {
+      body {
+        place-items: center;
+      }
+    }
+    main {
+      width: 100%;
+      max-width: 520px;
+      padding: clamp(16px, 5vw, 24px);
+      /* iOS notch / home indicator. */
+      padding-top: max(clamp(16px, 5vw, 24px), env(safe-area-inset-top));
+      padding-bottom: max(clamp(16px, 5vw, 24px), env(safe-area-inset-bottom));
+    }
+    swapkit-widget {
+      display: block;
+    }
+    </style>
+    <!-- SwapKit Widget -->
+    <script type="module" src="__CDN_BASE__/widget/latest/swapkit-widget.js"></script>
+  </head>
+  <body>
+    <main>
+      <!--
+        __CDN_BASE__ / __WIDGET_ID__ / __WIDGET_KEY__ are deploy-time placeholders.
+        This page is emitted into dist/widget/ by build:widget and published as a
+        versioned build artifact; the private devops deploy pipeline substitutes the
+        per-env values (dev vs prod CDN base + the PUBLIC, dedicated, rate-limited
+        widget id/key — never the partner API key) before uploading to the host
+        bucket. Values are client-side embed values, public by design; rotate them
+        in the private deploy config, not here.
+      -->
+      <swapkit-widget
+        wallets="BITGET,BRAVE,COINBASE_WEB,CTRL,KEEPKEY_BEX,KEPLR,LEAP,METAMASK,OKX,ONEKEY,PHANTOM,TALISMAN,LEDGER,TREZOR,COINBASE_MOBILE,OKX_MOBILE,TRONLINK,TRUSTWALLET_WEB,WALLETCONNECT,KEYSTORE"
+        widget-id="__WIDGET_ID__"
+        widget-key="__WIDGET_KEY__"
+        config='{"apiKeys":{"walletConnectProjectId":"ab7ab916f3c21381cf4243be3bc74988"}}'></swapkit-widget>
+    </main>
+  </body>
+</html>
