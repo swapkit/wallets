@@ -96,6 +96,7 @@ jobs:
         run: bun run tools/announce-release.ts
 
       - name: Publish Nightly to npm
+        id: nightly
         if: github.ref_name == 'nightly'
         uses: changesets/action@v1.4.10
         with:
@@ -104,3 +105,63 @@ jobs:
           publish: bun publish-packages --tag nightly --no-git-tag
           setupGitUser: false
           createGithubReleases: false
+
+      # --- Widget deploy artifact (GCP subscribes to the GitHub Release event) ---
+      # Only when @swapkit/ui was actually published this run. The GitHub Release
+      # is the deploy trigger: prerelease => dev, full release => prod; GCP filters
+      # to tags prefixed "@swapkit/ui@", downloads the assets, verifies the
+      # manifest sha256, and checks out the release SHA to build the studio.
+      - name: Detect @swapkit/ui publish
+        id: uipub
+        if: steps.changesets.outputs.published == 'true' || steps.nightly.outputs.published == 'true'
+        shell: bash
+        env:
+          LATEST_PKGS: ${{ steps.changesets.outputs.publishedPackages }}
+          NIGHTLY_PKGS: ${{ steps.nightly.outputs.publishedPackages }}
+        run: |
+          if [ "${{ github.ref_name }}" = "develop" ]; then
+            PKGS="${LATEST_PKGS:-[]}"; CHANNEL=latest
+          else
+            PKGS="${NIGHTLY_PKGS:-[]}"; CHANNEL=nightly
+          fi
+          UIVER=$(echo "$PKGS" | jq -r '.[] | select(.name=="@swapkit/ui") | .version')
+          if [ -n "$UIVER" ]; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+            echo "version=$UIVER" >> "$GITHUB_OUTPUT"
+            echo "Widget release: @swapkit/ui@$UIVER ($CHANNEL)"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+            echo "@swapkit/ui not in this publish — skipping widget release"
+          fi
+
+      - name: Build widget artifact
+        if: steps.uipub.outputs.ui == 'true'
+        env:
+          # nightly builds against the dev API; latest against prod
+          SWAPKIT_USE_DEV_API: ${{ steps.uipub.outputs.channel == 'nightly' && 'true' || 'false' }}
+          CHANNEL: ${{ steps.uipub.outputs.channel }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          bun --cwd packages/ui run build:widget
+          bun run tools/build-widget-artifact.ts
+
+      - name: Publish widget Release + assets
+        if: steps.uipub.outputs.ui == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANNEL: ${{ steps.uipub.outputs.channel }}
+          VERSION: ${{ steps.uipub.outputs.version }}
+        run: |
+          TAG="@swapkit/ui@${VERSION}"
+          ASSETS="packages/ui/dist/widget-${VERSION}.tgz packages/ui/dist/widget-manifest.json"
+          if [ "$CHANNEL" = "nightly" ]; then
+            # nightly has no changesets release/tag (--no-git-tag) — create a prerelease
+            gh release create "$TAG" $ASSETS \
+              --prerelease --target "${{ github.sha }}" \
+              --title "$TAG" --notes "Widget dev artifact ($VERSION) — deploys to widget-dev.swapkit.dev + cdn-dev."
+          else
+            # latest: changesets already created the @swapkit/ui@<version> release — attach assets
+            gh release upload "$TAG" $ASSETS --clobber
+          fi
