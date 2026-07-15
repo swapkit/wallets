@@ -1,5 +1,22 @@
 # @swapkit/sdk
 
+## 4.6.37
+
+### Patch Changes
+
+- [#109](https://github.com/swapkit/wallets/pull/109) [`8a29aa8`](https://github.com/swapkit/wallets/commit/8a29aa817cff49ac2dac73fc8af055e64b080012) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - [#317](https://github.com/swapkit/sdk/pull/317) [`41978a5`](https://github.com/swapkit/sdk/commit/41978a5601851ff5a72cb2a59495294dd04059a2) Thanks [@towanTG](https://github.com/towanTG)! - Replace dead THORChain default endpoints (thorchain.network, Nine Realms) with the official Liquify public gateway (gateway.liquify.com) for THORNode API, Tendermint RPC and Midgard (via @swapkit/helpers@4.16.2)
+  - [#315](https://github.com/swapkit/sdk/pull/315) [`b42ef37`](https://github.com/swapkit/sdk/commit/b42ef37d2510ffa6ffaf5f9e36ad13fa4881bbf7) Thanks [@towanTG](https://github.com/towanTG)! - Rename Robinhood Chain string identifier from RBH to HOOD. `Chain.Robinhood` now equals `"HOOD"`, the gas asset identifier is `HOOD.ETH`, and the EVM toolbox export is `HOODToolbox` (previously `RBHToolbox`). Chain ID (4663) and all other chain config values are unchanged. Anyone consuming the short-lived `"RBH"` string or `RBHToolbox` export from 4.16.0 must switch to `"HOOD"` / `HOODToolbox`. (via @swapkit/toolboxes@4.23.0)
+  - [#313](https://github.com/swapkit/sdk/pull/313) [`d800a41`](https://github.com/swapkit/sdk/commit/d800a41b60219f2e792fd9e68761b4ae87240d4c) Thanks [@towanTG](https://github.com/towanTG)! - Add support for Robinhood Chain (RBH) — an Ethereum-compatible Arbitrum Orbit L2 (chain ID 4663) with ETH as the native gas token. Includes chain config, EVM toolbox (RBHToolbox), gas asset resolution (RBH.ETH), wallet network params, and explorer URLs via Blockscout. Default RPC is the public endpoint; production apps should configure a provider endpoint (e.g. QuickNode robinhood-mainnet) via SKConfig.setRpcUrl. (via @swapkit/helpers@4.16.0)
+  - [#308](https://github.com/swapkit/sdk/pull/308) [`e83807a`](https://github.com/swapkit/sdk/commit/e83807a134cd844a2d6133444112142447918bab) Thanks [@towanTG](https://github.com/towanTG)! - Handle Stellar routes in the SwapKit plugin swap dispatch: decode the base64 transaction envelope XDR from the swap response and sign-and-broadcast it via the connected wallet. (via @swapkit/plugins@4.6.58)
+  - [#309](https://github.com/swapkit/sdk/pull/309) [`2cbca65`](https://github.com/swapkit/sdk/commit/2cbca65b786d9fb7e188b1fff36107887e963d3c) Thanks [@towanTG](https://github.com/towanTG)! - Return reserve-aware XLM balances, preserve Stellar issuer casing, and support USDC payments and trustline transactions. (via @swapkit/plugins@4.6.58)
+  - Validate Zcash Sprout, Sapling, and unified addresses while keeping transaction creation limited to transparent addresses. (via @swapkit/toolboxes@4.20.2)
+  - Validate Zcash Sprout, Sapling, and unified addresses while keeping transaction creation limited to transparent addresses.
+
+- Updated dependencies [[`8a29aa8`](https://github.com/swapkit/wallets/commit/8a29aa817cff49ac2dac73fc8af055e64b080012)]:
+  - @swapkit/wallets@4.8.29
+
 ## 4.6.36
 
 ### Patch Changes
