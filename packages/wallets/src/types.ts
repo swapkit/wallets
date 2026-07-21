@@ -5,6 +5,7 @@ import type { ctrlWallet } from "@swapkit/wallet-extensions/ctrl";
 import type { evmWallet } from "@swapkit/wallet-extensions/evm-extensions";
 import type { keepkeyBexWallet } from "@swapkit/wallet-extensions/keepkey-bex";
 import type { keplrWallet } from "@swapkit/wallet-extensions/keplr";
+import type { noirWallet } from "@swapkit/wallet-extensions/noir-wallet";
 import type { okxWallet } from "@swapkit/wallet-extensions/okx";
 import type { onekeyWallet } from "@swapkit/wallet-extensions/onekey";
 import type { petraWallet } from "@swapkit/wallet-extensions/petra";
@@ -41,6 +42,7 @@ export type SKWallets = {
   [WalletOption.LEAP]: typeof keplrWallet;
   [WalletOption.LEDGER]: typeof ledgerWallet;
   [WalletOption.METAMASK]: typeof evmWallet;
+  [WalletOption.NOIR_WALLET]: typeof noirWallet;
   [WalletOption.OKX]: typeof okxWallet;
   [WalletOption.OKX_MOBILE]: typeof evmWallet;
   [WalletOption.ONEKEY]: typeof onekeyWallet;
@@ -117,6 +119,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.LEAP]: typeof keplrWallet.connectKeplr.supportedChains;
   [WalletOption.LEDGER]: typeof ledgerWallet.connectLedger.supportedChains;
   [WalletOption.METAMASK]: typeof evmWallet.connectEVMWallet.supportedChains;
+  [WalletOption.NOIR_WALLET]: typeof noirWallet.connectNoirWallet.supportedChains;
   [WalletOption.OKX]: typeof okxWallet.connectOkx.supportedChains;
   [WalletOption.OKX_MOBILE]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.ONEKEY]: typeof onekeyWallet.connectOnekeyWallet.supportedChains;
