@@ -106,6 +106,7 @@ export const keystoreWallet = createWallet({
     ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
     ...Object.fromEntries(UTXOChains.map((chain) => [chain, true])),
     ...Object.fromEntries(CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, true])),
+    [Chain.Aleo]: true,
     [Chain.Aptos]: true,
     [Chain.Cardano]: true,
     [Chain.Near]: true,
@@ -121,6 +122,7 @@ export const keystoreWallet = createWallet({
     ...EVMChains,
     ...UTXOChains,
     ...CosmosChains.filter((chain) => chain !== Chain.Harbor),
+    Chain.Aleo,
     Chain.Aptos,
     Chain.Cardano,
     Chain.Ripple,
@@ -151,7 +153,9 @@ export async function createKeystoreWallet<T extends Chain[]>({
     walletType: WalletOption.KEYSTORE,
   });
 
-  const wallets = await Promise.all(
+  // One broken chain derivation must not fail the whole connect — collect per-chain
+  // results and only reject when every requested chain failed.
+  const settled = await Promise.allSettled(
     filteredChains.map(async (chain) => {
       const { getToolbox } = await import("@swapkit/toolboxes");
 
@@ -161,9 +165,10 @@ export async function createKeystoreWallet<T extends Chain[]>({
           ? derivationPathMapOrIndex[chain]
           : undefined;
 
+      // Solana and Aleo use 4-element hardened paths; everything else uses 5.
       const derivationArrayToUpdate = NetworkDerivationPath[chain].slice(
         0,
-        chain === Chain.Solana ? 4 : 5,
+        chain === Chain.Solana || chain === Chain.Aleo ? 4 : 5,
       ) as DerivationPathArray;
 
       const derivationPath: DerivationPathArray =
@@ -182,6 +187,19 @@ export async function createKeystoreWallet<T extends Chain[]>({
       return wallet;
     }),
   );
+
+  const wallets = settled.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failures = settled.filter((result) => result.status === "rejected");
+
+  if (wallets.length === 0 && failures.length > 0) {
+    throw failures[0]?.reason;
+  }
+
+  for (const [index, result] of settled.entries()) {
+    if (result.status === "rejected") {
+      console.error(`connectKeystore: skipping ${filteredChains[index]} — derivation failed`, result.reason);
+    }
+  }
 
   return wallets.reduce(
     (acc, wallet) => {
