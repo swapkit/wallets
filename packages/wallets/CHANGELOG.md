@@ -1,5 +1,33 @@
 # @swapkit-dev/wallets
 
+## 4.8.30
+
+### Patch Changes
+
+- [#112](https://github.com/swapkit/wallets/pull/112) [`e84d7bb`](https://github.com/swapkit/wallets/commit/e84d7bb684a8d3303b9793b99f2d9635d81d6927) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - [#332](https://github.com/swapkit/sdk/pull/332) [`d099d5f`](https://github.com/swapkit/sdk/commit/d099d5f95289e25a053cb0575f464c18419eebf0) Thanks [@towanTG](https://github.com/towanTG)! - `approveAssetValue` and `isAssetValueApproved` take **either the route or an explicit assetValue + spender/plugin address** — a route carries everything: the approval subject (a Stellar trustline belongs to the buy asset; an EVM allowance covers `sellAsset`/`sellAmount`), the spender (`meta.approvalAddress`), and the plugin (resolved the same way `swap()` resolves it: swapkit-routed providers and direct-signing wallets go to the swapkit plugin, everything else by the route's provider).
+  - [#331](https://github.com/swapkit/sdk/pull/331) [`f740a74`](https://github.com/swapkit/sdk/commit/f740a742a0cf879b4e56bb73647d21642bc22e9d) Thanks [@towanTG](https://github.com/towanTG)! - Add client-side support for the Stellar trustline approval flow: swap response types model the `approvalTx` union (EVM | Stellar changeTrust XDR) and `nextActions`, `approveAssetValue`/`isAssetValueApproved` switch between EVM allowances and Stellar trustlines (checking via the new Stellar toolbox `hasTrustline({ address, assetValue })`, approving by signing the API-provided changeTrust XDR with the destination wallet). The swap method itself is unchanged — integrators approve first, re-fetch the route, then swap. (via @swapkit/helpers@4.19.0)
+  - Update generated token lists. (via @swapkit/helpers@4.19.0)
+  - [#329](https://github.com/swapkit/sdk/pull/329) [`55d9edc`](https://github.com/swapkit/sdk/commit/55d9edcc603e0139588c905e41a59eaaa3275cda) Thanks [@towanTG](https://github.com/towanTG)! - Update NEAR provider token list: add Stellar assets (XLM.XLM, XLM.USDC) and latest NEAR-intents listings (SWEAT, GMX, KAITO, AAVE, LINK, UNI, and more); remove BTC.BTC(OMNI) (via @swapkit/helpers@4.19.0)
+  - [#319](https://github.com/swapkit/sdk/pull/319) [`67445d1`](https://github.com/swapkit/sdk/commit/67445d13c963492bbe4283f098b959de010ed0a7) Thanks [@towanTG](https://github.com/towanTG)! - Add Aleo chain metadata, assets, public-balance support, HD derivation, public transfers, fee estimates, broadcasting, transaction status, and keystore/server registration.
+  - [#328](https://github.com/swapkit/sdk/pull/328) [`0794dd0`](https://github.com/swapkit/sdk/commit/0794dd0d92a4ab1808c42069d483b91e5ae35f4a) Thanks [@towanTG](https://github.com/towanTG)! - Aleo review follow-up: surface `splitTransactionId` in unshield failure errors so an interrupted unshield is resumable, treat a 404 on the serial-number lookup as the authoritative unspent answer across RPC failover, filter record extraction to `credits.aleo` in `getRecords`, reject toolbox params carrying both a phrase and an external signer (`toolbox_aleo_conflicting_signers`), validate `feeRecordCredits`, and throw a clear `toolbox_aleo_no_rpc_urls` error when no RPC URL is configured. (via @swapkit/toolboxes@4.25.0)
+  - [#325](https://github.com/swapkit/sdk/pull/325) [`88aa0cc`](https://github.com/swapkit/sdk/commit/88aa0cc308af1010e5632a7fd9136e43ddbed6a4) Thanks [@paz-ts](https://github.com/paz-ts)! - toSignificant no longer corrupts values with long decimal parts: leading zeros are stripped as a string instead of through Number.parseInt, whose float round-trip rendered full-precision balances on 24-decimal chains like NEAR with two decimal points ("0.0003.2238") and silently lost digits past 2^53 on 18-decimal chains. (via @swapkit/toolboxes@4.25.0)
+  - Update generated token lists. (via @swapkit/toolboxes@4.25.0)
+  - [#306](https://github.com/swapkit/sdk/pull/306) [`be7e885`](https://github.com/swapkit/sdk/commit/be7e885d3779005b4a2e2e4d6560b2a1031994a3) Thanks [@towanTG](https://github.com/towanTG)! - Update generated token lists and preserve Maya address prefixes when signing THOR/Maya Amino messages. (via @swapkit/toolboxes@4.24.1)
+  - [#324](https://github.com/swapkit/sdk/pull/324) [`9641c5d`](https://github.com/swapkit/sdk/commit/9641c5d55b12e7e7263f4ef4d1c276eff9c866a9) Thanks [@towanTG](https://github.com/towanTG)! - Sweep hardening from post-merge adversarial review: EVM sweeps fail closed when the near-final gas probe is unaffordable instead of broadcasting with an under-validated gas limit; clamped Sui sweep budgets are dry-run verified so dust wallets cannot burn their balance on an insufficient budget; native TON sweeps throw the shared sweep guard for empty wallets; NEAR token-sweep gas shortfalls use the standard sweep error key. (via @swapkit/toolboxes@4.24.1)
+  - Update generated token lists. (via @swapkit/toolboxes@4.24.1)
+  - [#311](https://github.com/swapkit/sdk/pull/311) [`d787a38`](https://github.com/swapkit/sdk/commit/d787a38c6c96f36afde3964957409f4b2e4356a3) Thanks [@towanTG](https://github.com/towanTG)! - Add a `sweep` flag to `createTransaction` and `transfer` across all toolboxes. For native/gas assets, sweep sends the maximum spendable amount while keeping the sender account alive (fees, reserves, rent, existential deposits, and storage stakes are reserved per chain); for tokens, sweep resolves the full token balance. Also fixes Starknet balance decoding (uint256 halves order and decimals), the shared `GenericCreateTransactionParams` Omit, and the Chainflip EIP-7702 authorization signature type. (via @swapkit/helpers@4.17.0)
+  - Update generated token lists. (via @swapkit/tokens@4.3.4)
+  - Update generated token lists. (via @swapkit/tokens@4.3.3)
+  - Update generated token lists. (via @swapkit/tokens@4.3.2)
+  - Update generated token lists. (via @swapkit/helpers@4.18.0)
+  - Update generated token lists. (via @swapkit/helpers@4.17.1)
+
+- Updated dependencies [[`e84d7bb`](https://github.com/swapkit/wallets/commit/e84d7bb684a8d3303b9793b99f2d9635d81d6927)]:
+  - @swapkit/wallet-extensions@4.5.24
+  - @swapkit/wallet-hardware@4.9.25
+
 ## 4.8.29
 
 ### Patch Changes
