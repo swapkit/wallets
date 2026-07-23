@@ -1,5 +1,19 @@
 # @swapkit/sdk
 
+## 4.6.39
+
+### Patch Changes
+
+- [#114](https://github.com/swapkit/wallets/pull/114) [`a5b2da2`](https://github.com/swapkit/wallets/commit/a5b2da283f8c4175258361b179734953c8400833) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - [#336](https://github.com/swapkit/sdk/pull/336) [`82ddf32`](https://github.com/swapkit/sdk/commit/82ddf329eba718c23239bdea60dc070f4c8b4b34) Thanks [@towanTG](https://github.com/towanTG)! - Upgrade `@stellar/stellar-sdk` from 15.1.0 to 16.1.0 to fix Stellar in browser bundles. v15 mapped the `browser` export condition to a minified UMD bundle, so bundlers like Vite resolved a namespace without named exports — every lazy `const { Keypair } = await import("@stellar/stellar-sdk")` yielded `undefined` in the browser. The fallout was silent: XLM keystore wallets registered with an empty address, `getBalance` failed with `toolbox_stellar_account_not_found` without a Horizon call ever firing, and transaction signing (including the trustline approval flow) was broken in web apps, while Node/Bun (and therefore all tests) resolved the `default` condition and worked. v16 ships native ESM with no `browser` condition, restoring correct named-export resolution everywhere. No SwapKit API changes. (via @swapkit/toolboxes@4.26.1)
+  - Update generated token lists. (via @swapkit/toolboxes@4.26.1)
+  - Update generated token lists. (via @swapkit/tokens@4.3.5)
+  - Update generated token lists. (via @swapkit/helpers@4.19.1)
+
+- Updated dependencies [[`a5b2da2`](https://github.com/swapkit/wallets/commit/a5b2da283f8c4175258361b179734953c8400833)]:
+  - @swapkit/wallets@4.8.31
+
 ## 4.6.38
 
 ### Patch Changes
