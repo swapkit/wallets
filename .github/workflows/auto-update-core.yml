@@ -40,15 +40,22 @@ jobs:
                 echo "  ✅ Updated $PKG in $pkg_json (dependencies)"
               fi
               if jq -e ".devDependencies[\"$PKG\"]" "$pkg_json" > /dev/null 2>&1; then
-                jq ".devDependencies[\"$PKG\"] = \"$VER\"" "$pkg_json" > tmp.json && mv tmp.json "$pkg_json"
+                jq ".devDependencies[\"$PKG\"] = \"^$VER\"" "$pkg_json" > tmp.json && mv tmp.json "$pkg_json"
                 echo "  ✅ Updated $PKG in $pkg_json (devDependencies)"
               fi
             done
 
-            # Also sync root package.json dependencies + overrides (prevents transitive drift)
+            # Also sync root package.json deps + overrides. The root pins @swapkit/*
+            # in devDependencies; sherif (postinstall lint:ws) fails the whole run if
+            # any manifest drifts — versions AND range prefix must match everywhere,
+            # hence ^$VER for every dep field (overrides stay exact).
             if jq -e ".dependencies[\"$PKG\"]" package.json > /dev/null 2>&1; then
-              jq ".dependencies[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
+              jq ".dependencies[\"$PKG\"] = \"^$VER\"" package.json > tmp.json && mv tmp.json package.json
               echo "  ✅ Updated $PKG in root package.json (dependencies)"
+            fi
+            if jq -e ".devDependencies[\"$PKG\"]" package.json > /dev/null 2>&1; then
+              jq ".devDependencies[\"$PKG\"] = \"^$VER\"" package.json > tmp.json && mv tmp.json package.json
+              echo "  ✅ Updated $PKG in root package.json (devDependencies)"
             fi
             if jq -e ".overrides[\"$PKG\"]" package.json > /dev/null 2>&1; then
               jq ".overrides[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
