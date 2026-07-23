@@ -64,7 +64,25 @@ jobs:
           done
 
       - name: Install updated dependencies
-        run: bun install
+        shell: bash
+        run: |
+          # Converge the lockfile across the whole @swapkit/* family. A plain
+          # `bun install` keeps stale resolutions for consumers that were not in
+          # this dispatch payload (e.g. wallet-core pinning an older helpers),
+          # leaving two copies of a package in the isolated store — tsc
+          # declaration emit then fails with TS2883 (type not portable).
+          # `bun update` re-resolves the family but also rewrites manifests
+          # (exact-pins root deps, adds named deps missing from root), so we
+          # save and restore them around it.
+          WORKSPACE_PKGS=$(jq -r '.name' packages/*/package.json)
+          EXTERNAL_DEPS=$(jq -rs '[.[] | (.dependencies // {}), (.devDependencies // {}) | keys[]] | unique | .[] | select(startswith("@swapkit/"))' package.json packages/*/package.json | grep -vxF "$WORKSPACE_PKGS")
+
+          for f in package.json packages/*/package.json; do cp "$f" "$f.update-bak"; done
+          # shellcheck disable=SC2086 # word-splitting is intended
+          bun update $EXTERNAL_DEPS --ignore-scripts
+          for f in package.json packages/*/package.json; do mv "$f.update-bak" "$f"; done
+
+          bun install
 
       - name: Build and verify
         run: bun build:ci
