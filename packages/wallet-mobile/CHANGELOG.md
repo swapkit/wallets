@@ -1,5 +1,13 @@
 # @swapkit-dev/wallet-mobile
 
+## 4.3.19
+
+### Patch Changes
+
+- [#116](https://github.com/swapkit/wallets/pull/116) [`83cc493`](https://github.com/swapkit/wallets/commit/83cc49378a19588b49f4fe370c096f8f053969fd) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#338](https://github.com/swapkit/sdk/pull/338) [`b93b9cd`](https://github.com/swapkit/sdk/commit/b93b9cd04730e728cb2c9de0b7e1e19a0951e46b) Thanks [@towanTG](https://github.com/towanTG)! - Allow already-fetched Aleo records to be passed directly to `unshield({ records })` as an alternative to the transaction-scoped `unshield({ transactionId })` form. Callers that fetch records for display (e.g. a wallet UI showing shielded balances from known swap-delivery transactions via `getRecords`) can unshield those exact records without a second lookup. Spent records are filtered out; the split/fee-record/prove/broadcast flow and the `splitTransactionId` resume semantics are unchanged. (via @swapkit/toolboxes@4.27.0)
+
 ## 4.3.18
 
 ### Patch Changes
