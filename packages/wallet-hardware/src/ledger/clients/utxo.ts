@@ -42,13 +42,20 @@ const signUTXOTransaction = (
   const splitNewTx = btcApp.splitTransaction(newTxHex, true);
   const outputScriptHex = btcApp.serializeTransactionOutputs(splitNewTx).toString("hex");
 
+  // hw-app-btc derives the signing policy from these flags:
+  //   additionals ["bech32"] + segwit  → wpkh (native segwit, m/84')
+  //   no additionals + segwit         → sh(wpkh) (P2SH-P2WPKH, m/49')
+  //   no additionals + !segwit        → pkh (legacy, m/44')
+  // They must match the derivation path or the BTC app rejects with 0x6a80.
+  const format = getWalletFormatFor(derivationPath);
+  const segwit = format !== "legacy";
   const params: CreateTransactionArg = {
-    additionals: ["bech32"],
+    additionals: format === "bech32" ? ["bech32"] : [],
     associatedKeysets: inputs.map(() => derivationPath),
     inputs,
     outputScriptHex,
-    segwit: true,
-    useTrustedInputForSegwit: true,
+    segwit,
+    useTrustedInputForSegwit: segwit,
   };
 
   return btcApp.createPaymentTransaction({ ...params, ...options });
@@ -83,13 +90,17 @@ const signUTXOTransactionWithMultiplePaths = (
   const splitNewTx = btcApp.splitTransaction(newTxHex, true);
   const outputScriptHex = btcApp.serializeTransactionOutputs(splitNewTx).toString("hex");
 
+  // Same policy/path matching rules as signUTXOTransaction; all paths share
+  // one account so the first path determines the format.
+  const format = getWalletFormatFor(derivationPaths[0] ?? "");
+  const segwit = format !== "legacy";
   const params: CreateTransactionArg = {
-    additionals: ["bech32"],
+    additionals: format === "bech32" ? ["bech32"] : [],
     associatedKeysets: derivationPaths,
     inputs,
     outputScriptHex,
-    segwit: true,
-    useTrustedInputForSegwit: true,
+    segwit,
+    useTrustedInputForSegwit: segwit,
   };
 
   return btcApp.createPaymentTransaction({ ...params, ...options });

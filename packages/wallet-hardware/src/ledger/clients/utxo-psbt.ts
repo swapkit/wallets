@@ -83,7 +83,9 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
     const leafSegments = pathSegments.slice(3);
     const change = Number(leafSegments[0] ?? 0);
     const addressIndex = Number(leafSegments[1] ?? 0);
-    const format = getWalletFormatFor(derivationPath);
+    // getWalletFormatFor expects an m/-prefixed path (it reads the purpose
+    // from the second segment); derivationPath is normalized without it.
+    const format = getWalletFormatFor(`m/${derivationPath}`);
     const template = templateForFormat(format);
 
     let cachedAccountXpub: string | undefined;
