@@ -1,5 +1,16 @@
 # @swapkit/sdk
 
+## 4.6.42
+
+### Patch Changes
+
+- [#120](https://github.com/swapkit/wallets/pull/120) [`67e51a3`](https://github.com/swapkit/wallets/commit/67e51a3adfcd9bda5ceb3fb5e8aed9b9f316bbe5) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - [#340](https://github.com/swapkit/sdk/pull/340) [`13fc5d3`](https://github.com/swapkit/sdk/commit/13fc5d399e7bd3cf0b64326c0b97066a22ff8a2e) Thanks [@towanTG](https://github.com/towanTG)! - Load environment-specific static assets and add the SwapKit token search endpoint. (via @swapkit/helpers@4.20.0)
+
+- Updated dependencies [[`67e51a3`](https://github.com/swapkit/wallets/commit/67e51a3adfcd9bda5ceb3fb5e8aed9b9f316bbe5)]:
+  - @swapkit/wallets@4.9.1
+
 ## 4.6.41
 
 ### Patch Changes
