@@ -1,5 +1,20 @@
 # @swapkit-dev/wallets
 
+## 4.9.2
+
+### Patch Changes
+
+- [#123](https://github.com/swapkit/wallets/pull/123) [`5948313`](https://github.com/swapkit/wallets/commit/59483130c1e550e8cb18753c6c0dbea80a0ddbfe) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#335](https://github.com/swapkit/sdk/pull/335) [`d724200`](https://github.com/swapkit/sdk/commit/d7242000b765b5090013740dab893960bee1744c) Thanks [@towanTG](https://github.com/towanTG)! - Support the Zcash NU6.3 "Ironwood" network upgrade (mainnet activation at block 3,428,143, ~2026-07-28; testnet activated 2026-07-01). (via @swapkit/toolboxes@4.28.0)
+  - Update generated token lists. (via @swapkit/toolboxes@4.28.0)
+  - Update generated token lists. (via @swapkit/tokens@4.4.1)
+  - Update generated token lists. (via @swapkit/helpers@4.20.1)
+
+- Updated dependencies [[`5948313`](https://github.com/swapkit/wallets/commit/59483130c1e550e8cb18753c6c0dbea80a0ddbfe)]:
+  - @swapkit/wallet-extensions@4.5.28
+  - @swapkit/wallet-hardware@4.9.29
+
 ## 4.9.1
 
 ### Patch Changes

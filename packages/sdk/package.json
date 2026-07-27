@@ -45,12 +45,21 @@
       "types": "./dist/types/wallets.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/sdk",
-  "publishConfig": { "access": "public" },
-  "repository": { "directory": "packages/sdk", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/sdk",
+    "type": "git",
+    "url": "git+https://github.com/swapkit/wallets.git"
+  },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
@@ -59,5 +68,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.6.42"
+  "version": "4.6.43"
 }

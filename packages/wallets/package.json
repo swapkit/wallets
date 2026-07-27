@@ -205,12 +205,21 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": { "access": "public" },
-  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/wallets",
+    "type": "git",
+    "url": "git+https://github.com/swapkit/wallets.git"
+  },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
@@ -219,5 +228,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.9.1"
+  "version": "4.9.2"
 }
