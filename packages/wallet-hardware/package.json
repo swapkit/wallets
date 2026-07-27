@@ -22,9 +22,9 @@
     "@near-js/transactions": "~2.5.0",
     "@scure/base": "2.2.0",
     "@scure/bip32": "2.2.0",
-    "@swapkit/helpers": "^4.20.0",
-    "@swapkit/toolboxes": "^4.27.1",
-    "@swapkit/utxo-signer": "^2.2.3",
+    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/toolboxes": "^4.28.0",
+    "@swapkit/utxo-signer": "^2.3.0",
     "@swapkit/wallet-core": "^4.3.19",
     "@trezor/connect-web": "~9.7.3",
     "cosmjs-types": "~0.10.1",
@@ -91,16 +91,11 @@
       "types": "./dist/types/trezor/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-hardware",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
     "directory": "packages/wallet-hardware",
     "type": "git",
