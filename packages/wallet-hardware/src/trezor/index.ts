@@ -23,7 +23,7 @@ import {
   type UTXOType,
 } from "@swapkit/toolboxes/utxo";
 import type { BTCNetwork, PCZT, Transaction, ZcashPSBT, ZcashTransaction } from "@swapkit/utxo-signer";
-import { BCHSigHash, NETWORKS, ZcashConsensusBranchId, ZcashVersionGroupId } from "@swapkit/utxo-signer";
+import { BCHSigHash, NETWORKS, ZcashVersionGroupId } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
 
 type TrezorBip32Derivation = [Uint8Array, { fingerprint: number; path: number[] }];
@@ -588,7 +588,7 @@ async function getTrezorWallet<T extends Chain>({
         const outputs = buildZcashTxOutputsForTrezor(tx, address_n, address, chain);
 
         const result = await TrezorConnect.signTransaction({
-          branchId: ZcashConsensusBranchId.NU6,
+          branchId: tx.consensusBranchId,
           coin: "zcash",
           expiry: 0,
           inputs,
