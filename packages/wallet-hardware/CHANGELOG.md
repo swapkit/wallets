@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.9.30
+
+### Patch Changes
+
+- [#125](https://github.com/swapkit/wallets/pull/125) [`6d704c8`](https://github.com/swapkit/wallets/commit/6d704c8ce8e42d5f828bd017058796ded9e867e0) Thanks [@towanTG](https://github.com/towanTG)! - Fix Trezor Zcash serialized-tx fallback signing rejecting transactions after the NU6.3 "Ironwood" network upgrade: the consensus branch id is now taken dynamically from the transaction (`tx.consensusBranchId`) instead of a hardcoded `ZcashConsensusBranchId.NU6`, matching the PCZT signing path.
+
 ## 4.9.29
 
 ### Patch Changes
