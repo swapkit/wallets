@@ -1,0 +1,29 @@
+name: CI
+
+# Runs on every PR, including fork PRs. Safe for untrusted code by
+# construction: pull_request-triggered runs from forks receive no secrets
+# and a read-only GITHUB_TOKEN, and none of these jobs need either.
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-lint-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Repo
+        uses: ./tools/github/setup-repo
+
+      - run: bun build:ci
+      - run: bun lint
+      - run: bun type-check:ci
+      - run: bun test
