@@ -11,6 +11,13 @@ import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BrowserProvider, Eip1193Provider } from "ethers";
 import type { ExtensionWallet } from "../walletTypes";
 
+type AccountsChangedListener = (accounts: string[]) => void;
+
+type Eip1193EventProvider = Eip1193Provider & {
+  on?: (event: "accountsChanged", listener: AccountsChangedListener) => void;
+  removeListener?: (event: "accountsChanged", listener: AccountsChangedListener) => void;
+};
+
 export type EVMWalletOptions =
   | WalletOption.BRAVE
   | WalletOption.OKX_MOBILE
@@ -81,21 +88,47 @@ export const evmWallet: ExtensionWallet<
       await browserProvider.send("eth_requestAccounts", []);
       const signer = await browserProvider.getSigner();
       const address = await signer.getAddress();
-      const disconnect = () => browserProvider.send("wallet_revokePermissions", [{ eth_accounts: {} }]);
+      const eventProvider = windowProvider as Eip1193EventProvider;
+      let connectedAddress = address;
+      let accountChangeVersion = 0;
 
-      await Promise.all(
-        filteredChains.map(async (chain) => {
-          const walletMethods = await getWeb3WalletMethods({
-            address,
-            chain,
-            provider: browserProvider,
-            walletProvider: windowProvider,
-          });
+      const addConnectedChains = async (nextAddress: string, version = accountChangeVersion) => {
+        const connectedChains = await Promise.all(
+          filteredChains.map(async (chain) => {
+            const walletMethods = await getWeb3WalletMethods({
+              address: nextAddress,
+              chain,
+              provider: browserProvider,
+              walletProvider: windowProvider,
+            });
 
-          addChain({ ...walletMethods, address, chain, disconnect, walletType });
-          return;
-        }),
-      );
+            return { chain, walletMethods };
+          }),
+        );
+
+        if (version !== accountChangeVersion) return;
+
+        connectedChains.forEach(({ chain, walletMethods }) => {
+          addChain({ ...walletMethods, address: nextAddress, chain, disconnect, walletType });
+        });
+      };
+
+      function handleAccountsChanged(accounts: string[]) {
+        const [nextAddress] = accounts;
+        if (!nextAddress || nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
+
+        connectedAddress = nextAddress;
+        accountChangeVersion += 1;
+        void addConnectedChains(nextAddress);
+      }
+
+      const disconnect = () => {
+        eventProvider.removeListener?.("accountsChanged", handleAccountsChanged);
+        return browserProvider.send("wallet_revokePermissions", [{ eth_accounts: {} }]);
+      };
+
+      await addConnectedChains(address);
+      eventProvider.on?.("accountsChanged", handleAccountsChanged);
 
       return true;
     },

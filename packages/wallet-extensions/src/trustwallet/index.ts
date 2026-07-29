@@ -8,7 +8,7 @@ import {
   SwapKitError,
   WalletOption,
 } from "@swapkit/helpers";
-import type { TONTransactionMessage } from "@swapkit/toolboxes/ton";
+import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
 import type { ExtensionWallet } from "../walletTypes";
@@ -65,8 +65,9 @@ async function connectTon() {
   const { getTONToolbox } = await import("@swapkit/toolboxes/ton");
   const toolbox = getTONToolbox();
 
-  async function sendTonTransaction(messages: TONTransactionMessage[]) {
+  async function sendTonTransaction(transaction: TONTransactionInput) {
     const validUntil = Math.floor(Date.now() / 1000) + 300;
+    const messages = Array.isArray(transaction) ? transaction : transaction.messages;
 
     const txResult = (await tonProvider.send("ton_sendTransaction", [
       { from: address, messages, network: "-239", valid_until: validUntil },
@@ -78,12 +79,12 @@ async function connectTon() {
   }
 
   async function transfer(params: GenericTransferParams) {
-    const messages = await toolbox.createTransaction({ ...params, sender: address });
-    return sendTonTransaction(messages);
+    const transaction = await toolbox.createTransaction({ ...params, sender: address });
+    return sendTonTransaction(transaction);
   }
 
-  function signAndBroadcastTransaction(messages: TONTransactionMessage[]) {
-    return sendTonTransaction(messages);
+  function signAndBroadcastTransaction(transaction: TONTransactionInput) {
+    return sendTonTransaction(transaction);
   }
 
   return { ...toolbox, address, getBalance: () => toolbox.getBalance(address), signAndBroadcastTransaction, transfer };

@@ -64,6 +64,7 @@ export default defineConfig({
       "hoist-non-react-statics",
       "is-my-json-valid",
       "jayson/lib/client/browser",
+      "lucide-react",
       "mustache",
       "rpc-websockets",
       "secp256k1",
@@ -76,6 +77,20 @@ export default defineConfig({
   plugins: [nodePolyfills({ globals: { Buffer: true, global: true, process: true } }), react()],
   resolve: {
     alias: [
+      { find: "@noble/curves/ed25519", replacement: resolve(__dirname, "node_modules/@noble/curves/ed25519.js") },
+      { find: "@noble/hashes/utils", replacement: resolve(__dirname, "node_modules/@noble/hashes/utils.js") },
+      {
+        find: "vite-plugin-node-polyfills/shims/buffer",
+        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/buffer/dist/index.js"),
+      },
+      {
+        find: "vite-plugin-node-polyfills/shims/global",
+        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/global/dist/index.js"),
+      },
+      {
+        find: "vite-plugin-node-polyfills/shims/process",
+        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/process/dist/index.js"),
+      },
       { find: "@swapkit/ui/swapkit.css", replacement: swapkitUiCss },
       { find: /^@swapkit\/helpers\/api$/, replacement: swapkitHelpersApi },
       { find: /^@swapkit\/helpers$/, replacement: swapkitHelpers },

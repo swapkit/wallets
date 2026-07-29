@@ -1,0 +1,44 @@
+name: Enforce dep changeset
+
+# Any PR that changes an external @swapkit/* dependency version must carry the
+# generated rich changeset. We regenerate it and fail if it's missing or stale,
+# so a bump never ships as "deps got bumped" — no matter who/what made it.
+
+on:
+  pull_request:
+    paths:
+      - "packages/*/package.json"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Ensure base ref is available
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+      # Installs the bumped @swapkit/* versions so the generator can read each
+      # package's in-package CHANGELOG.md from node_modules (no token needed).
+      - name: Install dependencies
+        run: bun install
+
+      - name: Regenerate the dep changeset
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: bun run tools/generate-dep-changeset.ts
+
+      - name: Fail if the changeset is missing or stale
+        run: |
+          if [ -n "$(git status --porcelain .changeset)" ]; then
+            echo "::error::@swapkit/* versions changed but the generated dep changeset is missing or out of date."
+            echo "Run 'bun generate:dep-changeset' locally and commit the result."
+            git --no-pager status --porcelain .changeset
+            git --no-pager diff -- .changeset
+            exit 1
+          fi
+          echo "✅ dep changeset is present and up to date."

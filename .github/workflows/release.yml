@@ -19,8 +19,6 @@ jobs:
 
       - name: Setup Repo
         uses: ./tools/github/setup-repo
-        with:
-          npm-token: ${{ secrets.NPM_TOKEN }}
 
       - run: bun build:ci
       - run: bun lint
@@ -46,8 +44,6 @@ jobs:
 
       - name: Setup Repo
         uses: ./tools/github/setup-repo
-        with:
-          npm-token: ${{ secrets.NPM_TOKEN }}
 
       - name: Setup Node with working npm
         uses: actions/setup-node@v4
@@ -85,7 +81,19 @@ jobs:
           version: bun version-bump
           publish: bun publish-packages
           setupGitUser: false
-          createGithubReleases: false
+          createGithubReleases: true
+
+      # Only when packages were actually published to npm (not on the Version
+      # Packages PR, not on a failed publish). No-op until the secret is set.
+      - name: Announce release to Discord
+        if: github.ref_name == 'develop' && steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          RELEASE_LABEL: SwapKit Wallets
+          EMBED_COLOR: "3066993"
+        run: bun run tools/announce-release.ts
 
       - name: Publish Nightly to npm
         if: github.ref_name == 'nightly'
