@@ -16,10 +16,10 @@
     "@scure/base": "~2.2.0",
     "@scure/bip39": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^4.15.1",
-    "@swapkit/toolboxes": "^4.19.0",
-    "@swapkit/utxo-signer": "^2.2.2",
-    "@swapkit/wallet-core": "^4.3.8",
+    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/toolboxes": "^4.28.0",
+    "@swapkit/utxo-signer": "^2.3.0",
+    "@swapkit/wallet-core": "^4.3.19",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
     "@walletconnect/modal": "~2.7.0",
@@ -215,12 +215,21 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": { "access": "public" },
-  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/wallets",
+    "type": "git",
+    "url": "git+https://github.com/swapkit/wallets.git"
+  },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
@@ -229,5 +238,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.8.27"
+  "version": "4.10.0"
 }

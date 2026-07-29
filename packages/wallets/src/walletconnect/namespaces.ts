@@ -45,7 +45,7 @@ export const getSupportedMethodsByNamespace = (namespace: string) => {
   }
 };
 
-export const getSupportedEventsByNamespace = (namespace: string) => {
+export const getSupportedEventsByNamespace = (namespace: string): string[] => {
   switch (namespace) {
     case "eip155":
       return Object.values(DEFAULT_EIP_155_EVENTS);
@@ -72,9 +72,38 @@ export const getRequiredNamespaces = (chains: string[]): ProposalTypes.RequiredN
       namespace,
       {
         chains: chains.filter((chain) => chain.startsWith(namespace)),
-        events: getSupportedEventsByNamespace(namespace) as any[],
+        events: getSupportedEventsByNamespace(namespace),
         methods: getSupportedMethodsByNamespace(namespace),
       },
     ]),
   );
 };
+
+export const getOptionalNamespaces = (
+  requiredChains: string[],
+  optionalChains: string[],
+): ProposalTypes.OptionalNamespaces => {
+  const selectedNamespaces = getNamespacesFromChains([...requiredChains, ...optionalChains]);
+
+  return Object.fromEntries(
+    selectedNamespaces.map((namespace) => [
+      namespace,
+      {
+        chains: optionalChains.filter((chain) => chain.startsWith(namespace)),
+        events: getSupportedEventsByNamespace(namespace),
+        methods: getSupportedMethodsByNamespace(namespace),
+      },
+    ]),
+  );
+};
+
+export const getConnectionNamespaces = ({
+  requiredChains,
+  optionalChains,
+}: {
+  requiredChains: string[];
+  optionalChains: string[];
+}) => ({
+  optionalNamespaces: getOptionalNamespaces(requiredChains, optionalChains),
+  requiredNamespaces: getRequiredNamespaces(requiredChains),
+});

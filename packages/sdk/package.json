@@ -2,13 +2,13 @@
   "author": "swapkit-dev",
   "dependencies": {
     "@stricahq/typhonjs": "~3.0.1",
-    "@swapkit/core": "^4.4.40",
-    "@swapkit/helpers": "^4.15.1",
-    "@swapkit/plugins": "^4.6.54",
-    "@swapkit/server": "^4.3.8",
-    "@swapkit/toolboxes": "^4.19.0",
-    "@swapkit/wallet-core": "^4.3.8",
-    "@swapkit/wallet-keystore": "^4.4.8",
+    "@swapkit/core": "^4.6.4",
+    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/plugins": "^4.7.1",
+    "@swapkit/server": "^4.4.2",
+    "@swapkit/toolboxes": "^4.28.0",
+    "@swapkit/wallet-core": "^4.3.19",
+    "@swapkit/wallet-keystore": "^4.5.2",
     "@swapkit/wallets": "workspace:*",
     "cosmjs-types": "0.10.1"
   },
@@ -68,5 +68,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.6.35"
+  "version": "4.6.46"
 }
