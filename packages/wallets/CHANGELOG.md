@@ -1,5 +1,11 @@
 # @swapkit-dev/wallets
 
+## 4.10.0
+
+### Minor Changes
+
+- [#130](https://github.com/swapkit/wallets/pull/130) [`c02857f`](https://github.com/swapkit/wallets/commit/c02857ffefa521f62be32fc6700f78b773740ffe) Thanks [@towanTG](https://github.com/towanTG)! - Enable Hypercore (HYPE) on the keystore wallet. HyperEVM was already covered via `EVMChains`; `Chain.Hype` is now listed in `supportedChains` and `directSigningSupport`, so `connectKeystore` no longer filters it out.
+
 ## 4.9.4
 
 ### Patch Changes
