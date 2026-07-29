@@ -65,6 +65,7 @@ export const walletconnectWallet = createWallet({
     [Chain.XLayer]: true,
     [Chain.Cosmos]: true,
     [Chain.Kujira]: true,
+    [Chain.Maya]: true,
     [Chain.Near]: true,
     [Chain.THORChain]: true,
     [Chain.Tron]: true,
@@ -102,7 +103,7 @@ type WalletConnectCosmosAccount = {
   publicKey?: string | number[] | Uint8Array | { value?: string | number[] | Uint8Array };
 };
 
-function decodePublicKey(publicKey: WalletConnectCosmosAccount["publicKey"]) {
+export function decodePublicKey(publicKey: WalletConnectCosmosAccount["publicKey"]) {
   const key =
     typeof publicKey === "object" && !(publicKey instanceof Uint8Array) && !Array.isArray(publicKey)
       ? publicKey.value
@@ -121,7 +122,7 @@ function decodePublicKey(publicKey: WalletConnectCosmosAccount["publicKey"]) {
   return undefined;
 }
 
-function getWalletConnectSignature(response: unknown): AminoSignResponse {
+export function getWalletConnectSignature(response: unknown): AminoSignResponse {
   if (
     response &&
     typeof response === "object" &&
@@ -138,7 +139,7 @@ function getWalletConnectSignature(response: unknown): AminoSignResponse {
   });
 }
 
-function getWalletConnectCosmosAccounts(response: unknown, fallbackAddress: string): AccountData[] {
+export function getWalletConnectCosmosAccounts(response: unknown, fallbackAddress: string): AccountData[] {
   const accounts = Array.isArray(response)
     ? response
     : response && typeof response === "object" && "accounts" in response && Array.isArray(response.accounts)
@@ -150,7 +151,7 @@ function getWalletConnectCosmosAccounts(response: unknown, fallbackAddress: stri
     const address = walletAccount.address || fallbackAddress;
     const pubkey = decodePublicKey(walletAccount.pubkey || walletAccount.publicKey);
 
-    if (!pubkey) {
+    if (!pubkey || pubkey.length === 0) {
       throw new SwapKitError("wallet_walletconnect_method_not_supported", {
         method: DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS,
         reason: "WalletConnect Cosmos account did not include a public key",
@@ -201,7 +202,7 @@ function createWalletConnectCosmosSigner({
   };
 }
 
-function getNearTransactionHash(response: unknown): string {
+export function getNearTransactionHash(response: unknown): string {
   if (typeof response === "string") return response;
 
   if (Array.isArray(response)) {
@@ -331,6 +332,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
           );
         },
 
+        // Intentionally reject so the toolbox's signAndBroadcastTransaction falls back to signAndSendTransactions.
         signTransaction() {
           return Promise.reject(
             new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_signTransaction" }),
