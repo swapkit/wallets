@@ -1,5 +1,11 @@
 # @swapkit/sdk
 
+## 4.6.45
+
+### Patch Changes
+
+- [#128](https://github.com/swapkit/wallets/pull/128) [`0a6e87e`](https://github.com/swapkit/wallets/commit/0a6e87e28ee74e617f5a7b8ecf5144e368501a90) Thanks [@0xepicode](https://github.com/0xepicode)! - Fix WalletConnect EVM swaps always failing with "no transaction hash": eth_sendTransaction over WalletConnect resolves with the raw tx hash string, but the signer returned it cast as an ethers TransactionResponse, so callers reading `.hash` got `undefined` even though the wallet had already broadcast the transaction. The signer now wraps the hash (normalizing a missing 0x prefix) in a TransactionResponse-shaped object. Also corrects the `signTypedData` unsupported-method error to report `signTypedData` instead of `signTransaction`. (via @swapkit/wallets@4.9.4)
+
 ## 4.6.44
 
 ### Patch Changes
