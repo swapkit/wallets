@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { Chain, WalletOption } from "@swapkit/helpers";
+import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 
 const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const ETHEREUM_ADDRESS = "0x1111111111111111111111111111111111111111";
 const SOLANA_ADDRESS = "11111111111111111111111111111111";
 
 type InvokeOptions = { request: { method: string; params?: unknown }; scope: string };
+type SessionData = { sessionScopes: Record<string, { accounts?: string[] }> };
 
 const createClientOptions: unknown[] = [];
 const connectCalls: Array<{ caipAccountIds: string[]; scopes: string[] }> = [];
@@ -16,6 +17,7 @@ const solanaSigners: Record<string, unknown>[] = [];
 const browserProviders: MockBrowserProvider[] = [];
 
 let connectError: unknown;
+let sessionData: SessionData | undefined;
 
 class MockBrowserProvider {
   constructor(
@@ -40,14 +42,7 @@ const mockClient = {
     invokeCalls.push(options);
     return Promise.resolve("0x123");
   },
-  provider: {
-    getSession: async () => ({
-      sessionScopes: {
-        eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] },
-        solana: { accounts: [`${SOLANA_MAINNET_CAIP2}:${SOLANA_ADDRESS}`] },
-      },
-    }),
-  },
+  provider: { getSession: async () => sessionData },
 };
 
 mock.module("@metamask/connect-multichain", () => ({
@@ -83,6 +78,12 @@ describe("metamask multichain wallet", () => {
     solanaSigners.length = 0;
     browserProviders.length = 0;
     connectError = undefined;
+    sessionData = {
+      sessionScopes: {
+        eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] },
+        solana: { accounts: [`${SOLANA_MAINNET_CAIP2}:${SOLANA_ADDRESS}`] },
+      },
+    };
   });
 
   test("connects EVM and Solana through one CAIP-25 session", async () => {
@@ -116,7 +117,67 @@ describe("metamask multichain wallet", () => {
     expect(invokeCalls).toEqual([{ request: { method: "eth_blockNumber", params: [] }, scope: "eip155:1" }]);
 
     await (addChainCalls[0]?.disconnect as () => Promise<void>)();
-    expect(disconnectCalls).toEqual([undefined]);
+    expect(disconnectCalls).toEqual([["eip155:1"]]);
+  });
+
+  test("throws a SwapKitError when no multichain session exists", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    sessionData = undefined;
+
+    let connectionError: unknown;
+    try {
+      await metamaskWallet.connectMetamask.connectWallet({ addChain: () => {} })([Chain.Ethereum], {
+        dapp: { name: "SwapKit Test" },
+        supportedNetworks: { "eip155:1": "https://ethereum.example/rpc" },
+      });
+    } catch (error) {
+      connectionError = error;
+    }
+
+    expect(connectionError).toBeInstanceOf(SwapKitError);
+    expect(connectionError).not.toBeInstanceOf(TypeError);
+    expect(connectionError).toHaveProperty("errorKey", "core_wallet_connection_not_found");
+  });
+
+  test("does not add partially granted chains", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    const addChainCalls: Record<string, unknown>[] = [];
+    sessionData = { sessionScopes: { eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] } } };
+
+    await expect(
+      metamaskWallet.connectMetamask.connectWallet({
+        addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+      })([Chain.Ethereum, Chain.Solana], {
+        dapp: { name: "SwapKit Test" },
+        supportedNetworks: {
+          "eip155:1": "https://ethereum.example/rpc",
+          [SOLANA_MAINNET_CAIP2]: "https://solana.example/rpc",
+        },
+      }),
+    ).rejects.toThrow("wallet_chain_not_supported");
+
+    expect(addChainCalls).toEqual([]);
+  });
+
+  test("disconnects only the selected chain scope", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await metamaskWallet.connectMetamask.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum, Chain.Solana], {
+      dapp: { name: "SwapKit Test" },
+      supportedNetworks: {
+        "eip155:1": "https://ethereum.example/rpc",
+        [SOLANA_MAINNET_CAIP2]: "https://solana.example/rpc",
+      },
+    });
+
+    const solanaWallet = addChainCalls.find(({ chain }) => chain === Chain.Solana);
+    expect(solanaWallet).toBeDefined();
+    await (solanaWallet?.disconnect as () => Promise<void>)();
+
+    expect(disconnectCalls).toEqual([[SOLANA_MAINNET_CAIP2]]);
   });
 
   test("loadWallet returns the multichain MetaMask connector", async () => {

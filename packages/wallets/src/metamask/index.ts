@@ -1,3 +1,4 @@
+import type { InvokeMethodOptions, MultichainCore, Scope, SessionData } from "@metamask/connect-multichain";
 import {
   Chain,
   type EVMChain,
@@ -29,7 +30,7 @@ const EVM_CHAIN_SET = new Set<Chain>(EVMChains);
 const isEVMChain = (chain: Chain): chain is EVMChain => EVM_CHAIN_SET.has(chain);
 
 // SwapKit Chain -> CAIP-2 scope.
-const chainToScope = (chain: Chain): string => {
+const chainToScope = (chain: Chain): Scope => {
   if (isEVMChain(chain)) {
     return `eip155:${Number.parseInt(getChainConfig(chain).chainIdHex, 16)}`;
   }
@@ -47,15 +48,7 @@ export type ConnectMetamaskOptions = {
   supportedNetworks?: Record<string, string>;
 };
 
-// Minimal multichain client surface we depend on. Kept loose to avoid coupling
-// to a specific SDK minor; tighten once the dependency is installed.
-type InvokeRequest = { method: string; params?: unknown[] | Record<string, unknown> };
-type MultichainClient = {
-  connect: (scopes: string[], caipAccountIds: string[]) => Promise<void>;
-  disconnect: (scopes?: string[]) => Promise<void>;
-  invokeMethod: (options: { scope: string; request: InvokeRequest }) => Promise<unknown>;
-  provider: { getSession: () => Promise<{ sessionScopes: Record<string, { accounts?: string[] }> }> };
-};
+type MultichainClient = MultichainCore;
 
 const isUserRejection = (error: unknown) =>
   typeof error === "object" && error !== null && (error as { code?: number }).code === 4001;
@@ -66,12 +59,9 @@ const isUserRejection = (error: unknown) =>
 // namespace into one bucket ("eip155" with references: ["1","137"]). Rather than
 // rely on the key shape, scan every bucket's CAIP-10 accounts and match on
 // namespace:reference. CAIP-10 is "namespace:reference:address" (address = [2]).
-const findAddressForScope = (
-  session: { sessionScopes?: Record<string, { accounts?: string[] }> },
-  scope: string,
-): string | undefined => {
+const findAddressForScope = (session: SessionData, scope: Scope): string | undefined => {
   const [namespace, reference] = scope.split(":");
-  for (const bucket of Object.values(session.sessionScopes ?? {})) {
+  for (const bucket of Object.values(session.sessionScopes)) {
     for (const caip10 of bucket.accounts ?? []) {
       const [accNamespace, accReference, address] = caip10.split(":");
       if (accNamespace === namespace && accReference === reference && address) return address;
@@ -84,10 +74,10 @@ const findAddressForScope = (
 // BrowserProvider only needs `request`. Account/chain queries are answered from
 // the session; everything else is forwarded to the client, which routes reads to
 // the RPC node and wallet methods (eth_sendTransaction, personal_sign, …) to MetaMask.
-const makeEip1193ForScope = (client: MultichainClient, scope: string, address: string): Eip1193Provider => {
+const makeEip1193ForScope = (client: MultichainClient, scope: Scope, address: string): Eip1193Provider => {
   const chainIdHex = `0x${Number(scope.split(":")[1]).toString(16)}`;
   return {
-    request: ({ method, params }: { method: string; params?: unknown[] | object }) => {
+    request: ({ method, params }: { method: string; params?: InvokeMethodOptions["request"]["params"] }) => {
       switch (method) {
         case "eth_accounts":
         case "eth_requestAccounts":
@@ -102,7 +92,7 @@ const makeEip1193ForScope = (client: MultichainClient, scope: string, address: s
         case "wallet_addEthereumChain":
           return Promise.resolve(null);
         default:
-          return client.invokeMethod({ request: { method, params: params as unknown[] }, scope });
+          return client.invokeMethod({ request: { method, params }, scope });
       }
     },
   } as unknown as Eip1193Provider;
@@ -112,7 +102,7 @@ const makeEip1193ForScope = (client: MultichainClient, scope: string, address: s
 // Matches the SolanaProvider interface getSolanaToolbox({ signer }) consumes:
 // the toolbox calls signer.signTransaction(tx) and broadcasts the result itself,
 // so we sign-and-return (solana_signTransaction), we do NOT send.
-const makeSolanaSigner = async (client: MultichainClient, scope: string, address: string) => {
+const makeSolanaSigner = async (client: MultichainClient, scope: Scope, address: string) => {
   const { PublicKey, Transaction, VersionedTransaction } = await import("@solana/web3.js");
   const publicKey = new PublicKey(address);
 
@@ -151,21 +141,19 @@ export const metamaskWallet = createWallet({
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const { createMultichainClient } = await import("@metamask/connect-multichain");
 
-      const scopeByChain = new Map(filteredChains.map((chain) => [chain, chainToScope(chain)] as const));
-      const scopes = [...new Set(scopeByChain.values())];
+      const chainScopes = filteredChains.map((chain) => ({ chain, scope: chainToScope(chain) }));
+      const scopes = [...new Set(chainScopes.map(({ scope }) => scope))];
 
       const supportedNetworks =
         options?.supportedNetworks ??
         Object.fromEntries(
-          await Promise.all(
-            filteredChains.map(async (chain) => [scopeByChain.get(chain) as string, await getRPCUrl(chain)] as const),
-          ),
+          await Promise.all(chainScopes.map(async ({ chain, scope }) => [scope, await getRPCUrl(chain)] as const)),
         );
 
-      const client = (await createMultichainClient({
+      const client = await createMultichainClient({
         api: { supportedNetworks },
         dapp: options?.dapp ?? { name: "SwapKit", url: globalThis.location?.href },
-      })) as unknown as MultichainClient;
+      });
 
       try {
         // Single approval prompt for every requested scope.
@@ -176,13 +164,18 @@ export const metamaskWallet = createWallet({
       }
 
       const session = await client.provider.getSession();
-      const disconnect = () => client.disconnect();
+      if (!session) {
+        throw new SwapKitError("core_wallet_connection_not_found", { wallet: WalletOption.METAMASK });
+      }
 
-      await Promise.all(
-        filteredChains.map(async (chain) => {
-          const scope = scopeByChain.get(chain) as string;
+      const chainWallets = await Promise.all(
+        chainScopes.map(async ({ chain, scope }) => {
           const address = findAddressForScope(session, scope);
-          if (!address) throw new SwapKitError("wallet_connection_rejected_by_user", { chain, scope });
+          if (!address) {
+            throw new SwapKitError("wallet_chain_not_supported", { chain, scope, wallet: WalletOption.METAMASK });
+          }
+
+          const disconnect = () => client.disconnect([scope]);
 
           if (isEVMChain(chain)) {
             const { BrowserProvider } = await import("ethers");
@@ -195,17 +188,18 @@ export const metamaskWallet = createWallet({
               provider: browserProvider,
               walletProvider: eip1193,
             });
-            addChain({ ...walletMethods, address, chain, disconnect, walletType });
-            return;
+            return { ...walletMethods, address, chain, disconnect, walletType };
           }
 
           // Solana (and future ecosystems via their own adapter + toolbox).
           const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
           const signer = await makeSolanaSigner(client, scope, address);
           const toolbox = getSolanaToolbox({ signer });
-          addChain({ ...toolbox, address, chain, disconnect, walletType });
+          return { ...toolbox, address, chain, disconnect, walletType };
         }),
       );
+
+      for (const chainWallet of chainWallets) addChain(chainWallet);
 
       return true;
     },
