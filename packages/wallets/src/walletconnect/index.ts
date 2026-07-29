@@ -7,7 +7,7 @@ import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapki
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type SignClientClient from "@walletconnect/sign-client";
-import type { SessionTypes, SignClientTypes } from "@walletconnect/types";
+import type { PairingTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
 import { DEFAULT_APP_METADATA, DEFAULT_COSMOS_METHODS, DEFAULT_LOGGER, DEFAULT_RELAY_URL } from "./constants";
 import { getEVMSigner } from "./evmSigner";
 import { chainToChainId, getAddressByChain } from "./helpers";
@@ -172,12 +172,10 @@ export function getWalletConnectCosmosAccounts(response: unknown, fallbackAddres
 function createWalletConnectCosmosSigner({
   address,
   chain,
-  session,
   walletconnect,
 }: {
   address: string;
   chain: Exclude<CosmosChain, typeof Chain.Harbor | typeof Chain.Noble>;
-  session: SessionTypes.Struct;
   walletconnect: NonNullable<Walletconnect>;
 }): OfflineAminoSigner {
   const chainId = chainToChainId(chain);
@@ -185,6 +183,11 @@ function createWalletConnectCosmosSigner({
 
   return {
     async getAccounts() {
+      const session = walletconnect.session;
+      if (!session) {
+        throw new SwapKitError("wallet_walletconnect_connection_not_established");
+      }
+
       if (cachedAccounts) return cachedAccounts;
 
       const response = await walletconnect.client.request({
@@ -198,6 +201,11 @@ function createWalletConnectCosmosSigner({
     },
 
     async signAmino(signerAddress: string, signDoc: StdSignDoc) {
+      const session = walletconnect.session;
+      if (!session) {
+        throw new SwapKitError("wallet_walletconnect_connection_not_established");
+      }
+
       const response = await walletconnect.client.request({
         chainId,
         request: { method: DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, params: { signDoc, signerAddress } },
@@ -274,7 +282,6 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       const signer = createWalletConnectCosmosSigner({
         address,
         chain: chain as Exclude<CosmosChain, typeof Chain.Harbor | typeof Chain.Noble>,
-        session,
         walletconnect,
       });
 
@@ -298,6 +305,11 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
         },
 
         async signAndSendTransactions({ transactions }: { transactions: Transaction[] }) {
+          const session = walletconnect.session;
+          if (!session) {
+            throw new SwapKitError("wallet_walletconnect_connection_not_established");
+          }
+
           if (transactions.length === 0) {
             throw new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_empty_transactions" });
           }
@@ -320,7 +332,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
           return txHash;
         },
 
-        signDelegateAction(_delegateAction: any) {
+        signDelegateAction() {
           return Promise.reject(
             new SwapKitError("wallet_walletconnect_method_not_supported", { method: "signDelegateAction" }),
           );
@@ -362,7 +374,8 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
         },
 
         async signTransaction(transaction: TronTransaction) {
-          if (!walletconnect) {
+          const session = walletconnect.session;
+          if (!session) {
             throw new SwapKitError("wallet_walletconnect_connection_not_established");
           }
 
@@ -415,6 +428,11 @@ async function getWalletconnect(
       ...walletconnectOptions?.core,
     });
 
+    const existingSession = getPreferredSession(client.find({ requiredNamespaces }));
+    if (existingSession) {
+      return createWalletconnectConnection({ client, session: existingSession });
+    }
+
     modal = new WalletConnectModal({
       logger: DEFAULT_LOGGER,
       projectId: walletConnectProjectId,
@@ -422,17 +440,10 @@ async function getWalletconnect(
       ...walletconnectOptions?.core,
     });
 
-    const existingSession = getPreferredSession(client.find({ requiredNamespaces }));
-    if (existingSession) {
-      return createWalletconnectConnection({ client, session: existingSession });
-    }
-
     const pairingTopic = getPreferredPairingTopic(client);
-    const { uri, approval } = await client.connect({
-      optionalNamespaces,
-      pairingTopic,
-      requiredNamespaces,
-    });
+    // @walletconnect/sign-client deprecates pairingTopic; an offline wallet yields no QR URI and approval can wait
+    // for the ~5-minute proposal TTL. Accept for now; revisit on the next WalletConnect major bump.
+    const { uri, approval } = await client.connect({ optionalNamespaces, pairingTopic, requiredNamespaces });
 
     if (uri) {
       modal.openModal({ uri });
@@ -445,6 +456,9 @@ async function getWalletconnect(
     }
 
     return createWalletconnectConnection({ client, session });
+  } catch (error) {
+    if (error instanceof SwapKitError) throw error;
+    throw new SwapKitError("wallet_walletconnect_connection_not_established", error);
   } finally {
     if (modal) {
       modal.closeModal();
@@ -452,19 +466,35 @@ async function getWalletconnect(
   }
 }
 
-function createWalletconnectConnection({
+type WalletconnectLifecycleEvent = "session_delete" | "session_expire" | "session_extend" | "session_update";
+
+export interface WalletconnectLifecycleClient {
+  disconnect: SignClientClient["disconnect"];
+  on<E extends WalletconnectLifecycleEvent>(
+    event: E,
+    listener: (args: SignClientTypes.EventArguments[E]) => void,
+  ): unknown;
+  session: Pick<SignClientClient["session"], "get" | "keys">;
+}
+
+type WalletconnectConnection<Client> = Omit<Walletconnect, "client"> & { client: Client };
+
+export function createWalletconnectConnection<Client extends WalletconnectLifecycleClient>({
   client,
   session,
 }: {
-  client: SignClientClient;
+  client: Client;
   session: SessionTypes.Struct;
-}): Walletconnect {
-  const walletconnect: Walletconnect = {
+}): WalletconnectConnection<Client> {
+  const walletconnect: WalletconnectConnection<Client> = {
     accounts: extractAccountsFromSession(session),
     client,
     disconnect: async () => {
       if (!walletconnect.session) return;
-      await client.disconnect({ reason: { code: 0, message: "User disconnected" }, topic: walletconnect.session.topic });
+      await client.disconnect({
+        reason: { code: 0, message: "User disconnected" },
+        topic: walletconnect.session.topic,
+      });
     },
     session,
   };
@@ -481,6 +511,12 @@ function createWalletconnectConnection({
 
     walletconnect.accounts = [];
     walletconnect.session = undefined;
+  });
+
+  client.on("session_extend", ({ topic }: SignClientTypes.EventArguments["session_extend"]) => {
+    if (walletconnect.session?.topic !== topic || !client.session.keys.includes(topic)) return;
+
+    walletconnect.session = client.session.get(topic);
   });
 
   client.on("session_update", ({ topic, params }: SignClientTypes.EventArguments["session_update"]) => {
@@ -505,13 +541,18 @@ function extractAccountsFromSession(session: SessionTypes.Struct) {
   return accounts;
 }
 
-function getPreferredSession(sessions: SessionTypes.Struct[]) {
+export function getPreferredSession(sessions: SessionTypes.Struct[]) {
   return sessions
     .filter((session) => !isExpired(session.expiry))
     .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry)[0];
 }
 
-function getPreferredPairingTopic(client: SignClientClient) {
+export interface PreferredPairingClient {
+  core: { pairing: { getPairings(): PairingTypes.Struct[] } };
+  session: { getAll(): SessionTypes.Struct[] };
+}
+
+export function getPreferredPairingTopic(client: PreferredPairingClient) {
   const sessions = client.session
     .getAll()
     .filter((session) => !isExpired(session.expiry))
