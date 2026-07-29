@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { Chain } from "@swapkit/helpers";
 import type { PairingTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
 
 import {
@@ -10,8 +11,10 @@ import {
   DEFAULT_TRON_METHODS,
   getPreferredPairingTopic,
   getPreferredSession,
+  getSessionDirectSigningSupport,
   type WalletconnectLifecycleClient,
 } from "../src/walletconnect";
+import { chainToChainId } from "../src/walletconnect/helpers";
 import {
   getConnectionNamespaces,
   getOptionalNamespaces,
@@ -147,6 +150,122 @@ describe("WalletConnect namespaces", () => {
         },
       },
     });
+  });
+});
+
+describe("getSessionDirectSigningSupport", () => {
+  it("returns true when the approved session grants each signer family's required methods", () => {
+    const grants: { chain: Chain; methods: string[]; namespace: string }[] = [
+      { chain: Chain.Ethereum, methods: [DEFAULT_EIP155_METHODS.ETH_SEND_TRANSACTION], namespace: "eip155" },
+      {
+        chain: Chain.Cosmos,
+        methods: [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS],
+        namespace: "cosmos",
+      },
+      { chain: Chain.Near, methods: [DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTION], namespace: "near" },
+      { chain: Chain.Tron, methods: [DEFAULT_TRON_METHODS.TRON_SIGN_TRANSACTION], namespace: "tron" },
+    ];
+
+    for (const { chain, methods, namespace } of grants) {
+      const chainId = chainToChainId(chain);
+      const session = makeSession({
+        expiry: now() + 60,
+        namespaces: { [namespace]: { accounts: [`${chainId}:account`], events: [], methods } },
+        topic: `session-${namespace}`,
+      });
+
+      expect(getSessionDirectSigningSupport(chain, session)).toBe(true);
+    }
+  });
+
+  it("returns false when a required method is missing", () => {
+    const chainId = chainToChainId(Chain.Cosmos);
+    const session = makeSession({
+      expiry: now() + 60,
+      namespaces: {
+        cosmos: {
+          accounts: [`${chainId}:cosmos1walletconnect`],
+          events: [],
+          methods: [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO],
+        },
+      },
+      topic: "missing-method",
+    });
+
+    expect(getSessionDirectSigningSupport(Chain.Cosmos, session)).toBe(false);
+  });
+
+  it("returns false when the approved accounts do not cover the chain", () => {
+    const session = makeSession({
+      expiry: now() + 60,
+      namespaces: {
+        cosmos: {
+          accounts: [`${chainToChainId(Chain.THORChain)}:thor1walletconnect`],
+          events: [],
+          methods: [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS],
+        },
+      },
+      topic: "wrong-account-chain",
+    });
+
+    expect(getSessionDirectSigningSupport(Chain.Cosmos, session)).toBe(false);
+  });
+
+  it("supports namespaces keyed by the chain CAIP-2 id", () => {
+    const chainId = chainToChainId(Chain.Ethereum);
+    const session = makeSession({
+      expiry: now() + 60,
+      namespaces: {
+        [chainId]: {
+          accounts: [`${chainId}:0x123`],
+          events: [],
+          methods: [DEFAULT_EIP155_METHODS.ETH_SEND_TRANSACTION],
+        },
+      },
+      topic: "caip2-namespace",
+    });
+
+    expect(getSessionDirectSigningSupport(Chain.Ethereum, session)).toBe(true);
+  });
+
+  it("unions family and CAIP-2 namespace grants", () => {
+    const chainId = chainToChainId(Chain.Cosmos);
+    const session = makeSession({
+      expiry: now() + 60,
+      namespaces: {
+        cosmos: {
+          accounts: [`${chainId}:cosmos1walletconnect`],
+          events: [],
+          methods: [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO],
+        },
+        [chainId]: { accounts: [], events: [], methods: [DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS] },
+      },
+      topic: "merged-namespaces",
+    });
+
+    expect(getSessionDirectSigningSupport(Chain.Cosmos, session)).toBe(true);
+  });
+
+  it("does not require cosmos_signDirect for the amino signer path", () => {
+    const chainId = chainToChainId(Chain.Cosmos);
+    const session = makeSession({
+      expiry: now() + 60,
+      namespaces: {
+        cosmos: {
+          accounts: [`${chainId}:cosmos1walletconnect`],
+          events: [],
+          methods: [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS],
+        },
+      },
+      topic: "amino-only",
+    });
+
+    expect(session.namespaces.cosmos?.methods).not.toContain(DEFAULT_COSMOS_METHODS.COSMOS_SIGN_DIRECT);
+    expect(getSessionDirectSigningSupport(Chain.Cosmos, session)).toBe(true);
+  });
+
+  it("returns false when the session is undefined", () => {
+    expect(getSessionDirectSigningSupport(Chain.Ethereum, undefined)).toBe(false);
   });
 });
 

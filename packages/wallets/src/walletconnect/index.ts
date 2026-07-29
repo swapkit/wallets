@@ -8,7 +8,15 @@ import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type SignClientClient from "@walletconnect/sign-client";
 import type { PairingTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
-import { DEFAULT_APP_METADATA, DEFAULT_COSMOS_METHODS, DEFAULT_LOGGER, DEFAULT_RELAY_URL } from "./constants";
+import {
+  DEFAULT_APP_METADATA,
+  DEFAULT_COSMOS_METHODS,
+  DEFAULT_EIP155_METHODS,
+  DEFAULT_LOGGER,
+  DEFAULT_NEAR_METHODS,
+  DEFAULT_RELAY_URL,
+  DEFAULT_TRON_METHODS,
+} from "./constants";
 import { getEVMSigner } from "./evmSigner";
 import { chainToChainId, getAddressByChain } from "./helpers";
 import { getConnectionNamespaces } from "./namespaces";
@@ -21,6 +29,57 @@ export interface Walletconnect {
   client: SignClientClient;
   disconnect: () => Promise<void>;
   session?: SessionTypes.Struct;
+}
+
+const DIRECT_SIGNING_SUPPORT: Partial<Record<Chain, boolean>> = {
+  [Chain.Arbitrum]: true,
+  [Chain.Aurora]: true,
+  [Chain.Avalanche]: true,
+  [Chain.Base]: true,
+  [Chain.Berachain]: true,
+  [Chain.BinanceSmartChain]: true,
+  [Chain.Ethereum]: true,
+  [Chain.Monad]: true,
+  [Chain.Optimism]: true,
+  [Chain.Polygon]: true,
+  [Chain.XLayer]: true,
+  [Chain.Cosmos]: true,
+  [Chain.Kujira]: true,
+  [Chain.Maya]: true,
+  [Chain.Near]: true,
+  [Chain.THORChain]: true,
+  [Chain.Tron]: true,
+};
+
+export function getSessionDirectSigningSupport(chain: Chain, session: SessionTypes.Struct | undefined): boolean {
+  if (!session) return false;
+
+  const chainId = chainToChainId(chain);
+  const [namespace] = chainId.split(":");
+  if (!chainId || !namespace) return false;
+
+  const namespaceGrant = session.namespaces[namespace];
+  const chainGrant = session.namespaces[chainId];
+  const accounts = [...(namespaceGrant?.accounts ?? []), ...(chainGrant?.accounts ?? [])];
+  if (!accounts.some((account) => account.startsWith(`${chainId}:`))) return false;
+
+  const methods = new Set([...(namespaceGrant?.methods ?? []), ...(chainGrant?.methods ?? [])]);
+  const requiredMethods = (() => {
+    switch (namespace) {
+      case "eip155":
+        return [DEFAULT_EIP155_METHODS.ETH_SEND_TRANSACTION];
+      case "cosmos":
+        return [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS];
+      case "near":
+        return [DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTION];
+      case "tron":
+        return [DEFAULT_TRON_METHODS.TRON_SIGN_TRANSACTION];
+      default:
+        return [];
+    }
+  })();
+
+  return requiredMethods.length > 0 && requiredMethods.every((method) => methods.has(method));
 }
 
 export const walletconnectWallet = createWallet({
@@ -52,6 +111,8 @@ export const walletconnectWallet = createWallet({
             address,
             chain,
             disconnect: walletconnect.disconnect,
+            supportsDirectSigning:
+              DIRECT_SIGNING_SUPPORT[chain] === true && getSessionDirectSigningSupport(chain, walletconnect.session),
             walletType: WalletOption.WALLETCONNECT,
           });
         }),
@@ -59,25 +120,7 @@ export const walletconnectWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Aurora]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Monad]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.XLayer]: true,
-    [Chain.Cosmos]: true,
-    [Chain.Kujira]: true,
-    [Chain.Maya]: true,
-    [Chain.Near]: true,
-    [Chain.THORChain]: true,
-    [Chain.Tron]: true,
-  },
+  directSigningSupport: DIRECT_SIGNING_SUPPORT,
   name: "connectWalletconnect",
   supportedChains: [
     Chain.Arbitrum,
@@ -290,7 +333,6 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
     case Chain.Near: {
       const { getNearToolbox } = await import("@swapkit/toolboxes/near");
-      const { DEFAULT_NEAR_METHODS } = await import("./constants");
 
       // Create a NEAR signer that uses WalletConnect
       const signer = {
@@ -365,7 +407,6 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
     case Chain.Tron: {
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
-      const { DEFAULT_TRON_METHODS } = await import("./constants");
 
       // Create a Tron signer that uses WalletConnect
       const signer: TronSigner = {
