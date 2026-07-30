@@ -22,6 +22,8 @@
     "@swapkit/wallet-core": "^4.3.19",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
+    "@ton/core": "~0.63.1",
+    "@tonconnect/ui": "~3.0.0",
     "@walletconnect/modal": "~2.7.0",
     "@walletconnect/sign-client": "~2.23.9",
     "cosmjs-types": "~0.10.1",
@@ -46,6 +48,8 @@
     "@radixdlt/radix-dapp-toolkit": "2.3.0",
     "@scure/base": "2.2.0",
     "@solana/web3.js": "1.98.4",
+    "@ton/core": "0.63.1",
+    "@tonconnect/ui": "3.0.0",
     "@walletconnect/logger": "3.0.2",
     "@walletconnect/modal": "2.7.0",
     "@walletconnect/sign-client": "2.23.9",
@@ -184,6 +188,12 @@
       "require": "./dist/src/talisman.cjs",
       "types": "./dist/types/talisman.d.ts"
     },
+    "./tonconnect": {
+      "bun": "./src/tonconnect/index.ts",
+      "default": "./dist/src/tonconnect/index.js",
+      "require": "./dist/src/tonconnect/index.cjs",
+      "types": "./dist/types/tonconnect/index.d.ts"
+    },
     "./trezor": {
       "bun": "./src/trezor.ts",
       "default": "./dist/src/trezor.js",
@@ -215,21 +225,12 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/wallets",
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git"
-  },
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",

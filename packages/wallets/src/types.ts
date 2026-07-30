@@ -23,6 +23,7 @@ import type { metamaskWallet } from "./metamask";
 import type { walletSelectorWallet } from "./near-wallet-selector";
 import type { passkeysWallet } from "./passkeys";
 import type { radixWallet } from "./radix";
+import type { tonconnectWallet } from "./tonconnect";
 import type { walletconnectWallet } from "./walletconnect";
 import type { xamanWallet } from "./xaman";
 
@@ -52,6 +53,7 @@ export type SKWallets = {
   [WalletOption.POLKADOT_JS]: typeof polkadotWallet;
   [WalletOption.RADIX_WALLET]: typeof radixWallet;
   [WalletOption.TALISMAN]: typeof talismanWallet;
+  [WalletOption.TON_CONNECT]: typeof tonconnectWallet;
   [WalletOption.TREZOR]: typeof trezorWallet;
   [WalletOption.TRONLINK]: typeof tronlinkWallet;
   [WalletOption.TRUSTWALLET_WEB]: typeof trustwalletWallet;
@@ -128,6 +130,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.POLKADOT_JS]: typeof polkadotWallet.connectPolkadotJs.supportedChains;
   [WalletOption.RADIX_WALLET]: typeof radixWallet.connectRadixWallet.supportedChains;
   [WalletOption.TALISMAN]: typeof talismanWallet.connectTalisman.supportedChains;
+  [WalletOption.TON_CONNECT]: typeof tonconnectWallet.connectTonConnect.supportedChains;
   [WalletOption.TREZOR]: typeof trezorWallet.connectTrezor.supportedChains;
   [WalletOption.TRONLINK]: typeof tronlinkWallet.connectTronLink.supportedChains;
   [WalletOption.TRUSTWALLET_WEB]: typeof trustwalletWallet.connectTrustWallet.supportedChains;

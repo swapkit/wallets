@@ -1,4 +1,7 @@
 import { WalletOption } from "@swapkit/helpers";
+// Registers WalletOption.TON_CONNECT before the match below reads it; the
+// heavy TON Connect client itself still loads lazily via the match arm.
+import "./tonconnect/register";
 import type { SKWallets } from "./types";
 
 export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Promise<SKWallets[W]> {
@@ -50,6 +53,7 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
     .with(WalletOption.RADIX_WALLET, async () => (await import("./radix")).radixWallet)
     .with(WalletOption.TALISMAN, async () => (await import("@swapkit/wallet-extensions/talisman")).talismanWallet)
     .with(WalletOption.TRONLINK, async () => (await import("@swapkit/wallet-extensions/tronlink")).tronlinkWallet)
+    .with(WalletOption.TON_CONNECT, async () => (await import("./tonconnect")).tonconnectWallet)
     .with(WalletOption.WALLET_SELECTOR, async () => (await import("./near-wallet-selector")).walletSelectorWallet)
     .with(WalletOption.XAMAN, async () => (await import("./xaman")).xamanWallet)
     .exhaustive();
