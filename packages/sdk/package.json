@@ -3,7 +3,7 @@
   "dependencies": {
     "@stricahq/typhonjs": "~3.0.1",
     "@swapkit/core": "^4.6.4",
-    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/helpers": "0.0.0-rc-20260728115044",
     "@swapkit/plugins": "^4.7.1",
     "@swapkit/server": "^4.4.2",
     "@swapkit/toolboxes": "^4.28.0",

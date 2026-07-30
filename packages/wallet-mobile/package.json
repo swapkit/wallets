@@ -1,7 +1,7 @@
 {
   "author": "swapkit",
   "dependencies": {
-    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/helpers": "0.0.0-rc-20260728115044",
     "@swapkit/toolboxes": "^4.28.0",
     "@swapkit/wallet-core": "^4.3.19"
   },

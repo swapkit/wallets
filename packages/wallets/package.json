@@ -16,7 +16,7 @@
     "@scure/base": "~2.2.0",
     "@scure/bip39": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^4.20.1",
+    "@swapkit/helpers": "0.0.0-rc-20260728115044",
     "@swapkit/toolboxes": "^4.28.0",
     "@swapkit/utxo-signer": "^2.3.0",
     "@swapkit/wallet-core": "^4.3.19",
