@@ -7,7 +7,7 @@ import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapki
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type SignClientClient from "@walletconnect/sign-client";
-import type { PairingTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
+import type { PairingTypes, ProposalTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
 import {
   DEFAULT_APP_METADATA,
   DEFAULT_COSMOS_METHODS,
@@ -481,16 +481,13 @@ async function getWalletconnect(
       ...walletconnectOptions?.core,
     });
 
-    const pairingTopic = getPreferredPairingTopic(client);
-    // @walletconnect/sign-client deprecates pairingTopic; an offline wallet yields no QR URI and approval can wait
-    // for the ~5-minute proposal TTL. Accept for now; revisit on the next WalletConnect major bump.
-    const { uri, approval } = await client.connect({ optionalNamespaces, pairingTopic, requiredNamespaces });
-
-    if (uri) {
-      modal.openModal({ uri });
-    }
-
-    const session = await approval();
+    const session = await connectWithPairingFallback({
+      client,
+      onUri: (uri) => modal?.openModal({ uri }),
+      optionalNamespaces,
+      pairingTopic: getPreferredPairingTopic(client),
+      requiredNamespaces,
+    });
 
     if (!session) {
       throw new SwapKitError("wallet_walletconnect_connection_not_established");
@@ -593,20 +590,60 @@ export interface PreferredPairingClient {
   session: { getAll(): SessionTypes.Struct[] };
 }
 
+export interface PairingConnectClient {
+  connect(params: {
+    optionalNamespaces: ProposalTypes.OptionalNamespaces;
+    pairingTopic?: string;
+    requiredNamespaces: ProposalTypes.RequiredNamespaces;
+  }): Promise<{ approval: () => Promise<SessionTypes.Struct>; uri?: string }>;
+}
+
+export async function connectWithPairingFallback({
+  client,
+  onUri,
+  optionalNamespaces,
+  pairingTopic,
+  requiredNamespaces,
+}: {
+  client: PairingConnectClient;
+  onUri: (uri: string) => void;
+  optionalNamespaces: ProposalTypes.OptionalNamespaces;
+  pairingTopic?: string;
+  requiredNamespaces: ProposalTypes.RequiredNamespaces;
+}) {
+  const connect = (topic?: string) => {
+    // @walletconnect/sign-client deprecates pairingTopic. Try a reusable pairing once for compatibility, then
+    // fall back to a fresh pairing so a stale relay topic cannot suppress the QR flow.
+    return client.connect({ optionalNamespaces, requiredNamespaces, ...(topic ? { pairingTopic: topic } : {}) });
+  };
+
+  let connection: Awaited<ReturnType<PairingConnectClient["connect"]>>;
+  try {
+    connection = await connect(pairingTopic);
+  } catch (error) {
+    if (!pairingTopic) throw error;
+    connection = await connect();
+  }
+
+  if (connection.uri) onUri(connection.uri);
+  return connection.approval();
+}
+
 export function getPreferredPairingTopic(client: PreferredPairingClient) {
   const sessions = client.session
     .getAll()
     .filter((session) => !isExpired(session.expiry))
     .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry);
 
-  if (sessions[0]?.pairingTopic) {
-    return sessions[0].pairingTopic;
-  }
-
   const pairings = client.core.pairing
     .getPairings()
     .filter((pairing) => pairing.active && !isExpired(pairing.expiry))
     .sort((pairingA, pairingB) => pairingB.expiry - pairingA.expiry);
+
+  const sessionPairingTopic = sessions[0]?.pairingTopic;
+  if (sessionPairingTopic && pairings.some((pairing) => pairing.topic === sessionPairingTopic)) {
+    return sessionPairingTopic;
+  }
 
   return pairings[0]?.topic;
 }

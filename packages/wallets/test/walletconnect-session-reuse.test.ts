@@ -3,6 +3,7 @@ import { Chain } from "@swapkit/helpers";
 import type { PairingTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
 
 import {
+  connectWithPairingFallback,
   createWalletconnectConnection,
   DEFAULT_COSMOS_METHODS,
   DEFAULT_EIP_155_EVENTS,
@@ -12,6 +13,7 @@ import {
   getPreferredPairingTopic,
   getPreferredSession,
   getSessionDirectSigningSupport,
+  type PairingConnectClient,
   type WalletconnectLifecycleClient,
 } from "../src/walletconnect";
 import { chainToChainId } from "../src/walletconnect/helpers";
@@ -281,7 +283,7 @@ describe("WalletConnect session reuse", () => {
 
   it("prefers the most recent unexpired session pairing topic", () => {
     const client = {
-      core: { pairing: { getPairings: () => [makePairing({ expiry: now() + 300, topic: "pairing" })] } },
+      core: { pairing: { getPairings: () => [makePairing({ expiry: now() + 300, topic: "later-pairing" })] } },
       session: {
         getAll: () => [
           makeSession({ expiry: now() + 60, pairingTopic: "earlier-pairing", topic: "earlier" }),
@@ -292,6 +294,42 @@ describe("WalletConnect session reuse", () => {
     };
 
     expect(getPreferredPairingTopic(client)).toBe("later-pairing");
+  });
+
+  it("ignores a session pairing topic that is not an active unexpired pairing", () => {
+    const client = {
+      core: {
+        pairing: {
+          getPairings: () => [
+            makePairing({ expiry: now() + 120, topic: "active-pairing" }),
+            makePairing({ active: false, expiry: now() + 300, topic: "session-pairing" }),
+          ],
+        },
+      },
+      session: {
+        getAll: () => [makeSession({ expiry: now() + 300, pairingTopic: "session-pairing", topic: "session" })],
+      },
+    };
+
+    expect(getPreferredPairingTopic(client)).toBe("active-pairing");
+  });
+
+  it("returns a session pairing topic when its pairing is active and unexpired", () => {
+    const client = {
+      core: {
+        pairing: {
+          getPairings: () => [
+            makePairing({ expiry: now() + 60, topic: "session-pairing" }),
+            makePairing({ expiry: now() + 300, topic: "newer-pairing" }),
+          ],
+        },
+      },
+      session: {
+        getAll: () => [makeSession({ expiry: now() + 300, pairingTopic: "session-pairing", topic: "session" })],
+      },
+    };
+
+    expect(getPreferredPairingTopic(client)).toBe("session-pairing");
   });
 
   it("falls back to the most recent active unexpired pairing", () => {
@@ -326,6 +364,53 @@ describe("WalletConnect session reuse", () => {
     };
 
     expect(getPreferredPairingTopic(client)).toBeUndefined();
+  });
+});
+
+describe("connectWithPairingFallback", () => {
+  it("retries a rejected reused pairing with a fresh pairing and opens its URI", async () => {
+    const freshSession = makeSession({ expiry: now() + 300, topic: "fresh-session" });
+    const connectCalls: Parameters<PairingConnectClient["connect"]>[0][] = [];
+    const client = {
+      connect(params: Parameters<PairingConnectClient["connect"]>[0]) {
+        connectCalls.push(params);
+        if (params.pairingTopic) return Promise.reject(new Error("Failed to publish custom payload"));
+
+        return Promise.resolve({ approval: () => Promise.resolve(freshSession), uri: "wc:fresh-uri" });
+      },
+    } satisfies PairingConnectClient;
+    const uris: string[] = [];
+
+    const session = await connectWithPairingFallback({
+      client,
+      onUri: (uri) => uris.push(uri),
+      optionalNamespaces: {},
+      pairingTopic: "stale-pairing",
+      requiredNamespaces: {},
+    });
+
+    expect(connectCalls).toHaveLength(2);
+    expect(connectCalls[0]).toHaveProperty("pairingTopic", "stale-pairing");
+    expect(connectCalls[1]).not.toHaveProperty("pairingTopic");
+    expect(uris).toEqual(["wc:fresh-uri"]);
+    expect(session).toBe(freshSession);
+  });
+
+  it("propagates a fresh pairing failure after one attempt", async () => {
+    const connectCalls: Parameters<PairingConnectClient["connect"]>[0][] = [];
+    const connectionError = new Error("Fresh pairing failed");
+    const client = {
+      connect(params: Parameters<PairingConnectClient["connect"]>[0]) {
+        connectCalls.push(params);
+        return Promise.reject(connectionError);
+      },
+    } satisfies PairingConnectClient;
+
+    await expect(
+      connectWithPairingFallback({ client, onUri: () => {}, optionalNamespaces: {}, requiredNamespaces: {} }),
+    ).rejects.toBe(connectionError);
+    expect(connectCalls).toHaveLength(1);
+    expect(connectCalls[0]).not.toHaveProperty("pairingTopic");
   });
 });
 
