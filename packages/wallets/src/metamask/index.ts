@@ -168,13 +168,25 @@ export const metamaskWallet = createWallet({
         throw new SwapKitError("core_wallet_connection_not_found", { wallet: WalletOption.METAMASK });
       }
 
-      const chainWallets = await Promise.all(
-        chainScopes.map(async ({ chain, scope }) => {
-          const address = findAddressForScope(session, scope);
-          if (!address) {
-            throw new SwapKitError("wallet_chain_not_supported", { chain, scope, wallet: WalletOption.METAMASK });
-          }
+      // MetaMask may grant fewer scopes than requested (no Solana account, an EVM
+      // network not added/approved). Connect the granted subset and skip the rest —
+      // consumers see exactly the chains that arrived via addChain. Only a fully
+      // empty grant is an error.
+      const granted = chainScopes.flatMap(({ chain, scope }) => {
+        const address = findAddressForScope(session, scope);
+        return address ? [{ address, chain, scope }] : [];
+      });
 
+      if (granted.length === 0) {
+        throw new SwapKitError("wallet_chain_not_supported", {
+          chains: filteredChains,
+          scopes,
+          wallet: WalletOption.METAMASK,
+        });
+      }
+
+      const chainWallets = await Promise.all(
+        granted.map(async ({ address, chain, scope }) => {
           const disconnect = () => client.disconnect([scope]);
 
           if (isEVMChain(chain)) {

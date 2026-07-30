@@ -139,10 +139,28 @@ describe("metamask multichain wallet", () => {
     expect(connectionError).toHaveProperty("errorKey", "core_wallet_connection_not_found");
   });
 
-  test("does not add partially granted chains", async () => {
+  test("connects the granted subset when the wallet approves only some scopes", async () => {
     const { metamaskWallet } = await import("../src/metamask");
     const addChainCalls: Record<string, unknown>[] = [];
     sessionData = { sessionScopes: { eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] } } };
+
+    await metamaskWallet.connectMetamask.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum, Chain.Solana], {
+      dapp: { name: "SwapKit Test" },
+      supportedNetworks: {
+        "eip155:1": "https://ethereum.example/rpc",
+        [SOLANA_MAINNET_CAIP2]: "https://solana.example/rpc",
+      },
+    });
+
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual([Chain.Ethereum]);
+  });
+
+  test("throws only when the wallet grants none of the requested scopes", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    const addChainCalls: Record<string, unknown>[] = [];
+    sessionData = { sessionScopes: {} };
 
     await expect(
       metamaskWallet.connectMetamask.connectWallet({
