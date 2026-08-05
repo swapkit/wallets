@@ -19,19 +19,19 @@ type Eip1193EventProvider = Eip1193Provider & {
 };
 
 export type EVMWalletOptions =
-  | WalletOption.BRAVE
-  | WalletOption.OKX_MOBILE
-  | WalletOption.METAMASK
-  | WalletOption.COINBASE_WEB
-  | WalletOption.EIP6963;
+  | typeof WalletOption.BRAVE
+  | typeof WalletOption.OKX_MOBILE
+  | typeof WalletOption.METAMASK
+  | typeof WalletOption.COINBASE_WEB
+  | typeof WalletOption.EIP6963;
 
 const getWalletForType = (
   walletType:
-    | WalletOption.BRAVE
-    | WalletOption.OKX_MOBILE
-    | WalletOption.METAMASK
-    | WalletOption.COINBASE_WEB
-    | WalletOption.EIP6963,
+    | typeof WalletOption.BRAVE
+    | typeof WalletOption.OKX_MOBILE
+    | typeof WalletOption.METAMASK
+    | typeof WalletOption.COINBASE_WEB
+    | typeof WalletOption.EIP6963,
 ) => {
   switch (walletType) {
     case WalletOption.COINBASE_WEB:

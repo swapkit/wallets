@@ -1,34 +1,86 @@
-import type { StdSignDoc } from "@cosmjs/amino";
+import type { AccountData, Algo, AminoSignResponse, OfflineAminoSigner, StdSignDoc } from "@cosmjs/amino";
 import type { Transaction } from "@near-js/transactions";
-import {
-  Chain,
-  filterSupportedChains,
-  type GenericTransferParams,
-  getRPCUrl,
-  SKConfig,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit/helpers";
-import type { ThorchainDepositParams } from "@swapkit/toolboxes/cosmos";
+import { base64, hex } from "@scure/base";
+import { Chain, type CosmosChain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
-import type { SignClient } from "@walletconnect/sign-client";
-import type { SessionTypes, SignClientTypes } from "@walletconnect/types";
+import type SignClientClient from "@walletconnect/sign-client";
+import type { PairingTypes, ProposalTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
 import {
   DEFAULT_APP_METADATA,
   DEFAULT_COSMOS_METHODS,
+  DEFAULT_EIP155_METHODS,
   DEFAULT_LOGGER,
+  DEFAULT_NEAR_METHODS,
   DEFAULT_RELAY_URL,
-  THORCHAIN_MAINNET_ID,
+  DEFAULT_TRON_METHODS,
 } from "./constants";
 import { getEVMSigner } from "./evmSigner";
 import { chainToChainId, getAddressByChain } from "./helpers";
-import { getRequiredNamespaces } from "./namespaces";
+import { getConnectionNamespaces } from "./namespaces";
 
 export * from "./constants";
 export * from "./types";
+
+export interface Walletconnect {
+  accounts: string[];
+  client: SignClientClient;
+  disconnect: () => Promise<void>;
+  session?: SessionTypes.Struct;
+}
+
+const DIRECT_SIGNING_SUPPORT: Partial<Record<Chain, boolean>> = {
+  [Chain.Arbitrum]: true,
+  [Chain.Aurora]: true,
+  [Chain.Avalanche]: true,
+  [Chain.Base]: true,
+  [Chain.Berachain]: true,
+  [Chain.BinanceSmartChain]: true,
+  [Chain.Ethereum]: true,
+  [Chain.Monad]: true,
+  [Chain.Optimism]: true,
+  [Chain.Polygon]: true,
+  [Chain.XLayer]: true,
+  [Chain.Cosmos]: true,
+  [Chain.Kujira]: true,
+  [Chain.Maya]: true,
+  [Chain.Near]: true,
+  [Chain.THORChain]: true,
+  [Chain.Tron]: true,
+};
+
+export function getSessionDirectSigningSupport(chain: Chain, session: SessionTypes.Struct | undefined): boolean {
+  if (!session) return false;
+
+  const chainId = chainToChainId(chain);
+  const [namespace] = chainId.split(":");
+  if (!chainId || !namespace) return false;
+
+  const namespaceGrant = session.namespaces[namespace];
+  const chainGrant = session.namespaces[chainId];
+  const accounts = [...(namespaceGrant?.accounts ?? []), ...(chainGrant?.accounts ?? [])];
+  if (!accounts.some((account) => account.startsWith(`${chainId}:`))) return false;
+
+  const methods = new Set([...(namespaceGrant?.methods ?? []), ...(chainGrant?.methods ?? [])]);
+  const requiredMethods = (() => {
+    switch (namespace) {
+      case "eip155":
+        return [DEFAULT_EIP155_METHODS.ETH_SEND_TRANSACTION];
+      case "cosmos":
+        return [DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS];
+      case "near":
+        return [DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTION];
+      case "tron":
+        return [DEFAULT_TRON_METHODS.TRON_SIGN_TRANSACTION];
+      default:
+        return [];
+    }
+  })();
+
+  return requiredMethods.length > 0 && requiredMethods.every((method) => methods.has(method));
+}
 
 export const walletconnectWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
@@ -40,11 +92,12 @@ export const walletconnectWallet = createWallet({
         throw new SwapKitError("wallet_walletconnect_project_id_not_specified");
       }
 
-      const walletconnect = await getWalletconnect(filteredChains, walletConnectProjectId, walletconnectOptions);
-
-      if (!walletconnect) {
-        throw new SwapKitError("wallet_walletconnect_connection_not_established");
-      }
+      const walletconnect = await getWalletconnect(
+        filteredChains,
+        supportedChains,
+        walletConnectProjectId,
+        walletconnectOptions,
+      );
 
       const { accounts } = walletconnect;
 
@@ -58,6 +111,8 @@ export const walletconnectWallet = createWallet({
             address,
             chain,
             disconnect: walletconnect.disconnect,
+            supportsDirectSigning:
+              DIRECT_SIGNING_SUPPORT[chain] === true && getSessionDirectSigningSupport(chain, walletconnect.session),
             walletType: WalletOption.WALLETCONNECT,
           });
         }),
@@ -65,20 +120,7 @@ export const walletconnectWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Aurora]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Monad]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.XLayer]: true,
-    // Cosmos/Kujira/Maya/THORChain: cosmos toolbox built without signer; Tron/Near: signer wired but pending hardening (V3 plan PRs)
-  },
+  directSigningSupport: DIRECT_SIGNING_SUPPORT,
   name: "connectWalletconnect",
   supportedChains: [
     Chain.Arbitrum,
@@ -103,7 +145,142 @@ export const walletconnectWallet = createWallet({
 });
 
 export const WC_SUPPORTED_CHAINS = getWalletSupportedChains(walletconnectWallet);
-export type Walletconnect = Awaited<ReturnType<typeof getWalletconnect>>;
+
+type WalletConnectCosmosAccount = {
+  address?: string;
+  algo?: Algo;
+  pubkey?: string | number[] | Uint8Array | { value?: string | number[] | Uint8Array };
+  publicKey?: string | number[] | Uint8Array | { value?: string | number[] | Uint8Array };
+};
+
+export function decodePublicKey(publicKey: WalletConnectCosmosAccount["publicKey"]) {
+  const key =
+    typeof publicKey === "object" && !(publicKey instanceof Uint8Array) && !Array.isArray(publicKey)
+      ? publicKey.value
+      : publicKey;
+
+  if (key instanceof Uint8Array) return key;
+  if (Array.isArray(key)) return Uint8Array.from(key);
+
+  if (typeof key === "string") {
+    const normalized = key.startsWith("0x") ? key.slice(2) : key;
+    if (/^[\da-f]+$/i.test(normalized) && normalized.length % 2 === 0) return hex.decode(normalized);
+
+    return base64.decode(normalized);
+  }
+
+  return undefined;
+}
+
+export function getWalletConnectSignature(response: unknown): AminoSignResponse {
+  if (
+    response &&
+    typeof response === "object" &&
+    "signed" in response &&
+    "signature" in response &&
+    typeof response.signature === "object" &&
+    response.signature
+  ) {
+    return response as AminoSignResponse;
+  }
+
+  throw new SwapKitError("wallet_walletconnect_method_not_supported", {
+    method: DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO,
+  });
+}
+
+export function getWalletConnectCosmosAccounts(response: unknown, fallbackAddress: string): AccountData[] {
+  const accounts = Array.isArray(response)
+    ? response
+    : response && typeof response === "object" && "accounts" in response && Array.isArray(response.accounts)
+      ? response.accounts
+      : [];
+
+  return accounts.map((account): AccountData => {
+    const walletAccount = account as WalletConnectCosmosAccount;
+    const address = walletAccount.address || fallbackAddress;
+    const pubkey = decodePublicKey(walletAccount.pubkey || walletAccount.publicKey);
+
+    if (!pubkey || pubkey.length === 0) {
+      throw new SwapKitError("wallet_walletconnect_method_not_supported", {
+        method: DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS,
+        reason: "WalletConnect Cosmos account did not include a public key",
+      });
+    }
+
+    return { address, algo: walletAccount.algo || "secp256k1", pubkey };
+  });
+}
+
+function createWalletConnectCosmosSigner({
+  address,
+  chain,
+  walletconnect,
+}: {
+  address: string;
+  chain: Exclude<CosmosChain, typeof Chain.Harbor | typeof Chain.Noble>;
+  walletconnect: NonNullable<Walletconnect>;
+}): OfflineAminoSigner {
+  const chainId = chainToChainId(chain);
+  let cachedAccounts: AccountData[] | undefined;
+
+  return {
+    async getAccounts() {
+      const session = walletconnect.session;
+      if (!session) {
+        throw new SwapKitError("wallet_walletconnect_connection_not_established");
+      }
+
+      if (cachedAccounts) return cachedAccounts;
+
+      const response = await walletconnect.client.request({
+        chainId,
+        request: { method: DEFAULT_COSMOS_METHODS.COSMOS_GET_ACCOUNTS, params: {} },
+        topic: session.topic,
+      });
+
+      cachedAccounts = getWalletConnectCosmosAccounts(response, address);
+      return cachedAccounts;
+    },
+
+    async signAmino(signerAddress: string, signDoc: StdSignDoc) {
+      const session = walletconnect.session;
+      if (!session) {
+        throw new SwapKitError("wallet_walletconnect_connection_not_established");
+      }
+
+      const response = await walletconnect.client.request({
+        chainId,
+        request: { method: DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, params: { signDoc, signerAddress } },
+        topic: session.topic,
+      });
+
+      return getWalletConnectSignature(response);
+    },
+  };
+}
+
+export function getNearTransactionHash(response: unknown): string {
+  if (typeof response === "string") return response;
+
+  if (Array.isArray(response)) {
+    const [first] = response;
+    return getNearTransactionHash(first);
+  }
+
+  if (response && typeof response === "object") {
+    const result = response as {
+      transaction?: { hash?: string };
+      transaction_outcome?: { id?: string };
+      transactionHash?: string;
+      hash?: string;
+    };
+
+    return result.transaction_outcome?.id || result.transaction?.hash || result.transactionHash || result.hash || "";
+  }
+
+  return "";
+}
 
 async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
   chain,
@@ -140,101 +317,22 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       return toolbox;
     }
 
+    case Chain.Cosmos:
+    case Chain.Kujira:
+    case Chain.Maya:
     case Chain.THORChain: {
-      const { SignMode } = await import("cosmjs-types/cosmos/tx/signing/v1beta1/signing.js");
-      const { TxRaw } = await import("cosmjs-types/cosmos/tx/v1beta1/tx.js");
+      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
+      const signer = createWalletConnectCosmosSigner({
+        address,
+        chain: chain as Exclude<CosmosChain, typeof Chain.Harbor | typeof Chain.Noble>,
+        walletconnect,
+      });
 
-      const importedSigning = await import("@cosmjs/proto-signing");
-      const encodePubkey = importedSigning.encodePubkey ?? importedSigning.default?.encodePubkey;
-      const makeAuthInfoBytes = importedSigning.makeAuthInfoBytes ?? importedSigning.default?.makeAuthInfoBytes;
-      const importedAmino = await import("@cosmjs/amino");
-      const makeSignDoc = importedAmino.makeSignDoc ?? importedSigning.default?.makeSignDoc;
-
-      const {
-        getCosmosToolbox,
-        buildAminoMsg,
-        buildEncodedTxBody,
-        createStargateClient,
-        fromBase64,
-        getDefaultChainFee,
-        parseAminoMessageForDirectSigning,
-      } = await import("@swapkit/toolboxes/cosmos");
-      const toolbox = await getCosmosToolbox(chain);
-
-      const fee = getDefaultChainFee(chain);
-
-      const signRequest = (signDoc: StdSignDoc) =>
-        walletconnect?.client.request({
-          chainId: THORCHAIN_MAINNET_ID,
-          request: { method: DEFAULT_COSMOS_METHODS.COSMOS_SIGN_AMINO, params: { signDoc, signerAddress: address } },
-          topic: session.topic,
-        });
-
-      async function thorchainTransfer({ assetValue, memo, ...rest }: GenericTransferParams | ThorchainDepositParams) {
-        const account = await toolbox.getAccount(address);
-        if (!account) {
-          throw new SwapKitError({ errorKey: "wallet_missing_params", info: { account } });
-        }
-
-        if (!account.pubkey) {
-          throw new SwapKitError({ errorKey: "wallet_missing_params", info: { account, pubkey: account?.pubkey } });
-        }
-
-        const { accountNumber, sequence = 0 } = account;
-
-        const msgs = [buildAminoMsg({ ...rest, assetValue, memo, sender: address })];
-
-        const signDoc = makeSignDoc(
-          msgs,
-          fee,
-          assetValue.chainId,
-          memo,
-          accountNumber?.toString(),
-          sequence?.toString() || "0",
-        );
-
-        const signature: any = await signRequest(signDoc);
-
-        const bodyBytes = await buildEncodedTxBody({
-          chain: Chain.THORChain,
-          memo: memo || "",
-          msgs: msgs.map(parseAminoMessageForDirectSigning),
-        });
-        const pubkey = encodePubkey(account.pubkey);
-        const authInfoBytes = makeAuthInfoBytes(
-          [{ pubkey, sequence }],
-          fee.amount,
-          Number.parseInt(fee.gas, 10),
-          undefined,
-          undefined,
-          SignMode.SIGN_MODE_LEGACY_AMINO_JSON,
-        );
-
-        const txRaw = TxRaw.fromPartial({
-          authInfoBytes,
-          bodyBytes,
-          signatures: [
-            fromBase64(typeof signature.signature === "string" ? signature.signature : signature.signature.signature),
-          ],
-        });
-        const txBytes = TxRaw.encode(txRaw).finish();
-
-        const rpcUrl = await getRPCUrl(Chain.THORChain);
-        const broadcaster = await createStargateClient(rpcUrl);
-        const result = await broadcaster.broadcastTx(txBytes);
-        return result.transactionHash;
-      }
-
-      return {
-        ...toolbox,
-        deposit: (params: ThorchainDepositParams) => thorchainTransfer(params),
-        transfer: (params: GenericTransferParams) => thorchainTransfer(params),
-      };
+      return getCosmosToolbox(chain as Exclude<CosmosChain, typeof Chain.Harbor | typeof Chain.Noble>, { signer });
     }
 
     case Chain.Near: {
       const { getNearToolbox } = await import("@swapkit/toolboxes/near");
-      const { DEFAULT_NEAR_METHODS } = await import("./constants");
 
       // Create a NEAR signer that uses WalletConnect
       const signer = {
@@ -248,7 +346,35 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
           );
         },
 
-        signDelegateAction(_delegateAction: any) {
+        async signAndSendTransactions({ transactions }: { transactions: Transaction[] }) {
+          const session = walletconnect.session;
+          if (!session) {
+            throw new SwapKitError("wallet_walletconnect_connection_not_established");
+          }
+
+          if (transactions.length === 0) {
+            throw new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_empty_transactions" });
+          }
+
+          const isBatch = transactions.length > 1;
+          const result = await walletconnect.client.request({
+            chainId: chainToChainId(Chain.Near),
+            request: {
+              method: isBatch
+                ? DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTIONS
+                : DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTION,
+              params: isBatch ? { transactions } : { transaction: transactions[0] },
+            },
+            topic: session.topic,
+          });
+
+          const txHash = getNearTransactionHash(result);
+          if (!txHash) throw new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_tx_hash" });
+
+          return txHash;
+        },
+
+        signDelegateAction() {
           return Promise.reject(
             new SwapKitError("wallet_walletconnect_method_not_supported", { method: "signDelegateAction" }),
           );
@@ -267,18 +393,11 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
           );
         },
 
-        async signTransaction(transaction: Transaction) {
-          if (!walletconnect) {
-            throw new SwapKitError("wallet_walletconnect_connection_not_established");
-          }
-          // WalletConnect signs and sends in one operation
-          const result = await walletconnect.client.request({
-            chainId: chainToChainId(Chain.Near),
-            request: { method: DEFAULT_NEAR_METHODS.NEAR_SIGN_AND_SEND_TRANSACTION, params: { transaction } },
-            topic: session.topic,
-          });
-          // Return dummy hash and result
-          return [new Uint8Array(32), result];
+        // Intentionally reject so the toolbox's signAndBroadcastTransaction falls back to signAndSendTransactions.
+        signTransaction() {
+          return Promise.reject(
+            new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_signTransaction" }),
+          );
         },
       } as NearSigner;
 
@@ -288,7 +407,6 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
     case Chain.Tron: {
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
-      const { DEFAULT_TRON_METHODS } = await import("./constants");
 
       // Create a Tron signer that uses WalletConnect
       const signer: TronSigner = {
@@ -297,7 +415,8 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
         },
 
         async signTransaction(transaction: TronTransaction) {
-          if (!walletconnect) {
+          const session = walletconnect.session;
+          if (!session) {
             throw new SwapKitError("wallet_walletconnect_connection_not_established");
           }
 
@@ -326,16 +445,19 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
 
 async function getWalletconnect(
   chains: Chain[],
+  allSupportedChains: Chain[],
   walletConnectProjectId: string,
   walletconnectOptions?: SignClientTypes.Options,
 ) {
   let modal: WalletConnectModal | undefined;
-  let signer: typeof SignClient | undefined;
-  let session: SessionTypes.Struct | undefined;
-  let accounts: string[] | undefined;
-  try {
-    const requiredNamespaces = getRequiredNamespaces(chains.map(chainToChainId));
+  const chainIds = chains.map(chainToChainId).filter(Boolean);
+  const supportedChainIds = allSupportedChains.map(chainToChainId).filter(Boolean);
+  const { optionalNamespaces, requiredNamespaces } = getConnectionNamespaces({
+    optionalChains: supportedChainIds,
+    requiredChains: chainIds,
+  });
 
+  try {
     const { SignClient } = await import("@walletconnect/sign-client");
     const { WalletConnectModal } = await import("@walletconnect/modal");
 
@@ -347,63 +469,185 @@ async function getWalletconnect(
       ...walletconnectOptions?.core,
     });
 
-    const modal = new WalletConnectModal({
+    const existingSession = getPreferredSession(client.find({ requiredNamespaces }));
+    if (existingSession) {
+      return createWalletconnectConnection({ client, session: existingSession });
+    }
+
+    modal = new WalletConnectModal({
       logger: DEFAULT_LOGGER,
       projectId: walletConnectProjectId,
       relayUrl: DEFAULT_RELAY_URL,
       ...walletconnectOptions?.core,
     });
 
-    const oldSession = (await client.session.getAll())[0];
-
-    // disconnect old Session cause we can't handle using it with current ui
-    if (oldSession) {
-      await client.disconnect({ reason: { code: 0, message: "Resetting session" }, topic: oldSession.topic });
-    }
-
-    const { uri, approval } = await client.connect({
-      // Optionally: pass a known prior pairing (e.g. from `client.core.pairing.getPairings()`) to skip the `uri` step.
-      //   pairingTopic: pairing?.topic,
-      // Provide the namespaces and chains (e.g. `eip155` for EVM-based chains) we want to use in this session.
+    const session = await connectWithPairingFallback({
+      client,
+      onUri: (uri) => modal?.openModal({ uri }),
+      optionalNamespaces,
+      pairingTopic: getPreferredPairingTopic(client),
       requiredNamespaces,
     });
-
-    if (uri) {
-      modal.openModal({ uri });
-      // Await session approval from the wallet.
-      session = await approval();
-      // Handle the returned session (e.g. update UI to "connected" state).
-      // Close the QRCode modal in case it was open.
-      modal.closeModal();
-
-      function extractAccountsFromSession(session: SessionTypes.Struct) {
-        const accounts: string[] = [];
-
-        for (const [_namespace, data] of Object.entries(session.namespaces)) {
-          accounts.push(...data.accounts);
-        }
-
-        return accounts;
-      }
-
-      accounts = extractAccountsFromSession(session);
-    }
-
-    const disconnect = async () => {
-      session && (await client.disconnect({ reason: { code: 0, message: "User disconnected" }, topic: session.topic }));
-    };
 
     if (!session) {
       throw new SwapKitError("wallet_walletconnect_connection_not_established");
     }
 
-    return { accounts, client, disconnect, session, signer };
-  } catch {
-    // Errors are handled by returning undefined
+    return createWalletconnectConnection({ client, session });
+  } catch (error) {
+    if (error instanceof SwapKitError) throw error;
+    throw new SwapKitError("wallet_walletconnect_connection_not_established", error);
   } finally {
     if (modal) {
       modal.closeModal();
     }
   }
-  return undefined;
+}
+
+type WalletconnectLifecycleEvent = "session_delete" | "session_expire" | "session_extend" | "session_update";
+
+export interface WalletconnectLifecycleClient {
+  disconnect: SignClientClient["disconnect"];
+  on<E extends WalletconnectLifecycleEvent>(
+    event: E,
+    listener: (args: SignClientTypes.EventArguments[E]) => void,
+  ): unknown;
+  session: Pick<SignClientClient["session"], "get" | "keys">;
+}
+
+type WalletconnectConnection<Client> = Omit<Walletconnect, "client"> & { client: Client };
+
+export function createWalletconnectConnection<Client extends WalletconnectLifecycleClient>({
+  client,
+  session,
+}: {
+  client: Client;
+  session: SessionTypes.Struct;
+}): WalletconnectConnection<Client> {
+  const walletconnect: WalletconnectConnection<Client> = {
+    accounts: extractAccountsFromSession(session),
+    client,
+    disconnect: async () => {
+      if (!walletconnect.session) return;
+      await client.disconnect({
+        reason: { code: 0, message: "User disconnected" },
+        topic: walletconnect.session.topic,
+      });
+    },
+    session,
+  };
+
+  client.on("session_delete", ({ topic }: SignClientTypes.EventArguments["session_delete"]) => {
+    if (walletconnect.session?.topic !== topic) return;
+
+    walletconnect.accounts = [];
+    walletconnect.session = undefined;
+  });
+
+  client.on("session_expire", ({ topic }: SignClientTypes.EventArguments["session_expire"]) => {
+    if (walletconnect.session?.topic !== topic) return;
+
+    walletconnect.accounts = [];
+    walletconnect.session = undefined;
+  });
+
+  client.on("session_extend", ({ topic }: SignClientTypes.EventArguments["session_extend"]) => {
+    if (walletconnect.session?.topic !== topic || !client.session.keys.includes(topic)) return;
+
+    walletconnect.session = client.session.get(topic);
+  });
+
+  client.on("session_update", ({ topic, params }: SignClientTypes.EventArguments["session_update"]) => {
+    const currentSession = walletconnect.session;
+    if (!currentSession || currentSession.topic !== topic) return;
+
+    const nextSession = { ...currentSession, namespaces: params.namespaces };
+    walletconnect.session = nextSession;
+    walletconnect.accounts = extractAccountsFromSession(nextSession);
+  });
+
+  return walletconnect;
+}
+
+function extractAccountsFromSession(session: SessionTypes.Struct) {
+  const accounts: string[] = [];
+
+  for (const [_namespace, data] of Object.entries(session.namespaces)) {
+    accounts.push(...data.accounts);
+  }
+
+  return accounts;
+}
+
+export function getPreferredSession(sessions: SessionTypes.Struct[]) {
+  return sessions
+    .filter((session) => !isExpired(session.expiry))
+    .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry)[0];
+}
+
+export interface PreferredPairingClient {
+  core: { pairing: { getPairings(): PairingTypes.Struct[] } };
+  session: { getAll(): SessionTypes.Struct[] };
+}
+
+export interface PairingConnectClient {
+  connect(params: {
+    optionalNamespaces: ProposalTypes.OptionalNamespaces;
+    pairingTopic?: string;
+    requiredNamespaces: ProposalTypes.RequiredNamespaces;
+  }): Promise<{ approval: () => Promise<SessionTypes.Struct>; uri?: string }>;
+}
+
+export async function connectWithPairingFallback({
+  client,
+  onUri,
+  optionalNamespaces,
+  pairingTopic,
+  requiredNamespaces,
+}: {
+  client: PairingConnectClient;
+  onUri: (uri: string) => void;
+  optionalNamespaces: ProposalTypes.OptionalNamespaces;
+  pairingTopic?: string;
+  requiredNamespaces: ProposalTypes.RequiredNamespaces;
+}) {
+  const connect = (topic?: string) => {
+    // @walletconnect/sign-client deprecates pairingTopic. Try a reusable pairing once for compatibility, then
+    // fall back to a fresh pairing so a stale relay topic cannot suppress the QR flow.
+    return client.connect({ optionalNamespaces, requiredNamespaces, ...(topic ? { pairingTopic: topic } : {}) });
+  };
+
+  let connection: Awaited<ReturnType<PairingConnectClient["connect"]>>;
+  try {
+    connection = await connect(pairingTopic);
+  } catch (error) {
+    if (!pairingTopic) throw error;
+    connection = await connect();
+  }
+
+  if (connection.uri) onUri(connection.uri);
+  return connection.approval();
+}
+
+export function getPreferredPairingTopic(client: PreferredPairingClient) {
+  const sessions = client.session
+    .getAll()
+    .filter((session) => !isExpired(session.expiry))
+    .sort((sessionA, sessionB) => sessionB.expiry - sessionA.expiry);
+
+  const pairings = client.core.pairing
+    .getPairings()
+    .filter((pairing) => pairing.active && !isExpired(pairing.expiry))
+    .sort((pairingA, pairingB) => pairingB.expiry - pairingA.expiry);
+
+  const sessionPairingTopic = sessions[0]?.pairingTopic;
+  if (sessionPairingTopic && pairings.some((pairing) => pairing.topic === sessionPairingTopic)) {
+    return sessionPairingTopic;
+  }
+
+  return pairings[0]?.topic;
+}
+
+function isExpired(expiry: number) {
+  return expiry <= Math.floor(Date.now() / 1000);
 }

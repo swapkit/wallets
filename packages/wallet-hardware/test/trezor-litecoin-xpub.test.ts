@@ -2,7 +2,15 @@ import { describe, expect, it, mock } from "bun:test";
 import { HDKey } from "@scure/bip32";
 import { Chain } from "@swapkit/helpers";
 import { deriveAddressesFromXpub } from "@swapkit/toolboxes/utxo";
-import { createPCZT, OutScript, Script, ZcashPSBT } from "@swapkit/utxo-signer";
+import {
+  createPCZT,
+  createZcashTransaction,
+  getZcashConsensusBranchId,
+  OutScript,
+  Script,
+  ZCASH_IRONWOOD_ACTIVATION_HEIGHT,
+  ZcashPSBT,
+} from "@swapkit/utxo-signer";
 
 const trezorGetPublicKeyCalls: unknown[] = [];
 const trezorGetAddressCalls: unknown[] = [];
@@ -222,6 +230,29 @@ describe("Trezor wallet handling", () => {
     expect(trezorSignTransactionCalls).toHaveLength(1);
     expect(signedPublicKey).toEqual(publicKey);
     expect(signedSignature).toEqual(signature);
+  });
+
+  it("passes the transaction's Ironwood branch id to Trezor for serialized Zcash signing", async () => {
+    trezorSignTransactionCalls.length = 0;
+    trezorSerializedTx = buildZcashSignedTx(new Uint8Array());
+
+    const addChain = mock(() => undefined);
+    const connect = trezorWallet.connectTrezor.connectWallet({ addChain: addChain as never });
+    await connect([Chain.Zcash], [44, 133, 0, 0, 0], { address: "t1SelectedDerivedAddress" });
+
+    const connectedWallet = addChain.mock.calls[0]?.[0] as {
+      signTransaction: (tx: ReturnType<typeof createZcashTransaction>) => Promise<unknown>;
+    };
+    const branchId = getZcashConsensusBranchId(ZCASH_IRONWOOD_ACTIVATION_HEIGHT);
+    const tx = createZcashTransaction({ consensusBranchId: branchId });
+    tx.addInput({ index: 0, txid: new Uint8Array(32).fill(1), value: 1_000n });
+    tx.addOutput({ amount: 500n, script: OutScript.encode({ hash: new Uint8Array(20).fill(2), type: "pkh" }) });
+
+    await connectedWallet.signTransaction(tx);
+
+    const signParams = trezorSignTransactionCalls.at(-1) as { branchId: number };
+    expect(branchId).toBe(0x37a5165b);
+    expect(signParams.branchId).toBe(0x37a5165b);
   });
 
   it("passes route Zcash PSBT prev tx ids to Trezor without reversing them or looking up raw txs", async () => {

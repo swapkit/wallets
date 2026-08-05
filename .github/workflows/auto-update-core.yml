@@ -40,15 +40,22 @@ jobs:
                 echo "  ✅ Updated $PKG in $pkg_json (dependencies)"
               fi
               if jq -e ".devDependencies[\"$PKG\"]" "$pkg_json" > /dev/null 2>&1; then
-                jq ".devDependencies[\"$PKG\"] = \"$VER\"" "$pkg_json" > tmp.json && mv tmp.json "$pkg_json"
+                jq ".devDependencies[\"$PKG\"] = \"^$VER\"" "$pkg_json" > tmp.json && mv tmp.json "$pkg_json"
                 echo "  ✅ Updated $PKG in $pkg_json (devDependencies)"
               fi
             done
 
-            # Also sync root package.json dependencies + overrides (prevents transitive drift)
+            # Also sync root package.json deps + overrides. The root pins @swapkit/*
+            # in devDependencies; sherif (postinstall lint:ws) fails the whole run if
+            # any manifest drifts — versions AND range prefix must match everywhere,
+            # hence ^$VER for every dep field (overrides stay exact).
             if jq -e ".dependencies[\"$PKG\"]" package.json > /dev/null 2>&1; then
-              jq ".dependencies[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
+              jq ".dependencies[\"$PKG\"] = \"^$VER\"" package.json > tmp.json && mv tmp.json package.json
               echo "  ✅ Updated $PKG in root package.json (dependencies)"
+            fi
+            if jq -e ".devDependencies[\"$PKG\"]" package.json > /dev/null 2>&1; then
+              jq ".devDependencies[\"$PKG\"] = \"^$VER\"" package.json > tmp.json && mv tmp.json package.json
+              echo "  ✅ Updated $PKG in root package.json (devDependencies)"
             fi
             if jq -e ".overrides[\"$PKG\"]" package.json > /dev/null 2>&1; then
               jq ".overrides[\"$PKG\"] = \"$VER\"" package.json > tmp.json && mv tmp.json package.json
@@ -57,7 +64,25 @@ jobs:
           done
 
       - name: Install updated dependencies
-        run: bun install
+        shell: bash
+        run: |
+          # Converge the lockfile across the whole @swapkit/* family. A plain
+          # `bun install` keeps stale resolutions for consumers that were not in
+          # this dispatch payload (e.g. wallet-core pinning an older helpers),
+          # leaving two copies of a package in the isolated store — tsc
+          # declaration emit then fails with TS2883 (type not portable).
+          # `bun update` re-resolves the family but also rewrites manifests
+          # (exact-pins root deps, adds named deps missing from root), so we
+          # save and restore them around it.
+          WORKSPACE_PKGS=$(jq -r '.name' packages/*/package.json)
+          EXTERNAL_DEPS=$(jq -rs '[.[] | (.dependencies // {}), (.devDependencies // {}) | keys[]] | unique | .[] | select(startswith("@swapkit/"))' package.json packages/*/package.json | grep -vxF "$WORKSPACE_PKGS")
+
+          for f in package.json packages/*/package.json; do cp "$f" "$f.update-bak"; done
+          # shellcheck disable=SC2086 # word-splitting is intended
+          bun update $EXTERNAL_DEPS --ignore-scripts
+          for f in package.json packages/*/package.json; do mv "$f.update-bak" "$f"; done
+
+          bun install
 
       - name: Build and verify
         run: bun build:ci

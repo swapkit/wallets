@@ -1,9 +1,9 @@
 {
   "author": "swapkit",
   "dependencies": {
-    "@swapkit/helpers": "^4.16.2",
-    "@swapkit/toolboxes": "^4.23.1",
-    "@swapkit/wallet-core": "^4.3.14"
+    "@swapkit/helpers": "0.0.0-rc-20260728115044",
+    "@swapkit/toolboxes": "^4.28.0",
+    "@swapkit/wallet-core": "^4.3.19"
   },
   "description": "SwapKit - Wallet Mobile",
   "exports": {
@@ -37,5 +37,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.3.16"
+  "version": "4.3.21"
 }

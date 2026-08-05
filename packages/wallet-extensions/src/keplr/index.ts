@@ -8,12 +8,12 @@ const keplrSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, C
 export const keplrWallet: ExtensionWallet<
   "connectKeplr",
   Chain[],
-  [chains: Chain[], walletType?: WalletOption.KEPLR | WalletOption.LEAP]
+  [chains: Chain[], walletType?: typeof WalletOption.KEPLR | typeof WalletOption.LEAP]
 > = createWallet({
   connect: ({ addChain, supportedChains }) =>
     async function connectKeplr(
       chains: Chain[],
-      walletType: WalletOption.KEPLR | WalletOption.LEAP = WalletOption.KEPLR,
+      walletType: typeof WalletOption.KEPLR | typeof WalletOption.LEAP = WalletOption.KEPLR,
     ) {
       const extensionKey = walletType === WalletOption.LEAP ? "leap" : "keplr";
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });

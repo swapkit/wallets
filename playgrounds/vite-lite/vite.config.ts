@@ -28,6 +28,9 @@ export default defineConfig({
     ],
     esbuildOptions: { define: { global: "globalThis" } },
     exclude: [
+      // Stencil lazy web components resolve chunks via import.meta.url; pre-bundling
+      // breaks that, so serve the MetaMask connect UI package as native ESM.
+      "@metamask/multichain-ui",
       "@swapkit/helpers",
       "@swapkit/helpers/api",
       "@swapkit/wallets",
@@ -46,6 +49,12 @@ export default defineConfig({
       "@ledgerhq/hw-app-btc",
       "@ledgerhq/hw-transport-webhid",
       "@ledgerhq/hw-transport-webusb",
+      // CJS deps dynamically imported with NAMED imports by the MetaMask connect
+      // SDK; without listing them esbuild emits default-only interop and the
+      // mobile/QR flow throws on undefined named members.
+      "@metamask/mobile-wallet-protocol-core",
+      "@metamask/mobile-wallet-protocol-dapp-client",
+      "eciesjs",
       "@near-js/accounts",
       "@near-js/crypto",
       "@near-js/providers",
