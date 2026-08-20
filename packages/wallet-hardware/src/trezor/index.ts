@@ -23,7 +23,6 @@ import {
   type UTXOType,
 } from "@swapkit/toolboxes/utxo";
 import type { BTCNetwork, PCZT, Transaction, ZcashPSBT, ZcashTransaction } from "@swapkit/utxo-signer";
-import { BCHSigHash, NETWORKS, ZcashVersionGroupId } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
 
 type TrezorBip32Derivation = [Uint8Array, { fingerprint: number; path: number[] }];
@@ -49,15 +48,12 @@ const DEFAULT_TREZOR_CORE_MODE: TrezorCoreMode = "auto";
 const DEFAULT_TREZOR_MANIFEST = { appName: "SwapKit", appUrl: "https://swapkit.dev", email: "support@swapkit.dev" };
 const DEFAULT_TREZOR_TRANSPORTS = ["WebUsbTransport" as const];
 const TREZOR_KEEP_SESSION_PARAMS = { keepSession: true } as const;
+const BITCOIN_CASH_SIGHASH_ALL = 0x41;
 const trezorXpubCache = new Map<string, TrezorExtendedPublicKeyInfo>();
 let trezorSessionDispose: Promise<void> | undefined;
-const EXTENDED_KEY_VERSION_CANDIDATES = [
-  NETWORKS.bitcoin.bip32,
-  NETWORKS.bitcoinCash.bip32,
-  NETWORKS.dash.bip32,
-  NETWORKS.dogecoin.bip32,
-  NETWORKS.litecoin.bip32,
-];
+const EXTENDED_KEY_VERSION_CANDIDATES = (
+  [Chain.Bitcoin, Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin] as const satisfies readonly UTXOChain[]
+).map((chain) => getNetworkForChain(chain).bip32);
 
 async function disconnectTrezorSession() {
   trezorXpubCache.clear();
@@ -260,7 +256,7 @@ export function normalizeTrezorSignature(signatureHex: string, chain: Chain) {
   const derLength = signature[1] !== undefined ? signature[1] + 2 : undefined;
 
   if (derLength !== undefined && signature.length === derLength) {
-    return new Uint8Array([...signature, chain === Chain.BitcoinCash ? BCHSigHash.ALL : 0x01]);
+    return new Uint8Array([...signature, chain === Chain.BitcoinCash ? BITCOIN_CASH_SIGHASH_ALL : 0x01]);
   }
 
   return new Uint8Array(signature);
@@ -325,7 +321,7 @@ async function buildPCZTOutputsForTrezor(pczt: PCZT, address_n: number[], myAddr
 
 async function decodeOutputAddress(script: Uint8Array): Promise<string | undefined> {
   try {
-    const { OutScript, Address } = await import("@swapkit/utxo-signer");
+    const { OutScript, Address, NETWORKS } = await import("@swapkit/utxo-signer");
     const decoded = OutScript.decode(script);
     if (decoded.type === "pkh" || decoded.type === "pk") {
       return Address(NETWORKS.zcash).encode(decoded);
@@ -375,11 +371,23 @@ function buildZcashTxInputsForTrezor(
   return inputs;
 }
 
-function buildZcashTxOutputsForTrezor(tx: ZcashTransaction, address_n: number[], myAddress: string, chain: Chain) {
+function buildZcashTxOutputsForTrezor({
+  addressN,
+  chain,
+  myAddress,
+  network,
+  tx,
+}: {
+  addressN: number[];
+  chain: Chain;
+  myAddress: string;
+  network: BTCNetwork;
+  tx: ZcashTransaction;
+}) {
   const outputs = [];
   for (let i = 0; i < tx.outputsLength; i++) {
     const output = tx.getOutput(i);
-    const outputAddress = tx.getOutputAddress(i, NETWORKS.zcash);
+    const outputAddress = tx.getOutputAddress(i, network);
     const script = output.script;
 
     if (output.amount === 0n && script?.length > 0 && script[0] === 0x6a) {
@@ -399,7 +407,7 @@ function buildZcashTxOutputsForTrezor(tx: ZcashTransaction, address_n: number[],
     }
 
     const isChangeAddress = outputAddress === myAddress;
-    const outputParam = isChangeAddress || !outputAddress ? { address_n } : { address: outputAddress };
+    const outputParam = isChangeAddress || !outputAddress ? { address_n: addressN } : { address: outputAddress };
     outputs.push({ ...outputParam, amount: output.amount?.toString() || "0", script_type: "PAYTOADDRESS" as const });
   }
   return outputs;
@@ -582,10 +590,17 @@ async function getTrezorWallet<T extends Chain>({
       const signZcashTransactionWithSerializedTx = async (tx: ZcashTransaction) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const { hex: hexEncode } = await import("@scure/base");
+        const { NETWORKS, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
 
         const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
-        const outputs = buildZcashTxOutputsForTrezor(tx, address_n, address, chain);
+        const outputs = buildZcashTxOutputsForTrezor({
+          addressN: address_n,
+          chain,
+          myAddress: address,
+          network: NETWORKS.zcash,
+          tx,
+        });
 
         const result = await TrezorConnect.signTransaction({
           branchId: tx.consensusBranchId,
