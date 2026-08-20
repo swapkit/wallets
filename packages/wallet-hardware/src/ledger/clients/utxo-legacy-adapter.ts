@@ -50,16 +50,18 @@ export async function extractInputsFromPsbt(tx: Transaction, chain: UTXOChain): 
 }
 
 export async function signLegacyPsbtTransaction({
-  legacyClient,
   chain,
+  inputUtxos,
+  legacyClient,
   tx,
 }: {
-  legacyClient: { signTransaction: (tx: Transaction, inputUtxos: UTXOType[]) => Promise<string> };
   chain: UTXOChain;
+  inputUtxos?: UTXOType[];
+  legacyClient: { signTransaction: (tx: Transaction, inputUtxos: UTXOType[]) => Promise<string> };
   tx: Transaction;
 }): Promise<string> {
-  const inputUtxos = await extractInputsFromPsbt(tx, chain);
-  return legacyClient.signTransaction(tx, inputUtxos);
+  const resolvedInputUtxos = inputUtxos ?? (await extractInputsFromPsbt(tx, chain));
+  return legacyClient.signTransaction(tx, resolvedInputUtxos);
 }
 
 /**

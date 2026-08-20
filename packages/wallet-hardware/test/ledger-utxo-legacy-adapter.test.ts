@@ -88,4 +88,26 @@ describe("ledger legacy UTXO adapter", () => {
 
     expect(signedTxHex).toBe("0200000000");
   });
+
+  it("reuses prepared inputs without fetching previous transactions again", async () => {
+    rawTxRequests.length = 0;
+    const tx = new Transaction({ allowUnknownOutputs: true });
+    const inputUtxos = [{ hash: "11".repeat(32), index: 1, txHex: "02000000000100", value: 12_345 }];
+    const signTransaction = mock((receivedTx: Transaction, receivedInputs: typeof inputUtxos) => {
+      expect(receivedTx).toBe(tx);
+      expect(receivedInputs).toEqual(inputUtxos);
+      return Promise.resolve("0200000000");
+    });
+
+    const signedTxHex = await signLegacyPsbtTransaction({
+      chain: Chain.Litecoin,
+      inputUtxos,
+      legacyClient: { signTransaction },
+      tx,
+    });
+
+    expect(rawTxRequests).toEqual([]);
+    expect(signTransaction).toHaveBeenCalledTimes(1);
+    expect(signedTxHex).toBe("0200000000");
+  });
 });
