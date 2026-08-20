@@ -11,6 +11,7 @@ import {
 } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
+import { match, P } from "ts-pattern";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { getLedgerDMKSession } from "../helpers/dmk";
@@ -143,43 +144,46 @@ function stripHexPrefix(value: string) {
   return value.replace(/^0x/i, "");
 }
 
-async function signedInputParts({
+function signedInputParts({
   rawInput,
   purpose,
 }: {
   rawInput: ReturnType<Transaction["getInput"]>;
-  purpose: number;
+  purpose: ParsedBitcoinPath["purpose"];
 }) {
-  if (purpose === 86) {
-    const [tapKeySig] = rawInput.finalScriptWitness ?? [];
-    if (!tapKeySig) throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing taproot signature" });
-    return { tapKeySig };
-  }
-
-  if (purpose === 49 || purpose === 84) {
-    const [signature, publicKey] = rawInput.finalScriptWitness ?? [];
-    if (!signature || !publicKey) {
-      throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing SegWit signature or public key" });
-    }
-
-    if (purpose === 49) {
-      const { Script } = await import("@swapkit/utxo-signer");
-      const [redeemScript] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
-      if (!(redeemScript instanceof Uint8Array)) {
-        throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing nested SegWit redeem script" });
+  return match(purpose)
+    .with(86, () => {
+      const [tapKeySig] = rawInput.finalScriptWitness ?? [];
+      if (!tapKeySig) throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing taproot signature" });
+      return { tapKeySig };
+    })
+    .with(P.union(49, 84), (segwitPurpose) => {
+      const [signature, publicKey] = rawInput.finalScriptWitness ?? [];
+      if (!signature || !publicKey) {
+        throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing SegWit signature or public key" });
       }
-      return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]], redeemScript };
-    }
 
-    return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] };
-  }
-
-  const { Script } = await import("@swapkit/utxo-signer");
-  const [signature, publicKey] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
-  if (!(signature instanceof Uint8Array) || !(publicKey instanceof Uint8Array)) {
-    throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing legacy signature or public key" });
-  }
-  return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] };
+      return match(segwitPurpose)
+        .with(49, async () => {
+          const { Script } = await import("@swapkit/utxo-signer");
+          const [redeemScript] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
+          if (!(redeemScript instanceof Uint8Array)) {
+            throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing nested SegWit redeem script" });
+          }
+          return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]], redeemScript };
+        })
+        .with(84, () => ({ partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] }))
+        .exhaustive();
+    })
+    .with(44, async () => {
+      const { Script } = await import("@swapkit/utxo-signer");
+      const [signature, publicKey] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
+      if (!(signature instanceof Uint8Array) || !(publicKey instanceof Uint8Array)) {
+        throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing legacy signature or public key" });
+      }
+      return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] };
+    })
+    .exhaustive();
 }
 
 async function restoreSignedPsbt({
@@ -189,7 +193,7 @@ async function restoreSignedPsbt({
 }: {
   rawTransaction: string;
   tx: Transaction;
-  purpose: number;
+  purpose: ParsedBitcoinPath["purpose"];
 }) {
   const { Transaction } = await import("@swapkit/utxo-signer");
   const parsedRaw = Transaction.fromRaw(hex.decode(rawTransaction));
