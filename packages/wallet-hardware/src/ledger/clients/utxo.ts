@@ -18,11 +18,19 @@ import {
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
 } from "../helpers/ledgerJsDmkBridge";
+import { createCachedRawTxResolver } from "../helpers/rawTx";
 
 const nonSegwitLedgerChains = ["bitcoin-cash", "dash", "dogecoin", "zcash"];
 
 type LedgerUTXOChain = "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
 type UTXOLedgerParams = LedgerJsClientParams<DerivationPathArray | string>;
+
+interface ZcashPreviousTransactionInput {
+  index: number;
+  scriptPubkey: Uint8Array;
+  txid: Uint8Array;
+  value: bigint;
+}
 
 const ledgerAppNames: Record<LedgerUTXOChain, string> = {
   bitcoin: "Bitcoin",
@@ -52,10 +60,10 @@ export async function resolveZcashPreviousTransaction({
   inputIndex,
 }: {
   getRawTx: (txid: string) => Promise<string>;
-  input: { index: number; scriptPubkey: Uint8Array; txid: Uint8Array; value: bigint };
+  input: ZcashPreviousTransactionInput;
   inputIndex: number;
 }) {
-  const txid = hex.encode(new Uint8Array([...input.txid].reverse()));
+  const txid = hex.encode(input.txid);
   const txHex = await getRawTx(txid);
   if (!txHex) {
     throw new SwapKitError("wallet_ledger_invalid_params", {
@@ -73,6 +81,19 @@ export async function resolveZcashPreviousTransaction({
     value: Number(input.value),
     witnessUtxo: { script: input.scriptPubkey, value: Number(input.value) },
   } as UTXOType;
+}
+
+export function resolveZcashPreviousTransactions({
+  getRawTx,
+  inputs,
+}: {
+  getRawTx: (txid: string) => Promise<string>;
+  inputs: ZcashPreviousTransactionInput[];
+}) {
+  const cachedGetRawTx = createCachedRawTxResolver(getRawTx);
+  return Promise.all(
+    inputs.map((input, inputIndex) => resolveZcashPreviousTransaction({ getRawTx: cachedGetRawTx, input, inputIndex })),
+  );
 }
 
 const signUTXOTransaction = (
@@ -238,11 +259,9 @@ const BaseLedgerUTXO = ({
           versionGroupId: global.versionGroupId,
         });
 
-        const inputUtxos: UTXOType[] = [];
+        const inputs = Array.from({ length: pczt.inputsLength }, (_, inputIndex) => pczt.getInput(inputIndex));
 
-        for (let i = 0; i < pczt.inputsLength; i++) {
-          const input = pczt.getInput(i);
-
+        for (const input of inputs) {
           unsignedTx.addInput({
             index: input.index,
             script: new Uint8Array(),
@@ -250,15 +269,13 @@ const BaseLedgerUTXO = ({
             txid: input.txid,
             value: input.value,
           });
-
-          inputUtxos.push(
-            await resolveZcashPreviousTransaction({
-              getRawTx: (txid) => getUtxoApi(Chain.Zcash).getRawTx(txid),
-              input,
-              inputIndex: i,
-            }),
-          );
         }
+
+        const zcashApi = getUtxoApi(Chain.Zcash);
+        const inputUtxos = await resolveZcashPreviousTransactions({
+          getRawTx: (txid) => zcashApi.getRawTx(txid),
+          inputs,
+        });
 
         for (let i = 0; i < pczt.outputsLength; i++) {
           const output = pczt.getOutput(i);
