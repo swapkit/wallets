@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
-import { Chain } from "@swapkit/helpers";
+import { Chain, WalletOption } from "@swapkit/helpers";
 import { hexlify, Signature, Transaction } from "ethers";
 import { of } from "rxjs";
 
@@ -385,17 +385,44 @@ describe("wallet-hardware/ledger", () => {
     ]);
   });
 
-  it("connectLedger: requests Litecoin account xpubs with the Litecoin version byte", async () => {
+  it("connectLedger: routes every UTXO account xpub path and version", async () => {
+    for (const chain of [Chain.Bitcoin, Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash]) {
+      const addChain = mock(() => {});
+      const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
+      const transport = { id: chain } as unknown as Transport;
+
+      await connectLedger([chain], undefined, { address: "provided-ledger-address", transport });
+      const walletMethods = addChain.mock.calls[0]?.[0] as
+        | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
+        | undefined;
+      await walletMethods?.getExtendedPublicKey?.({ accountIndex: 0 });
+    }
+
+    expect(bitcoinAppXpubInvocations).toEqual([
+      { path: "m/84'/0'/0'", xpubVersion: 76067358 },
+      { path: "44'/145'/0'", xpubVersion: 76067358 },
+      { path: "44'/5'/0'", xpubVersion: 76067358 },
+      { path: "44'/3'/0'", xpubVersion: 49990397 },
+      { path: "m/84'/2'/0'", xpubVersion: 27108450 },
+      { path: "44'/133'/0'", xpubVersion: 76067358 },
+    ]);
+  });
+
+  it("connectLedger: routes EVM chains through the EVM wallet methods", async () => {
     const addChain = mock(() => {});
     const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
-    const transport = { id: "LTC" } as unknown as Transport;
 
-    await connectLedger([Chain.Litecoin], undefined, { transport });
-    const walletMethods = addChain.mock.calls[0]?.[0] as
-      | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
-      | undefined;
-    await walletMethods?.getExtendedPublicKey?.({ accountIndex: 0 });
+    await connectLedger([Chain.Arbitrum], undefined, { dmkSession, originToken: "ledger-origin-token" });
 
-    expect(bitcoinAppXpubInvocations).toEqual([{ path: "m/84'/2'/0'", xpubVersion: 27108450 }]);
+    expect(addChain).toHaveBeenCalledTimes(1);
+    expect(addChain.mock.calls[0]?.[0]).toMatchObject({
+      address: "0x0000000000000000000000000000000000000001",
+      chain: Chain.Arbitrum,
+      walletType: WalletOption.LEDGER,
+    });
+    expect(ethereumBuilderInvocations).toEqual([
+      { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
+    ]);
+    expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
   });
 });
