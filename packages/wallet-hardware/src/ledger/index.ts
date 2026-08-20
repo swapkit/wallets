@@ -30,6 +30,7 @@ import {
 } from "@swapkit/toolboxes/utxo";
 import type { Transaction, ZcashTransaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
+import { match } from "ts-pattern";
 import {
   getLedgerAddress,
   getLedgerClient,
@@ -223,75 +224,71 @@ async function getWalletMethods({
 
       const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
 
-      let toolboxSigner:
-        | { getAddress: () => Promise<string>; signTransaction: (tx: Transaction) => Promise<Transaction> }
-        | undefined;
-      let signAndBroadcastLedgerTransaction: ((tx: Transaction | ZcashTransaction) => Promise<string>) | undefined;
-      if (chain === Chain.Bitcoin) {
-        const bitcoinSigner = signer as BitcoinLedgerClient;
-        toolboxSigner = { getAddress: bitcoinSigner.getAddress, signTransaction: bitcoinSigner.signTransaction };
-        signAndBroadcastLedgerTransaction = async (tx) => {
-          const signedTxHex = await bitcoinSigner.signTransactionHex({ tx: tx as Transaction });
-          return toolbox.broadcastTx(signedTxHex);
-        };
-      } else if (
-        chain === Chain.BitcoinCash ||
-        chain === Chain.Dogecoin ||
-        chain === Chain.Dash ||
-        chain === Chain.Litecoin
-      ) {
-        const { createLegacyPsbtSigner, signLegacyPsbtTransaction } = await import("./clients/utxo-legacy-adapter");
-        const legacySigner = signer as LegacyUTXOLedgerClient;
-        toolboxSigner = createLegacyPsbtSigner({ address, chain: utxoChain, legacyClient: legacySigner });
-        signAndBroadcastLedgerTransaction = async (tx) => {
-          const signedTxHex = await signLegacyPsbtTransaction({
-            chain: utxoChain,
-            legacyClient: legacySigner,
-            tx: tx as Transaction,
-          });
-          return toolbox.broadcastTx(signedTxHex);
-        };
-      } else if (chain === Chain.Zcash) {
-        const zcashSigner = signer as ZcashLedgerClient;
-        signAndBroadcastLedgerTransaction = async (transaction) => {
-          if (!("consensusBranchId" in transaction)) {
-            throw new SwapKitError("wallet_ledger_method_not_supported", {
-              method: "signPCZT",
-              wallet: WalletOption.LEDGER,
-            });
-          }
-
-          const inputUtxos = await Promise.all(
-            Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
-              const input = transaction.getInput(inputIndex);
-              const txid = hex.encode(input.txid);
-              const txHex = await getUtxoApi(Chain.Zcash).getRawTx(txid);
-              if (!txHex) {
-                throw new SwapKitError("wallet_ledger_invalid_params", {
-                  inputIndex,
-                  reason: "Unable to resolve previous transaction hex for Ledger signing",
-                  txid,
+      const { signLedgerTransaction, toolboxSigner } = await match(chain)
+        .with(Chain.Bitcoin, () => {
+          const bitcoinSigner = signer as BitcoinLedgerClient;
+          return {
+            signLedgerTransaction: (tx: Transaction | ZcashTransaction) =>
+              bitcoinSigner.signTransactionHex({ tx: tx as Transaction }),
+            toolboxSigner: { getAddress: bitcoinSigner.getAddress, signTransaction: bitcoinSigner.signTransaction },
+          };
+        })
+        .with(Chain.BitcoinCash, Chain.Dogecoin, Chain.Dash, Chain.Litecoin, async () => {
+          const { createLegacyPsbtSigner, signLegacyPsbtTransaction } = await import("./clients/utxo-legacy-adapter");
+          const legacySigner = signer as LegacyUTXOLedgerClient;
+          return {
+            signLedgerTransaction: (tx: Transaction | ZcashTransaction) =>
+              signLegacyPsbtTransaction({ chain: utxoChain, legacyClient: legacySigner, tx: tx as Transaction }),
+            toolboxSigner: createLegacyPsbtSigner({ address, chain: utxoChain, legacyClient: legacySigner }),
+          };
+        })
+        .with(Chain.Zcash, () => {
+          const zcashSigner = signer as ZcashLedgerClient;
+          return {
+            signLedgerTransaction: async (transaction: Transaction | ZcashTransaction) => {
+              if (!("consensusBranchId" in transaction)) {
+                throw new SwapKitError("wallet_ledger_method_not_supported", {
+                  method: "signPCZT",
+                  wallet: WalletOption.LEDGER,
                 });
               }
 
-              return {
-                hash: txid,
-                index: input.index,
-                txHex,
-                value: Number(input.value),
-                witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
-              } as UTXOType;
-            }),
-          );
-          const signedTxHex = await zcashSigner.signTransaction({ inputUtxos, tx: transaction });
-          return toolbox.broadcastTx(signedTxHex);
-        };
-      }
+              const inputUtxos = await Promise.all(
+                Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
+                  const input = transaction.getInput(inputIndex);
+                  const txid = hex.encode(input.txid);
+                  const txHex = await getUtxoApi(Chain.Zcash).getRawTx(txid);
+                  if (!txHex) {
+                    throw new SwapKitError("wallet_ledger_invalid_params", {
+                      inputIndex,
+                      reason: "Unable to resolve previous transaction hex for Ledger signing",
+                      txid,
+                    });
+                  }
+
+                  return {
+                    hash: txid,
+                    index: input.index,
+                    txHex,
+                    value: Number(input.value),
+                    witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
+                  } as UTXOType;
+                }),
+              );
+              return zcashSigner.signTransaction({ inputUtxos, tx: transaction });
+            },
+            toolboxSigner: undefined,
+          };
+        })
+        .exhaustive();
 
       const toolbox = toolboxSigner
         ? await getUtxoToolbox(utxoChain, { signer: toolboxSigner })
         : getUtxoToolbox(utxoChain);
-      const signAndBroadcastTransaction = signAndBroadcastLedgerTransaction ?? toolbox.signAndBroadcastTransaction;
+      const signAndBroadcastTransaction = signLedgerTransaction
+        ? async (transaction: Transaction | ZcashTransaction) =>
+            toolbox.broadcastTx(await signLedgerTransaction(transaction))
+        : toolbox.signAndBroadcastTransaction;
 
       const transfer = async (params: UTXOBuildTxParams) => {
         const feeRate = params.feeRate || (await toolbox.getFeeRates())[FeeOption.Average];
