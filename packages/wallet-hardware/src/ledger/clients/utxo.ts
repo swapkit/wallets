@@ -1,27 +1,79 @@
+import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type BitcoinApp from "@ledgerhq/hw-app-btc";
 import type { CreateTransactionArg } from "@ledgerhq/hw-app-btc/lib-es/createTransaction";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
-import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
+import {
+  Chain,
+  type DerivationPathArray,
+  derivationPathToString,
+  getWalletFormatFor,
+  SwapKitError,
+} from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { PCZT, Transaction } from "@swapkit/utxo-signer";
 
-import { getLedgerTransport } from "../helpers/getLedgerTransport";
+import {
+  type LedgerJsClientParams,
+  normalizeLedgerJsClientParams,
+  runLedgerJsOperation,
+} from "../helpers/ledgerJsDmkBridge";
 
 const nonSegwitLedgerChains = ["bitcoin-cash", "dash", "dogecoin", "zcash"];
+
+type LedgerUTXOChain = "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
+type UTXOLedgerParams = LedgerJsClientParams<DerivationPathArray | string>;
+
+const ledgerAppNames: Record<LedgerUTXOChain, string> = {
+  bitcoin: "Bitcoin",
+  "bitcoin-cash": "Bitcoin Cash",
+  dash: "Dash",
+  dogecoin: "Dogecoin",
+  litecoin: "Litecoin",
+  zcash: "Zcash",
+};
 
 type Params = {
   tx: Transaction;
   inputUtxos: UTXOType[];
   btcApp: BitcoinApp;
   derivationPath: string;
-  chain: "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
+  chain: LedgerUTXOChain;
 };
 
 type MultiPathParams = Omit<Params, "derivationPath"> & {
   /** Derivation paths for each input - one per input */
   derivationPaths: string[];
 };
+
+export async function resolveZcashPreviousTransaction({
+  getRawTx,
+  input,
+  inputIndex,
+}: {
+  getRawTx: (txid: string) => Promise<string>;
+  input: { index: number; scriptPubkey: Uint8Array; txid: Uint8Array; value: bigint };
+  inputIndex: number;
+}) {
+  const txid = hex.encode(new Uint8Array([...input.txid].reverse()));
+  const txHex = await getRawTx(txid);
+  if (!txHex) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      chain: Chain.Zcash,
+      inputIndex,
+      reason: "Unable to resolve previous transaction hex for Ledger signing",
+      txid,
+    });
+  }
+
+  return {
+    hash: txid,
+    index: input.index,
+    txHex,
+    value: Number(input.value),
+    witnessUtxo: { script: input.scriptPubkey, value: Number(input.value) },
+  } as UTXOType;
+}
 
 const signUTXOTransaction = (
   { tx, inputUtxos, btcApp, derivationPath, chain }: Params,
@@ -110,52 +162,47 @@ const BaseLedgerUTXO = ({
   chain,
   additionalSignParams,
 }: {
-  chain: "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
+  chain: LedgerUTXOChain;
   additionalSignParams?: Partial<CreateTransactionArg>;
 }) => {
-  return (derivationPathArray?: DerivationPathArray | string, injectedTransport?: Transport) => {
-    // Per-call state — each BitcoinLedger/LitecoinLedger/... invocation has its own
-    // transport + btcApp so different consumers (e.g. concurrent MCP sessions) cannot
-    // cross-contaminate each other's Ledger device handle.
-    let btcApp: InstanceType<typeof BitcoinApp> | undefined;
-    let transport: any = null;
-
-    async function createTransportWebUSB() {
-      transport ||= injectedTransport ?? (await getLedgerTransport());
-      const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
-
-      btcApp ||= new BitcoinApp({ currency: chain, transport });
-      return btcApp;
-    }
-
-    async function getBtcApp() {
-      return btcApp || (await createTransportWebUSB());
-    }
-
-    async function disconnect() {
-      if (!injectedTransport) await transport?.close?.();
-      btcApp = undefined;
-      transport = null;
-    }
-
+  return (paramsOrPath?: UTXOLedgerParams | DerivationPathArray | string, transport?: Transport) => {
+    const { derivationPath: derivationPathParam, ...connection } = normalizeLedgerJsClientParams({
+      paramsOrPath,
+      transport,
+    });
     const derivationPath =
-      typeof derivationPathArray === "string"
-        ? derivationPathArray
-        : derivationPathToString(derivationPathArray as DerivationPathArray);
-
+      typeof derivationPathParam === "string"
+        ? derivationPathParam
+        : derivationPathToString(derivationPathParam as DerivationPathArray);
     const format = getWalletFormatFor(derivationPath);
+
+    async function runBtcOperation<Output>({
+      operation,
+      requiredUserInteraction,
+    }: {
+      operation: (app: InstanceType<typeof BitcoinApp>) => Promise<Output> | Output;
+      requiredUserInteraction?: UserInteractionRequired;
+    }) {
+      const BitcoinApp = (await import("@ledgerhq/hw-app-btc")).default;
+      return runLedgerJsOperation({
+        appName: ledgerAppNames[chain],
+        connection,
+        createApp: (ledgerTransport) => new BitcoinApp({ currency: chain, transport: ledgerTransport }),
+        operation,
+        requiredUserInteraction,
+      });
+    }
 
     return {
       connect: async () => {
-        await getBtcApp();
+        await runBtcOperation({ operation: async () => true });
       },
-      disconnect,
+      disconnect: async () => {},
       getAddress: async () => {
         const { toCashAddress } = await import("@swapkit/toolboxes/utxo");
-
-        const app = await getBtcApp();
-
-        const { bitcoinAddress: address } = await app.getWalletPublicKey(derivationPath, { format });
+        const { bitcoinAddress: address } = await runBtcOperation({
+          operation: (app) => app.getWalletPublicKey(derivationPath, { format }),
+        });
 
         if (!address) {
           throw new SwapKitError("wallet_ledger_get_address_error", {
@@ -168,9 +215,7 @@ const BaseLedgerUTXO = ({
           : address;
       },
       getExtendedPublicKey: async (path = "84'/0'/0'", xpubVersion = 76067358) => {
-        const app = await getBtcApp();
-
-        return app.getWalletXpub({ path, xpubVersion });
+        return await runBtcOperation({ operation: (app) => app.getWalletXpub({ path, xpubVersion }) });
       },
 
       signPCZT: async (pczt: PCZT): Promise<PCZT> => {
@@ -180,9 +225,8 @@ const BaseLedgerUTXO = ({
           });
         }
 
-        const app = await getBtcApp();
-
         const { ZcashTransaction, Script } = await import("@swapkit/utxo-signer");
+        const { getUtxoApi } = await import("@swapkit/toolboxes/utxo");
 
         const global = pczt.getGlobal();
 
@@ -207,13 +251,13 @@ const BaseLedgerUTXO = ({
             value: input.value,
           });
 
-          inputUtxos.push({
-            hash: hex.encode(new Uint8Array([...input.txid].reverse())),
-            index: input.index,
-            txHex: buildMinimalPrevTxHex(input, global),
-            value: Number(input.value),
-            witnessUtxo: { script: input.scriptPubkey, value: Number(input.value) },
-          } as UTXOType);
+          inputUtxos.push(
+            await resolveZcashPreviousTransaction({
+              getRawTx: (txid) => getUtxoApi(Chain.Zcash).getRawTx(txid),
+              input,
+              inputIndex: i,
+            }),
+          );
         }
 
         for (let i = 0; i < pczt.outputsLength; i++) {
@@ -221,18 +265,22 @@ const BaseLedgerUTXO = ({
           unsignedTx.addOutput({ amount: output.value, script: output.scriptPubkey });
         }
 
-        const signedTxHex = await signUTXOTransaction(
-          { btcApp: app, chain, derivationPath, inputUtxos, tx: unsignedTx as unknown as Transaction },
-          {
-            ...additionalSignParams,
-            expiryHeight: (() => {
-              const buf = Buffer.alloc(4);
-              buf.writeUInt32LE(global.expiryHeight);
-              return buf;
-            })(),
-            lockTime: global.lockTime,
-          },
-        );
+        const signedTxHex = await runBtcOperation({
+          operation: (app) =>
+            signUTXOTransaction(
+              { btcApp: app, chain, derivationPath, inputUtxos, tx: unsignedTx as unknown as Transaction },
+              {
+                ...additionalSignParams,
+                expiryHeight: (() => {
+                  const buf = Buffer.alloc(4);
+                  buf.writeUInt32LE(global.expiryHeight);
+                  return buf;
+                })(),
+                lockTime: global.lockTime,
+              },
+            ),
+          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+        });
 
         const signedTx = ZcashTransaction.fromHex(signedTxHex, { allowUnknownOutputs: true });
         const signedPczt = pczt.clone();
@@ -250,9 +298,11 @@ const BaseLedgerUTXO = ({
         return signedPczt;
       },
       signTransaction: async (tx: Transaction, inputUtxos: UTXOType[]) => {
-        const app = await getBtcApp();
-
-        return signUTXOTransaction({ btcApp: app, chain, derivationPath, inputUtxos, tx }, additionalSignParams);
+        return await runBtcOperation({
+          operation: (app) =>
+            signUTXOTransaction({ btcApp: app, chain, derivationPath, inputUtxos, tx }, additionalSignParams),
+          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+        });
       },
 
       /**
@@ -260,84 +310,18 @@ const BaseLedgerUTXO = ({
        * Each input can be signed with its own derivation path.
        */
       signTransactionWithMultiplePaths: async (tx: Transaction, inputUtxos: UTXOType[], derivationPaths: string[]) => {
-        const app = await getBtcApp();
-
-        return signUTXOTransactionWithMultiplePaths(
-          { btcApp: app, chain, derivationPaths, inputUtxos, tx },
-          additionalSignParams,
-        );
+        return await runBtcOperation({
+          operation: (app) =>
+            signUTXOTransactionWithMultiplePaths(
+              { btcApp: app, chain, derivationPaths, inputUtxos, tx },
+              additionalSignParams,
+            ),
+          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+        });
       },
     };
   };
 };
-
-function buildMinimalPrevTxHex(
-  input: { txid: Uint8Array; index: number; scriptPubkey: Uint8Array; value: bigint },
-  global: { txVersion: number; versionGroupId: number; expiryHeight: number; lockTime: number },
-): string {
-  const parts: number[] = [];
-
-  const version = (global.txVersion | 0x80000000) >>> 0;
-  parts.push(version & 0xff, (version >> 8) & 0xff, (version >> 16) & 0xff, (version >> 24) & 0xff);
-
-  const vgid = global.versionGroupId;
-  parts.push(vgid & 0xff, (vgid >> 8) & 0xff, (vgid >> 16) & 0xff, (vgid >> 24) & 0xff);
-
-  parts.push(0);
-
-  const outputCount = input.index + 1;
-  if (outputCount < 0xfd) {
-    parts.push(outputCount);
-  } else {
-    parts.push(0xfd, outputCount & 0xff, (outputCount >> 8) & 0xff);
-  }
-
-  for (let i = 0; i < input.index; i++) {
-    parts.push(0, 0, 0, 0, 0, 0, 0, 0);
-    parts.push(0);
-  }
-
-  const value = input.value;
-  parts.push(
-    Number(value & 0xffn),
-    Number((value >> 8n) & 0xffn),
-    Number((value >> 16n) & 0xffn),
-    Number((value >> 24n) & 0xffn),
-    Number((value >> 32n) & 0xffn),
-    Number((value >> 40n) & 0xffn),
-    Number((value >> 48n) & 0xffn),
-    Number((value >> 56n) & 0xffn),
-  );
-
-  const script = input.scriptPubkey;
-  if (script.length < 0xfd) {
-    parts.push(script.length);
-  } else {
-    parts.push(0xfd, script.length & 0xff, (script.length >> 8) & 0xff);
-  }
-  for (const byte of script) {
-    parts.push(byte);
-  }
-
-  parts.push(
-    global.lockTime & 0xff,
-    (global.lockTime >> 8) & 0xff,
-    (global.lockTime >> 16) & 0xff,
-    (global.lockTime >> 24) & 0xff,
-  );
-  parts.push(
-    global.expiryHeight & 0xff,
-    (global.expiryHeight >> 8) & 0xff,
-    (global.expiryHeight >> 16) & 0xff,
-    (global.expiryHeight >> 24) & 0xff,
-  );
-  parts.push(0, 0, 0, 0, 0, 0, 0, 0); // value balance
-  parts.push(0); // empty sapling spends
-  parts.push(0); // empty sapling outputs
-  parts.push(0); // empty joinsplits
-
-  return hex.encode(new Uint8Array(parts));
-}
 
 export const BitcoinLedger = BaseLedgerUTXO({ chain: "bitcoin" });
 export const LitecoinLedger = BaseLedgerUTXO({ chain: "litecoin" });

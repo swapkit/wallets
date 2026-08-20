@@ -1,11 +1,37 @@
 import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
+import { Secp256k1Signature } from "@cosmjs/crypto";
+import {
+  CallTaskInAppDeviceAction,
+  type DmkError,
+  DmkResultFactory,
+  isSuccessCommandResult,
+  UnknownDeviceExchangeError,
+  UserInteractionRequired,
+} from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
-import { type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
+import { type DerivationPathArray, NetworkDerivationPath, SKConfig, SwapKitError } from "@swapkit/helpers";
 
-import { CosmosLedgerInterface } from "../../interfaces/CosmosLedgerInterface";
-import type { GetAddressAndPubKeyResponse } from "../../types";
-import { getSignature } from "./utils";
+import type { LedgerDMKSession } from "../../helpers/dmk";
+import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../../helpers/executeDeviceAction";
+import {
+  getThorAddressCommand,
+  getThorLegacyVersion,
+  getThorSignCommands,
+  invalidThorAppVersion,
+  parseThorAddressResponse,
+  sendThorLegacyCommand,
+  type ThorCommand,
+} from "./protocol";
+
+const THOR_APP_NAME = "THORChain";
+
+interface THORChainLedgerParams {
+  derivationPath?: DerivationPathArray;
+  dmkSession?: LedgerDMKSession;
+  onDeviceActionState?: LedgerDeviceActionStateHandler;
+  transport?: Transport;
+}
 
 type ThorchainAssetObject = { chain?: string; symbol?: string; synth?: boolean; ticker?: string };
 
@@ -18,9 +44,7 @@ function getAminoAssetDenom(asset: string | ThorchainAssetObject) {
   const symbol = (asset.symbol || asset.ticker || "").toUpperCase();
 
   if (!(chain && symbol)) return symbol || chain || "";
-  if (asset.synth) return `${chain}/${symbol}`;
-
-  return `${chain}.${symbol}`;
+  return `${chain}${asset.synth ? "/" : "."}${symbol}`;
 }
 
 export function normalizeThorchainLedgerSignDoc(signDoc: StdSignDoc): StdSignDoc {
@@ -43,123 +67,181 @@ export function normalizeThorchainLedgerSignDoc(signDoc: StdSignDoc): StdSignDoc
   };
 }
 
-export class THORChainLedger extends CosmosLedgerInterface {
-  private pubKey: string | null = null;
+function getFixedSignature({ signature }: { signature: Uint8Array }) {
+  try {
+    return Secp256k1Signature.fromDer(signature).toFixedLength();
+  } catch (error) {
+    throw new SwapKitError("wallet_ledger_invalid_signature", error);
+  }
+}
 
-  derivationPath: DerivationPathArray;
+export class THORChainLedger {
+  readonly derivationPath: DerivationPathArray;
+  private readonly dmkSession?: LedgerDMKSession;
+  private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
+  private pubKey: Uint8Array | undefined;
+  private readonly transport?: Transport;
 
-  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.THOR, transport?: Transport) {
-    super(transport);
-    this.chain = "thor";
+  constructor({
+    derivationPath = NetworkDerivationPath.THOR,
+    dmkSession,
+    onDeviceActionState,
+    transport,
+  }: THORChainLedgerParams = {}) {
+    if (dmkSession && transport) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        message: "Provide either a Ledger DMK session or a LedgerJS transport, not both",
+      });
+    }
+
+    if (!(dmkSession || transport)) throw new SwapKitError("wallet_ledger_connection_error");
+
     this.derivationPath = derivationPath;
+    this.dmkSession = dmkSession;
+    this.onDeviceActionState = onDeviceActionState;
+    this.transport = transport;
   }
 
   get pubkey() {
-    return this.pubKey;
+    return this.pubKey ? base64.encode(this.pubKey) : null;
   }
 
+  private executeCommands = async ({
+    commands,
+    requiredUserInteraction,
+  }: {
+    commands: ThorCommand[];
+    requiredUserInteraction: UserInteractionRequired;
+  }) => {
+    if (this.transport) {
+      const version = await getThorLegacyVersion({ transport: this.transport });
+      if (!version.startsWith("2.")) throw invalidThorAppVersion({ version });
+
+      let response = new Uint8Array();
+      for (const command of commands) {
+        response = await sendThorLegacyCommand({ command, transport: this.transport });
+      }
+      return response;
+    }
+
+    const dmkSession = this.dmkSession;
+    if (!dmkSession) throw new SwapKitError("wallet_ledger_connection_error");
+
+    const deviceAction = new CallTaskInAppDeviceAction<{ response: Uint8Array }, DmkError, UserInteractionRequired>({
+      input: {
+        appName: THOR_APP_NAME,
+        requiredUserInteraction,
+        skipOpenApp: false,
+        task: async (internalApi) => {
+          try {
+            const sessionState = internalApi.getDeviceSessionState();
+            const version = "currentApp" in sessionState ? sessionState.currentApp.version : undefined;
+            if (!version?.startsWith("2.")) {
+              return DmkResultFactory<{ response: Uint8Array }, DmkError>({
+                error: invalidThorAppVersion({ version }),
+              });
+            }
+
+            let response: Uint8Array<ArrayBufferLike> = new Uint8Array();
+            for (const command of commands) {
+              const result = await internalApi.sendCommand(command);
+              if (!isSuccessCommandResult(result)) {
+                return DmkResultFactory<{ response: Uint8Array }, DmkError>({ error: result.error });
+              }
+              response = result.data;
+            }
+
+            return DmkResultFactory<{ response: Uint8Array }, DmkError>({ data: { response } });
+          } catch (error) {
+            return DmkResultFactory<{ response: Uint8Array }, DmkError>({
+              error: new UnknownDeviceExchangeError(error),
+            });
+          }
+        },
+      },
+    });
+
+    const result = await executeLedgerDeviceAction({
+      action: dmkSession.dmk.executeDeviceAction({ deviceAction, sessionId: dmkSession.sessionId }),
+      onDeviceActionState: this.onDeviceActionState,
+    });
+
+    return result.response;
+  };
+
+  private getAddressData = async ({ checkOnDevice }: { checkOnDevice: boolean }) => {
+    const { isStagenet } = SKConfig.get("envs");
+    const response = await this.executeCommands({
+      commands: [
+        getThorAddressCommand({ checkOnDevice, hrp: isStagenet ? "sthor" : "thor", path: this.derivationPath }),
+      ],
+      requiredUserInteraction: checkOnDevice ? UserInteractionRequired.VerifyAddress : UserInteractionRequired.None,
+    });
+
+    return parseThorAddressResponse({ response });
+  };
+
+  private signBytes = async ({ message }: { message: Uint8Array }) => {
+    const response = await this.executeCommands({
+      commands: getThorSignCommands({ message, path: this.derivationPath }),
+      requiredUserInteraction: UserInteractionRequired.SignTransaction,
+    });
+
+    return getFixedSignature({ signature: response });
+  };
+
   connect = async () => {
-    await this.checkOrCreateTransportAndLedger();
-    const { compressed_pk, bech32_address }: GetAddressAndPubKeyResponse = await this.getAddressAndPubKey();
-
-    this.pubKey = base64.encode(compressed_pk);
-
-    return bech32_address;
+    const { address, publicKey } = await this.getAddressData({ checkOnDevice: false });
+    this.pubKey = publicKey;
+    return address;
   };
 
   getAddressAndPubKey = async () => {
-    await this.checkOrCreateTransportAndLedger(true);
+    const { address, publicKey } = await this.getAddressData({ checkOnDevice: false });
+    this.pubKey = publicKey;
 
-    const response: GetAddressAndPubKeyResponse = await this.ledgerApp.getAddressAndPubKey(
-      this.derivationPath,
-      this.chain,
-    );
-
-    this.validateResponse(response.return_code, response.error_message);
-
-    return response;
+    return { bech32_address: address, compressed_pk: publicKey, error_message: "No errors", return_code: 0x9000 };
   };
 
   showAddressAndPubKey = async () => {
-    await this.checkOrCreateTransportAndLedger(true);
+    const { address, publicKey } = await this.getAddressData({ checkOnDevice: true });
+    this.pubKey = publicKey;
 
-    const response: GetAddressAndPubKeyResponse = await this.ledgerApp.showAddressAndPubKey(
-      this.derivationPath,
-      this.chain,
-    );
-
-    this.validateResponse(response.return_code, response.error_message);
-
-    return response;
+    return { bech32_address: address, compressed_pk: publicKey, error_message: "No errors", return_code: 0x9000 };
   };
 
-  signTransaction = async (rawTx: string, sequence = "0") => {
-    await this.checkOrCreateTransportAndLedger(true);
+  signTransaction = async ({ rawTx, sequence = "0" }: { rawTx: string; sequence?: string }) => {
+    if (!this.pubKey) await this.connect();
+    const pubKey = this.pubKey;
+    if (!pubKey) throw new SwapKitError("wallet_ledger_pubkey_not_found");
 
-    const { return_code, error_message, signature } = await this.ledgerApp.sign(this.derivationPath, rawTx);
-
-    if (!this.pubKey) throw new SwapKitError("wallet_ledger_pubkey_not_found");
-
-    this.validateResponse(return_code, error_message);
+    const signature = await this.signBytes({ message: new TextEncoder().encode(rawTx) });
 
     return [
       {
-        pub_key: { type: "tendermint/PubKeySecp256k1", value: this.pubKey },
+        pub_key: { type: "tendermint/PubKeySecp256k1", value: base64.encode(pubKey) },
         sequence,
-        signature: getSignature(signature),
+        signature: base64.encode(signature),
       },
     ];
   };
 
   signAmino = async (signerAddress: string, signDoc: StdSignDoc): Promise<AminoSignResponse> => {
-    await this.checkOrCreateTransportAndLedger(true);
+    const account = (await this.getAccounts()).find(({ address }) => address === signerAddress);
+    if (!account) throw new SwapKitError("wallet_ledger_address_not_found", { address: signerAddress });
 
-    const account = (await this.getAccounts()).find((item) => item.address === signerAddress);
-    if (!account) {
-      throw new SwapKitError("wallet_ledger_address_not_found", { address: signerAddress });
-    }
+    const { encodeSecp256k1Signature, serializeSignDoc } = await import("@cosmjs/amino");
 
-    const importedAmino = await import("@cosmjs/amino");
-    const encodeSecp256k1Signature =
-      importedAmino.encodeSecp256k1Signature ?? importedAmino.default?.encodeSecp256k1Signature;
-    const serializeSignDoc = importedAmino.serializeSignDoc ?? importedAmino.default?.serializeSignDoc;
-    const normalizedSignDoc = normalizeThorchainLedgerSignDoc(signDoc);
+    const signature = await this.signBytes({ message: serializeSignDoc(normalizeThorchainLedgerSignDoc(signDoc)) });
 
-    const { return_code, error_message, signature } = await this.ledgerApp.sign(
-      this.derivationPath,
-      serializeSignDoc(normalizedSignDoc),
-    );
-
-    this.validateResponse(return_code, error_message);
-
-    return {
-      signature: encodeSecp256k1Signature(account.pubkey, base64.decode(getSignature(signature))),
-      // CosmJS rebuilds bodyBytes from the returned `signed` doc. Keep the
-      // original direct-shaped doc there so MsgDeposit protobuf assets do not
-      // get round-tripped through the incomplete Amino converter.
-      signed: signDoc,
-    };
+    return { signature: encodeSecp256k1Signature(account.pubkey, signature), signed: signDoc };
   };
 
   getAccounts = async (): Promise<readonly AccountData[]> => {
-    await this.checkOrCreateTransportAndLedger(true);
-
-    const { bech32_address, compressed_pk }: GetAddressAndPubKeyResponse = await this.getAddressAndPubKey();
-
-    this.pubKey = base64.encode(compressed_pk);
-
-    return [{ address: bech32_address, algo: "secp256k1", pubkey: compressed_pk }];
+    const { address, publicKey } = await this.getAddressData({ checkOnDevice: false });
+    this.pubKey = publicKey;
+    return [{ address, algo: "secp256k1", pubkey: publicKey }];
   };
 
-  sign = async (message: string) => {
-    await this.checkOrCreateTransportAndLedger(true);
-
-    const { return_code, error_message, signature } = await this.ledgerApp.sign(this.derivationPath, message);
-
-    if (!this.pubKey) throw new SwapKitError("wallet_ledger_pubkey_not_found");
-
-    this.validateResponse(return_code, error_message);
-
-    return getSignature(signature);
-  };
+  sign = async (message: string) => base64.encode(await this.signBytes({ message: new TextEncoder().encode(message) }));
 }
