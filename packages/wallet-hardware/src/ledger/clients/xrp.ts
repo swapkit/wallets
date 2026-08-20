@@ -1,33 +1,50 @@
+import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import Xrp from "@ledgerhq/hw-app-xrp";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, type DerivationPathArray, derivationPathToString, NetworkDerivationPath } from "@swapkit/helpers";
 import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
 import { encode } from "ripple-binary-codec";
 import type { Payment } from "xrpl";
-import { getLedgerTransport } from "../helpers/getLedgerTransport";
+
+import {
+  type LedgerJsClientParams,
+  normalizeLedgerJsClientParams,
+  runLedgerJsOperation,
+} from "../helpers/ledgerJsDmkBridge";
 
 const TF_FULLY_CANONICAL_SIG = 2147483648;
+
+type XRPLedgerParams = LedgerJsClientParams<DerivationPathArray>;
 
 function cleanTransactionObject(obj: Record<string, any>) {
   const cleaned: Record<string, any> = {};
   for (const key in obj) {
-    if (obj[key] !== null && obj[key] !== undefined) {
-      cleaned[key] = obj[key];
-    }
+    if (obj[key] !== null && obj[key] !== undefined) cleaned[key] = obj[key];
   }
   return cleaned;
 }
 
-function establishConnection(transport: Transport) {
-  return new Xrp(transport);
-}
-
-export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTransport?: Transport) => {
+export async function XRPLedger(paramsOrPath?: XRPLedgerParams | DerivationPathArray, transport?: Transport) {
+  const { derivationPath, ...connection } = normalizeLedgerJsClientParams({ paramsOrPath, transport });
   const path = derivationPathToString(derivationPath || NetworkDerivationPath[Chain.Ripple]);
-  const transport = injectedTransport ?? (await getLedgerTransport());
-  const xrpInstance = establishConnection(transport);
 
-  const { address, publicKey } = await xrpInstance.getAddress(path);
+  function runXrpOperation<Output>({
+    operation,
+    requiredUserInteraction,
+  }: {
+    operation: (app: Xrp) => Promise<Output>;
+    requiredUserInteraction?: UserInteractionRequired;
+  }) {
+    return runLedgerJsOperation({
+      appName: "XRP",
+      connection,
+      createApp: (ledgerTransport) => new Xrp(ledgerTransport),
+      operation,
+      requiredUserInteraction,
+    });
+  }
+
+  const { address, publicKey } = await runXrpOperation({ operation: (app) => app.getAddress(path) });
 
   async function signTransaction(transaction: Payment | RippleTransaction) {
     const { hashes } = await import("xrpl");
@@ -39,7 +56,10 @@ export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTr
     };
 
     const transactionToSignOnLedger = encode(transactionJSON);
-    const txnSignature = await xrpInstance.signTransaction(path, transactionToSignOnLedger);
+    const txnSignature = await runXrpOperation({
+      operation: (app) => app.signTransaction(path, transactionToSignOnLedger),
+      requiredUserInteraction: UserInteractionRequired.SignTransaction,
+    });
     const tx_blob = encode({ ...transactionJSON, TxnSignature: txnSignature });
     const hash = hashes.hashSignedTx(tx_blob);
 
@@ -47,4 +67,4 @@ export const XRPLedger = async (derivationPath?: DerivationPathArray, injectedTr
   }
 
   return { getAddress: () => address, signTransaction };
-};
+}
