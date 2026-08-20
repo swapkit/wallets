@@ -1,4 +1,5 @@
 import type Transport from "@ledgerhq/hw-transport";
+import { hex } from "@scure/base";
 import {
   type AssetValue,
   Chain,
@@ -27,34 +28,61 @@ import {
   getUtxoApi,
   type UTXOBuildTxParams,
   type UTXOForMultiAddressTransfer,
+  type UTXOType,
 } from "@swapkit/toolboxes/utxo";
-import type { Transaction } from "@swapkit/utxo-signer";
+import type { Transaction, ZcashTransaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
-import { getLedgerAddress, getLedgerClient } from "./helpers";
+import {
+  getLedgerAddress,
+  getLedgerClient,
+  type LedgerDeviceActionStateHandler,
+  type LedgerDMKSession,
+} from "./helpers";
+
+type BitcoinLedgerClient = ReturnType<typeof import("./clients/bitcoin")["BitcoinLedger"]>;
+type LegacyUTXOLedgerClient = ReturnType<typeof import("./clients/utxo")["BitcoinCashLedger"]>;
+type ZcashLedgerClient = ReturnType<typeof import("./clients/zcash")["ZcashLedger"]>;
 
 /**
  * Options passed to `connectLedger` at call time.
  *
- * When `transport` is supplied, the consumer opens and owns its lifecycle —
- * wallet-hardware will use that exact instance for every per-chain Ledger
- * client and will NOT recreate it on `forceReconnect`. When omitted, the
- * default browser flow (WebHID / WebUSB via `navigator.usb`) is used.
+ * When `dmkSession` is omitted, the default browser WebHID flow discovers a
+ * device and reuses one session across chains. Lazy-loaded apps can call
+ * `preloadLedgerDMK` before the user gesture that starts connection.
  */
-export type ConnectLedgerOptions = { address?: string; transport?: Transport };
+export interface ConnectLedgerOptions {
+  address?: string;
+  /** Caller-owned DMK session used by every supported chain. */
+  dmkSession?: LedgerDMKSession;
+  /** Receives DMK progress and device-interaction states. */
+  onDeviceActionState?: LedgerDeviceActionStateHandler;
+  /** Ledger-provided token required for Transaction Checks. */
+  originToken?: string;
+  /** @deprecated Temporary non-EVM fallback. Cannot be combined with `dmkSession`. */
+  transport?: Transport;
+}
 
 export const ledgerWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectLedger(
       chains: Chain[],
       derivationPath?: DerivationPathArray,
-      { address, transport }: ConnectLedgerOptions = {},
+      { address, dmkSession, onDeviceActionState, originToken, transport }: ConnectLedgerOptions = {},
     ) {
       const [chain] = filterSupportedChains({ chains, supportedChains, walletType });
 
       if (!chain) return false;
 
       const resolvedPath = derivationPath ?? (NetworkDerivationPath[chain] as DerivationPathArray | undefined);
-      const walletMethods = await getWalletMethods({ address, chain, derivationPath: resolvedPath, transport });
+      const walletMethods = await getWalletMethods({
+        address,
+        chain,
+        derivationPath: resolvedPath,
+        dmkSession,
+        onDeviceActionState,
+        originToken,
+        transport,
+      });
 
       addChain({ ...walletMethods, chain, walletType: WalletOption.LEDGER });
 
@@ -85,7 +113,7 @@ export const ledgerWallet = createWallet({
     [Chain.THORChain]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
-    // ZEC: still on bespoke signPCZT path
+    // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
   },
   getExtendedPublicKey: getLedgerExtendedPublicKey,
   name: "connectLedger",
@@ -133,14 +161,30 @@ function reduceMemo(memo?: string, affiliateAddress = "t") {
 export async function getLedgerExtendedPublicKey(
   chain: Chain,
   derivationPath?: DerivationPathArray,
-  { accountIndex }: { accountIndex?: number } = {},
+  {
+    accountIndex,
+    dmkSession,
+    onDeviceActionState,
+    transport,
+  }: {
+    accountIndex?: number;
+    dmkSession?: LedgerDMKSession;
+    onDeviceActionState?: LedgerDeviceActionStateHandler;
+    transport?: Transport;
+  } = {},
 ): Promise<HardwareExtendedPublicKeyInfo | undefined> {
   if (![Chain.BitcoinCash, Chain.Bitcoin, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash].includes(chain)) {
     throw new SwapKitError("wallet_chain_not_supported", { chain, wallet: WalletOption.LEDGER });
   }
 
   const utxoChain = chain as UTXOChain;
-  const signer = await getLedgerClient({ chain: utxoChain, derivationPath });
+  const signer = await getLedgerClient({
+    chain: utxoChain,
+    derivationPath,
+    dmkSession,
+    onDeviceActionState,
+    transport,
+  });
   if (!signer.getExtendedPublicKey) return undefined;
 
   const accountPath = getUTXOAccountPath({ accountIndex, chain: utxoChain, derivationPath });
@@ -148,7 +192,12 @@ export async function getLedgerExtendedPublicKey(
   const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
   const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
   try {
-    const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
+    const xpub =
+      chain === Chain.Bitcoin
+        ? await (signer as BitcoinLedgerClient).getExtendedPublicKey({ path: ledgerPath })
+        : chain === Chain.Zcash
+          ? await (signer as ZcashLedgerClient).getExtendedPublicKey({ path: ledgerPath, xpubVersion })
+          : await (signer as LegacyUTXOLedgerClient).getExtendedPublicKey(ledgerPath, xpubVersion);
     return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
   } finally {
     await (signer as { disconnect?: () => Promise<void> }).disconnect?.();
@@ -158,7 +207,10 @@ export async function getLedgerExtendedPublicKey(
 async function getWalletMethods({
   address: providedAddress,
   chain,
+  dmkSession,
   derivationPath,
+  onDeviceActionState,
+  originToken,
   transport,
 }: ConnectLedgerOptions & { chain: Chain; derivationPath?: DerivationPathArray }) {
   switch (chain) {
@@ -171,18 +223,11 @@ async function getWalletMethods({
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const utxoChain = chain as UTXOChain;
 
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
 
       const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
       const scriptType = getScriptTypeForAddress(address, utxoChain);
 
-      // V3 toolbox signer:
-      //  - BTC uses the modern `ledger-bitcoin` AppClient with native PSBT signing.
-      //  - LTC/BCH/DOGE/DASH use the legacy `hw-app-btc` adapter that pulls
-      //    `nonWitnessUtxo` (full prev-tx hex) out of the API PSBT.
-      //    The Litecoin Ledger app does not support the `ledger-bitcoin`
-      //    policy APDUs and returns CLA_NOT_SUPPORTED.
-      //  - ZEC stays on the bespoke `signPCZT` flow for now.
       let toolboxSigner:
         | {
             getAddress: () => Promise<string>;
@@ -190,13 +235,14 @@ async function getWalletMethods({
             signTransaction: (tx: Transaction) => Promise<Transaction>;
           }
         | undefined;
-      let publicKey: Uint8Array | undefined;
-      let signAndBroadcastLegacyPsbtTransaction: ((tx: Transaction) => Promise<string>) | undefined;
+      let signAndBroadcastLedgerTransaction: ((tx: Transaction | ZcashTransaction) => Promise<string>) | undefined;
       if (chain === Chain.Bitcoin) {
-        const { BitcoinPsbtLedger } = await import("./clients/utxo-psbt");
-        const psbtClient = BitcoinPsbtLedger(derivationPath, transport);
-        publicKey = scriptType === UTXOScriptType.P2SH_P2WPKH ? await psbtClient.getPublicKey() : undefined;
-        toolboxSigner = { getAddress: psbtClient.getAddress, publicKey, signTransaction: psbtClient.signTransaction };
+        const bitcoinSigner = signer as BitcoinLedgerClient;
+        toolboxSigner = { getAddress: bitcoinSigner.getAddress, signTransaction: bitcoinSigner.signTransaction };
+        signAndBroadcastLedgerTransaction = async (tx) => {
+          const signedTxHex = await bitcoinSigner.signTransactionHex({ tx: tx as Transaction });
+          return toolbox.broadcastTx(signedTxHex);
+        };
       } else if (
         chain === Chain.BitcoinCash ||
         chain === Chain.Dogecoin ||
@@ -204,17 +250,57 @@ async function getWalletMethods({
         chain === Chain.Litecoin
       ) {
         const { createLegacyPsbtSigner, signLegacyPsbtTransaction } = await import("./clients/utxo-legacy-adapter");
-        toolboxSigner = createLegacyPsbtSigner({ address, chain: utxoChain, legacyClient: signer });
-        signAndBroadcastLegacyPsbtTransaction = async (tx) => {
-          const signedTxHex = await signLegacyPsbtTransaction({ chain: utxoChain, legacyClient: signer, tx });
+        const legacySigner = signer as LegacyUTXOLedgerClient;
+        toolboxSigner = createLegacyPsbtSigner({ address, chain: utxoChain, legacyClient: legacySigner });
+        signAndBroadcastLedgerTransaction = async (tx) => {
+          const signedTxHex = await signLegacyPsbtTransaction({
+            chain: utxoChain,
+            legacyClient: legacySigner,
+            tx: tx as Transaction,
+          });
+          return toolbox.broadcastTx(signedTxHex);
+        };
+      } else if (chain === Chain.Zcash) {
+        const zcashSigner = signer as ZcashLedgerClient;
+        signAndBroadcastLedgerTransaction = async (transaction) => {
+          if (!("consensusBranchId" in transaction)) {
+            throw new SwapKitError("wallet_ledger_method_not_supported", {
+              method: "signPCZT",
+              wallet: WalletOption.LEDGER,
+            });
+          }
+
+          const inputUtxos = await Promise.all(
+            Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
+              const input = transaction.getInput(inputIndex);
+              const txid = hex.encode(input.txid);
+              const txHex = await getUtxoApi(Chain.Zcash).getRawTx(txid);
+              if (!txHex) {
+                throw new SwapKitError("wallet_ledger_invalid_params", {
+                  inputIndex,
+                  reason: "Unable to resolve previous transaction hex for Ledger signing",
+                  txid,
+                });
+              }
+
+              return {
+                hash: txid,
+                index: input.index,
+                txHex,
+                value: Number(input.value),
+                witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
+              } as UTXOType;
+            }),
+          );
+          const signedTxHex = await zcashSigner.signTransaction({ inputUtxos, tx: transaction });
           return toolbox.broadcastTx(signedTxHex);
         };
       }
 
       const toolbox = toolboxSigner
-        ? await getUtxoToolbox(utxoChain, { scriptType, signer: toolboxSigner })
-        : getUtxoToolbox(utxoChain, { scriptType });
-      const signAndBroadcastTransaction = signAndBroadcastLegacyPsbtTransaction ?? toolbox.signAndBroadcastTransaction;
+        ? await getUtxoToolbox(utxoChain, { signer: toolboxSigner })
+        : getUtxoToolbox(utxoChain);
+      const signAndBroadcastTransaction = signAndBroadcastLedgerTransaction ?? toolbox.signAndBroadcastTransaction;
 
       const transfer = async (params: UTXOBuildTxParams) => {
         const feeRate = params.feeRate || (await toolbox.getFeeRates())[FeeOption.Average];
@@ -229,9 +315,12 @@ async function getWalletMethods({
           sender: address,
         });
 
-        // Legacy Ledger UTXO signing returns finalized raw tx hex, so transfer
-        // broadcasts directly instead of routing through toolbox finalization.
-        const txHex = await signer.signTransaction(tx as Transaction, inputs);
+        const txHex =
+          chain === Chain.Bitcoin
+            ? await (signer as BitcoinLedgerClient).signTransactionHex({ inputUtxos: inputs, tx: tx as Transaction })
+            : chain === Chain.Zcash
+              ? await (signer as ZcashLedgerClient).signTransaction({ inputUtxos: inputs, tx: tx as ZcashTransaction })
+              : await (signer as LegacyUTXOLedgerClient).signTransaction(tx as Transaction, inputs);
         const txHash = await toolbox.broadcastTx(txHex);
 
         return txHash;
@@ -244,7 +333,12 @@ async function getWalletMethods({
         const path = derivationPathToString(accountPath);
         const ledgerPath = chain === Chain.Bitcoin || chain === Chain.Litecoin ? path : path.replace(/^m\//, "");
         const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
-        const xpub = await signer.getExtendedPublicKey(ledgerPath, xpubVersion);
+        const xpub =
+          chain === Chain.Bitcoin
+            ? await (signer as BitcoinLedgerClient).getExtendedPublicKey({ path: ledgerPath })
+            : chain === Chain.Zcash
+              ? await (signer as ZcashLedgerClient).getExtendedPublicKey({ path: ledgerPath, xpubVersion })
+              : await (signer as LegacyUTXOLedgerClient).getExtendedPublicKey(ledgerPath, xpubVersion);
 
         return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
       }
@@ -265,7 +359,13 @@ async function getWalletMethods({
         try {
           const fullPath = getUTXOAddressPath({ accountIndex, chain: utxoChain, change, derivationPath, index });
 
-          const indexedSigner = await getLedgerClient({ chain: utxoChain, derivationPath: fullPath, transport });
+          const indexedSigner = await getLedgerClient({
+            chain: utxoChain,
+            derivationPath: fullPath,
+            dmkSession,
+            onDeviceActionState,
+            transport,
+          });
           const derivedAddress = await getLedgerAddress({ chain: utxoChain, ledgerClient: indexedSigner });
 
           return {
@@ -328,6 +428,13 @@ async function getWalletMethods({
         feeOptionKey?: FeeOption;
         changeAddress?: string;
       }) {
+        if (chain === Chain.Zcash) {
+          throw new SwapKitError("wallet_ledger_method_not_supported", {
+            method: "transferFromMultipleAddresses",
+            wallet: WalletOption.LEDGER,
+          });
+        }
+
         if (!utxos.length) {
           throw new SwapKitError("wallet_ledger_invalid_params", {
             message: "No UTXOs provided for multi-address transfer",
@@ -391,7 +498,18 @@ async function getWalletMethods({
           throw new SwapKitError("wallet_ledger_method_not_supported", { method: "signTransactionWithMultiplePaths" });
         }
 
-        const txHex = await signer.signTransactionWithMultiplePaths(tx, selectedInputs, inputDerivationPaths);
+        const txHex =
+          chain === Chain.Bitcoin
+            ? await (signer as BitcoinLedgerClient).signTransactionWithMultiplePaths({
+                derivationPaths: inputDerivationPaths,
+                inputUtxos: selectedInputs,
+                tx,
+              })
+            : await (signer as LegacyUTXOLedgerClient).signTransactionWithMultiplePaths(
+                tx,
+                selectedInputs,
+                inputDerivationPaths,
+              );
         return toolbox.broadcastTx(txHex);
       }
 
@@ -422,8 +540,15 @@ async function getWalletMethods({
     case Chain.Gnosis:
     case Chain.Monad:
     case Chain.XLayer: {
+      const signer = await getLedgerClient({
+        chain,
+        derivationPath,
+        dmkSession,
+        onDeviceActionState,
+        originToken,
+        transport,
+      });
       const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
       const toolbox = await getEvmToolboxAsync(chain, { signer });
 
@@ -434,7 +559,7 @@ async function getWalletMethods({
       const { createSigningStargateClient, getDefaultChainFee, getMsgSendDenom, getCosmosToolbox } = await import(
         "@swapkit/toolboxes/cosmos"
       );
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
       const toolbox = await getCosmosToolbox(Chain.Cosmos, { signer });
 
@@ -469,7 +594,7 @@ async function getWalletMethods({
     }
 
     case Chain.THORChain: {
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
       const toolbox = getCosmosToolbox(chain, { signer });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
@@ -480,7 +605,7 @@ async function getWalletMethods({
 
     case Chain.Near: {
       const { getNearToolbox } = await import("@swapkit/toolboxes/near");
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const accountId = await signer.getAddress();
       const toolbox = getNearToolbox({ signer });
 
@@ -489,7 +614,7 @@ async function getWalletMethods({
 
     case Chain.Ripple: {
       const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const address = signer.getAddress();
       const toolbox = getRippleToolbox({ signer });
 
@@ -498,7 +623,7 @@ async function getWalletMethods({
 
     case Chain.Tron: {
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
       const toolbox = getTronToolbox({ signer });
 
@@ -507,7 +632,7 @@ async function getWalletMethods({
 
     case Chain.Sui: {
       const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");
-      const signer = await getLedgerClient({ chain, derivationPath, transport });
+      const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
       const address = await getLedgerAddress({ chain, ledgerClient: signer });
       const toolbox = getSuiToolbox({ signer });
 
@@ -518,3 +643,6 @@ async function getWalletMethods({
       throw new SwapKitError("wallet_ledger_chain_not_supported", { chain });
   }
 }
+
+export type { LedgerDeviceActionState, LedgerDeviceActionStateHandler, LedgerDMKSession } from "./helpers";
+export { disconnectLedgerDMKSession, getLedgerDMKSession, preloadLedgerDMK } from "./helpers";

@@ -1,85 +1,182 @@
+import { encodeSecp256k1Signature, type StdSignDoc, serializeSignDoc } from "@cosmjs/amino";
+import { Secp256k1Signature } from "@cosmjs/crypto";
+import type { SignerCosmos } from "@ledgerhq/device-signer-kit-cosmos";
 import type Transport from "@ledgerhq/hw-transport";
+import { hex } from "@scure/base";
 import {
   type DerivationPathArray,
   derivationPathToString,
   NetworkDerivationPath,
   SwapKitError,
 } from "@swapkit/helpers";
-import { CosmosLedgerInterface } from "../interfaces/CosmosLedgerInterface";
 
-export class CosmosLedger extends CosmosLedgerInterface {
-  private pubKey: string | null = null;
+import type { LedgerDMKSession } from "../helpers/dmk";
+import { getLedgerDMKSession } from "../helpers/dmk";
+import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 
-  derivationPath: string;
+interface CosmosLedgerParams {
+  derivationPath?: DerivationPathArray | string;
+  dmkSession?: LedgerDMKSession;
+  onDeviceActionState?: LedgerDeviceActionStateHandler;
+  transport?: Transport;
+}
 
-  constructor(derivationPath: DerivationPathArray = NetworkDerivationPath.GAIA, transport?: Transport) {
-    super(transport);
-    this.chain = "cosmos";
-    this.derivationPath = derivationPathToString(derivationPath);
+interface CosmosAddressAndPublicKey {
+  address: string;
+  publicKey: string;
+}
+
+function normalizeCosmosPath(path: DerivationPathArray | string) {
+  const normalized = (typeof path === "string" ? path : derivationPathToString(path))
+    .replace(/^m\//, "")
+    .replace(/^\/+/, "");
+
+  if (!/^44'\/118'\/\d+'\/(0|1)\/\d+$/.test(normalized)) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      path: normalized,
+      reason: "Expected a five-level Cosmos derivation path with coin type 118",
+    });
   }
 
-  connect = async () => {
-    await this.checkOrCreateTransportAndLedger(true);
-    const { publicKey, address } = await this.getAddressAndPubKey();
+  return normalized;
+}
 
+function normalizeCosmosSignature(signature: Uint8Array) {
+  try {
+    return signature.length === 64
+      ? Secp256k1Signature.fromFixedLength(signature).toFixedLength()
+      : Secp256k1Signature.fromDer(signature).toFixedLength();
+  } catch (error) {
+    throw new SwapKitError("wallet_ledger_invalid_response", error);
+  }
+}
+
+export class CosmosLedger {
+  readonly chain = "cosmos";
+  readonly derivationPath: string;
+  private readonly dmkSession?: LedgerDMKSession;
+  private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
+  private readonly transport?: Transport;
+  private legacyAppPromise?: Promise<import("@ledgerhq/hw-app-cosmos").default>;
+  private pubKey: string | null = null;
+  private signerPromise?: Promise<SignerCosmos>;
+
+  constructor({
+    derivationPath = NetworkDerivationPath.GAIA,
+    dmkSession,
+    onDeviceActionState,
+    transport,
+  }: CosmosLedgerParams = {}) {
+    this.derivationPath = normalizeCosmosPath(derivationPath);
+    this.dmkSession = dmkSession;
+    this.onDeviceActionState = onDeviceActionState;
+    this.transport = transport;
+  }
+
+  private getSigner() {
+    if (this.transport) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        reason: "A Device Signer Kit operation is unavailable when a legacy transport is supplied",
+      });
+    }
+
+    this.signerPromise ??= (async () => {
+      const session = this.dmkSession ?? (await getLedgerDMKSession());
+      const { SignerCosmosBuilder } = await import("@ledgerhq/device-signer-kit-cosmos");
+      return new SignerCosmosBuilder(session).build();
+    })();
+    return this.signerPromise;
+  }
+
+  private getLegacyApp() {
+    if (!this.transport) {
+      throw new SwapKitError("wallet_ledger_invalid_params", { reason: "Legacy Cosmos transport is unavailable" });
+    }
+
+    this.legacyAppPromise ??= import("@ledgerhq/hw-app-cosmos").then(
+      ({ default: CosmosApp }) => new CosmosApp(this.transport as Transport),
+    );
+    return this.legacyAppPromise;
+  }
+
+  private async signBytes(message: Uint8Array) {
+    if (this.transport) {
+      const app = await this.getLegacyApp();
+      const response = await app.sign(this.derivationPath, new TextDecoder().decode(message));
+      if (response.return_code !== 0x9000 || !response.signature) {
+        throw new SwapKitError("wallet_ledger_invalid_response", { returnCode: response.return_code });
+      }
+      return normalizeCosmosSignature(response.signature);
+    }
+
+    const signer = await this.getSigner();
+    const signature = await executeLedgerDeviceAction({
+      action: signer.signTransaction(this.derivationPath, this.chain, message),
+      onDeviceActionState: this.onDeviceActionState,
+    });
+    return normalizeCosmosSignature(signature);
+  }
+
+  async connect() {
+    if (this.transport) await this.getLegacyApp();
+    else await this.getSigner();
+
+    const { address, publicKey } = await this.getAddressAndPubKey();
     this.pubKey = Buffer.from(publicKey, "hex").toString("base64");
-
     return address;
-  };
+  }
 
-  getAddressAndPubKey = async () => {
-    await this.checkOrCreateTransportAndLedger(true);
+  async disconnect() {}
 
-    const response = await this.ledgerApp.getAddress(this.derivationPath, this.chain);
+  async getAddressAndPubKey(): Promise<CosmosAddressAndPublicKey> {
+    if (this.transport) {
+      return this.getLegacyApp().then((app) => app.getAddress(this.derivationPath, this.chain));
+    }
 
-    return response;
-  };
+    const signer = await this.getSigner();
+    const { address, publicKey } = await executeLedgerDeviceAction({
+      action: signer.getAddress(this.derivationPath, this.chain),
+      onDeviceActionState: this.onDeviceActionState,
+    });
+    return { address, publicKey: hex.encode(publicKey) };
+  }
 
-  signTransaction = async (rawTx: string, sequence = "0") => {
-    await this.checkOrCreateTransportAndLedger(true);
+  async showAddressAndPubKey(): Promise<CosmosAddressAndPublicKey> {
+    if (this.transport) {
+      return this.getLegacyApp().then((app) => app.getAddress(this.derivationPath, this.chain, true));
+    }
 
-    const { return_code, error_message, signature } = await this.ledgerApp.sign(this.derivationPath, rawTx);
+    const signer = await this.getSigner();
+    const { address, publicKey } = await executeLedgerDeviceAction({
+      action: signer.getAddress(this.derivationPath, this.chain, { checkOnDevice: true }),
+      onDeviceActionState: this.onDeviceActionState,
+    });
+    return { address, publicKey: hex.encode(publicKey) };
+  }
 
-    if (!this.pubKey) throw new SwapKitError("wallet_ledger_pubkey_not_found");
-
-    this.validateResponse(return_code, error_message);
+  async signTransaction(rawTx: string | Uint8Array, sequence = "0") {
+    const signature = await this.signBytes(typeof rawTx === "string" ? new TextEncoder().encode(rawTx) : rawTx);
+    if (!this.pubKey) {
+      const { publicKey } = await this.getAddressAndPubKey();
+      this.pubKey = Buffer.from(publicKey, "hex").toString("base64");
+    }
 
     return [{ pub_key: { type: "tendermint/PubKeySecp256k1", value: this.pubKey }, sequence, signature }];
-  };
+  }
 
-  signAmino = async (signerAddress: string, signDoc: any): Promise<any> => {
-    await this.checkOrCreateTransportAndLedger(true);
-
+  async signAmino(signerAddress: string, signDoc: StdSignDoc) {
     const accounts = await this.getAccounts();
-    const accountIndex = accounts.findIndex((account) => account.address === signerAddress);
-
-    if (accountIndex === -1) {
+    const account = accounts.find(({ address }) => address === signerAddress);
+    if (!account) {
       throw new SwapKitError("wallet_ledger_address_not_found", { address: signerAddress });
     }
 
-    const importedAmino = await import("@cosmjs/amino");
-    const encodeSecp256k1Signature =
-      importedAmino.encodeSecp256k1Signature ?? importedAmino.default?.encodeSecp256k1Signature;
-    const serializeSignDoc = importedAmino.serializeSignDoc ?? importedAmino.default?.serializeSignDoc;
-    const importedCrypto = await import("@cosmjs/crypto");
-    const Secp256k1Signature = importedCrypto.Secp256k1Signature ?? importedCrypto.default?.Secp256k1Signature;
+    const signature = await this.signBytes(serializeSignDoc(signDoc));
+    return { signature: encodeSecp256k1Signature(account.pubkey, signature), signed: signDoc };
+  }
 
-    const message = serializeSignDoc(signDoc);
-    const signature = await this.ledgerApp.sign(this.derivationPath, message);
-
-    this.validateResponse(signature.return_code, signature.error_message);
-
-    const secpSignature = Secp256k1Signature.fromDer(signature.signature).toFixedLength();
-
-    return { signature: encodeSecp256k1Signature(accounts[0].pubkey, secpSignature), signed: signDoc };
-  };
-
-  getAccounts = async () => {
-    await this.checkOrCreateTransportAndLedger(true);
-
-    const addressAndPubKey = await this.getAddressAndPubKey();
-    return [
-      { address: addressAndPubKey.address, algo: "secp256k1", pubkey: Buffer.from(addressAndPubKey.publicKey, "hex") },
-    ] as any[];
-  };
+  async getAccounts() {
+    const { address, publicKey } = await this.getAddressAndPubKey();
+    return [{ address, algo: "secp256k1" as const, pubkey: hex.decode(publicKey) }];
+  }
 }
