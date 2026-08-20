@@ -17,6 +17,8 @@ import type { LedgerDMKSession } from "./dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "./executeDeviceAction";
 
 const STATUS_CODE_LENGTH = 2;
+const TransportBase =
+  typeof Transport === "function" ? Transport : (Transport as unknown as { default: typeof Transport }).default;
 
 interface RawApduResponse {
   response: Uint8Array;
@@ -67,7 +69,7 @@ function parseShortApdu(apdu: Buffer) {
   return new Apdu(cla, ins, p1, p2, apdu.subarray(5));
 }
 
-export class LedgerJsDmkTransport extends Transport {
+export class LedgerJsDmkTransport extends TransportBase {
   constructor(private readonly internalApi: InternalApi) {
     super();
   }
