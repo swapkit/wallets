@@ -37,6 +37,7 @@ import {
   type LedgerDeviceActionStateHandler,
   type LedgerDMKSession,
 } from "./helpers";
+import { createCachedRawTxResolver } from "./helpers/rawTx";
 
 type BitcoinLedgerClient = ReturnType<typeof import("./clients/bitcoin")["BitcoinLedger"]>;
 type LegacyUTXOLedgerClient = ReturnType<typeof import("./clients/utxo")["BitcoinCashLedger"]>;
@@ -222,6 +223,34 @@ function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccoun
     .exhaustive();
 }
 
+function resolveZcashInputUtxos(transaction: ZcashTransaction) {
+  const zcashApi = getUtxoApi(Chain.Zcash);
+  const getRawTx = createCachedRawTxResolver((txid) => zcashApi.getRawTx(txid));
+
+  return Promise.all(
+    Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
+      const input = transaction.getInput(inputIndex);
+      const txid = hex.encode(input.txid);
+      const txHex = await getRawTx(txid);
+      if (!txHex) {
+        throw new SwapKitError("wallet_ledger_invalid_params", {
+          inputIndex,
+          reason: "Unable to resolve previous transaction hex for Ledger signing",
+          txid,
+        });
+      }
+
+      return {
+        hash: txid,
+        index: input.index,
+        txHex,
+        value: Number(input.value),
+        witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
+      } as UTXOType;
+    }),
+  );
+}
+
 export async function getLedgerExtendedPublicKey(
   chain: Chain,
   derivationPath?: DerivationPathArray,
@@ -311,30 +340,7 @@ async function getUTXOWalletMethods({
             });
           }
 
-          const resolvedInputUtxos =
-            inputUtxos ??
-            (await Promise.all(
-              Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
-                const input = transaction.getInput(inputIndex);
-                const txid = hex.encode(input.txid);
-                const txHex = await getUtxoApi(Chain.Zcash).getRawTx(txid);
-                if (!txHex) {
-                  throw new SwapKitError("wallet_ledger_invalid_params", {
-                    inputIndex,
-                    reason: "Unable to resolve previous transaction hex for Ledger signing",
-                    txid,
-                  });
-                }
-
-                return {
-                  hash: txid,
-                  index: input.index,
-                  txHex,
-                  value: Number(input.value),
-                  witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
-                } as UTXOType;
-              }),
-            ));
+          const resolvedInputUtxos = inputUtxos ?? (await resolveZcashInputUtxos(transaction));
           return zcashSigner.signTransaction({ inputUtxos: resolvedInputUtxos, tx: transaction });
         },
         toolboxSigner: undefined,
