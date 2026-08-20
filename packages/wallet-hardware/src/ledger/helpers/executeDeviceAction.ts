@@ -1,9 +1,11 @@
-import type {
-  DeviceActionIntermediateValue,
-  DeviceActionState,
-  ExecuteDeviceActionReturnType,
+import {
+  type DeviceActionIntermediateValue,
+  type DeviceActionState,
+  DeviceActionStatus,
+  type ExecuteDeviceActionReturnType,
 } from "@ledgerhq/device-management-kit";
 import { SwapKitError } from "@swapkit/helpers";
+import { match } from "ts-pattern";
 
 export type LedgerDeviceActionState = DeviceActionState<unknown, unknown, DeviceActionIntermediateValue>;
 export type LedgerDeviceActionStateHandler = (state: LedgerDeviceActionState) => void;
@@ -44,13 +46,13 @@ export function executeLedgerDeviceAction<
           void error;
         }
 
-        if (state.status === "completed") {
-          settle(() => resolve(state.output));
-        } else if (state.status === "error") {
-          settle(() => reject(state.error));
-        } else if (state.status === "stopped") {
-          settle(() => reject(new SwapKitError("wallet_ledger_connection_error")));
-        }
+        match(state)
+          .with({ status: DeviceActionStatus.Completed }, ({ output }) => settle(() => resolve(output)))
+          .with({ status: DeviceActionStatus.Error }, ({ error }) => settle(() => reject(error)))
+          .with({ status: DeviceActionStatus.Stopped }, () =>
+            settle(() => reject(new SwapKitError("wallet_ledger_connection_error"))),
+          )
+          .otherwise(() => undefined);
       },
     });
 
