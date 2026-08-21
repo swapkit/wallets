@@ -1,5 +1,4 @@
-import type EthereumApp from "@ledgerhq/hw-app-eth";
-import type Transport from "@ledgerhq/hw-transport";
+import type { TypedDataDomain as LedgerTypedDataDomain, SignerEth } from "@ledgerhq/device-signer-kit-ethereum";
 import {
   ChainId,
   type DerivationPathArray,
@@ -10,99 +9,137 @@ import {
 import {
   AbstractSigner,
   type Provider,
+  type TransactionLike,
   type TransactionRequest,
   type TypedDataDomain,
   type TypedDataField,
 } from "ethers";
 
-import { getLedgerTransport } from "../helpers/getLedgerTransport";
+import type { LedgerDMKSession } from "../helpers/dmk";
+import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 
-function parseLedgerSignatureV(v: number | string) {
-  if (typeof v === "number") return v;
+interface EVMLedgerParams {
+  dmkSession: LedgerDMKSession;
+  provider: Provider;
+  derivationPath?: DerivationPathArray | string;
+  chainId?: ChainId;
+  onDeviceActionState?: LedgerDeviceActionStateHandler;
+  originToken?: string;
+}
 
-  const hex = v.startsWith("0x") ? v.slice(2) : v;
-  return Number.parseInt(hex || "0", 16);
+function selectTypedDataTypes({
+  primaryType,
+  types,
+}: {
+  primaryType: string;
+  types: Record<string, TypedDataField[]>;
+}) {
+  const selectedTypes: Record<string, TypedDataField[]> = {};
+
+  function addType(typeName: string) {
+    if (Object.hasOwn(selectedTypes, typeName) || !Object.hasOwn(types, typeName)) return;
+    const fields = types[typeName];
+    if (!fields) return;
+
+    selectedTypes[typeName] = fields;
+    for (const field of fields) addType(field.type.replace(/\[[0-9]*\]/g, ""));
+  }
+
+  addType(primaryType);
+
+  if (!Object.hasOwn(selectedTypes, primaryType)) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      primaryType,
+      reason: "The EIP-712 primary type is not defined",
+    });
+  }
+
+  return selectedTypes;
 }
 
 class EVMLedgerInterface extends AbstractSigner {
   chainId: ChainId = ChainId.Ethereum;
   derivationPath = "";
-  ledgerApp: InstanceType<typeof EthereumApp> | null = null;
-  ledgerTimeout = 50000;
-  private transport?: Transport;
-  private readonly injectedTransport?: Transport;
+  private readonly dmkSession: LedgerDMKSession;
+  private ledgerSignerPromise?: Promise<SignerEth>;
+  private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
+  private readonly originToken?: string;
 
   constructor({
     provider,
+    dmkSession,
     derivationPath = NetworkDerivationPath.OP,
     chainId = ChainId.Optimism,
-    transport,
-  }: { provider: Provider; derivationPath?: DerivationPathArray | string; chainId?: ChainId; transport?: Transport }) {
+    onDeviceActionState,
+    originToken,
+  }: EVMLedgerParams) {
     super(provider);
 
     this.chainId = chainId || ChainId.Ethereum;
-    this.derivationPath = typeof derivationPath === "string" ? derivationPath : derivationPathToString(derivationPath);
-    this.injectedTransport = transport;
+    this.derivationPath = (
+      typeof derivationPath === "string" ? derivationPath : derivationPathToString(derivationPath)
+    ).replace(/^m\//, "");
+    this.dmkSession = dmkSession;
+    this.onDeviceActionState = onDeviceActionState;
+    this.originToken = originToken;
 
     Object.defineProperty(this, "provider", { enumerable: true, value: provider || null, writable: false });
   }
+
+  private getLedgerSigner = () => {
+    this.ledgerSignerPromise ??= import("@ledgerhq/device-signer-kit-ethereum").then(({ SignerEthBuilder }) =>
+      new SignerEthBuilder({ ...this.dmkSession, originToken: this.originToken }).build(),
+    );
+
+    return this.ledgerSignerPromise;
+  };
 
   connect = (provider: Provider) =>
     new EVMLedgerInterface({
       chainId: this.chainId,
       derivationPath: this.derivationPath,
+      dmkSession: this.dmkSession,
+      onDeviceActionState: this.onDeviceActionState,
+      originToken: this.originToken,
       provider,
-      transport: this.transport ?? this.injectedTransport,
     });
 
-  checkOrCreateTransportAndLedger = async () => {
-    await this.createTransportAndLedger();
-  };
-
-  createTransportAndLedger = async () => {
-    if (this.ledgerApp) return;
-
-    this.transport ||= this.injectedTransport ?? (await getLedgerTransport());
-    const EthereumApp = (await import("@ledgerhq/hw-app-eth")).default;
-
-    this.ledgerApp = new EthereumApp(this.transport);
-  };
-
   getAddress = async () => {
-    const response = await this.getAddressAndPubKey();
-    if (!response) throw new SwapKitError("wallet_ledger_failed_to_get_address");
-    return response.address;
+    const { address } = await this.getAddressAndPubKey();
+    if (!address) throw new SwapKitError("wallet_ledger_failed_to_get_address");
+    return address;
   };
 
   getAddressAndPubKey = async () => {
-    await this.createTransportAndLedger();
-    return this.ledgerApp?.getAddress(this.derivationPath);
+    const ledgerSigner = await this.getLedgerSigner();
+
+    return executeLedgerDeviceAction({
+      action: ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId) }),
+      onDeviceActionState: this.onDeviceActionState,
+    });
   };
 
   showAddressAndPubKey = async () => {
-    await this.createTransportAndLedger();
-    return this.ledgerApp?.getAddress(this.derivationPath, true);
+    const ledgerSigner = await this.getLedgerSigner();
+
+    return executeLedgerDeviceAction({
+      action: ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId), checkOnDevice: true }),
+      onDeviceActionState: this.onDeviceActionState,
+    });
   };
 
-  signMessage = async (messageHex: string) => {
-    const { Signature } = await import("ethers");
-    await this.createTransportAndLedger();
+  signMessage = async (message: string | Uint8Array) => {
+    const { Signature, toUtf8Bytes } = await import("ethers");
+    const ledgerSigner = await this.getLedgerSigner();
+    const signature = await executeLedgerDeviceAction({
+      action: ledgerSigner.signMessage(
+        this.derivationPath,
+        typeof message === "string" ? toUtf8Bytes(message) : message,
+      ),
+      onDeviceActionState: this.onDeviceActionState,
+    });
 
-    const sig = await this.ledgerApp?.signPersonalMessage(this.derivationPath, messageHex);
-
-    if (!sig) throw new SwapKitError("wallet_ledger_signing_error");
-
-    sig.r = `0x${sig.r}`;
-    sig.s = `0x${sig.s}`;
-    return Signature.from(sig).serialized;
-  };
-
-  sendTransaction = async (tx: TransactionRequest): Promise<any> => {
-    if (!this.provider) throw new SwapKitError("wallet_ledger_no_provider");
-
-    const signedTxHex = await this.signTransaction(tx);
-
-    return await this.provider.broadcastTransaction(signedTxHex);
+    return Signature.from(signature).serialized;
   };
 
   signTypedData = async (
@@ -112,96 +149,139 @@ class EVMLedgerInterface extends AbstractSigner {
     explicitPrimaryType?: string,
   ) => {
     const { buildEIP712DomainType } = await import("@swapkit/toolboxes/evm");
-    const { Signature, TypedDataEncoder } = await import("ethers");
-    await this.createTransportAndLedger();
-
+    const { hexlify, Signature, TypedDataEncoder } = await import("ethers");
     const { EIP712Domain: _, ...filteredTypes } = types;
     const primaryType = explicitPrimaryType ?? TypedDataEncoder.from(filteredTypes).primaryType;
+    const resolutionTypes = selectTypedDataTypes({ primaryType, types: filteredTypes });
+    const populated = await TypedDataEncoder.resolveNames(domain, resolutionTypes, value, async (name) => {
+      const resolvedAddress = await this.resolveName(name);
+      if (!resolvedAddress) throw new SwapKitError("wallet_ledger_invalid_params", { name });
+      return resolvedAddress;
+    });
+    const chainId = populated.domain.chainId == null ? undefined : Number(populated.domain.chainId);
 
-    let sig: { v: number; s: string; r: string } | undefined;
-
-    try {
-      sig = await this.ledgerApp?.signEIP712Message(this.derivationPath, {
-        domain: domain as Record<string, unknown>,
-        message: value,
-        primaryType,
-        types: { EIP712Domain: buildEIP712DomainType(domain), ...filteredTypes },
-      });
-    } catch (error) {
-      const isLedgerDeviceError = error instanceof Error && "statusCode" in error;
-      if (!isLedgerDeviceError || (isLedgerDeviceError && (error as { statusCode: number }).statusCode === 0x6985)) {
-        throw error;
-      }
-
-      const domainSeparator = TypedDataEncoder.hashDomain(domain).slice(2);
-      const messageHash = TypedDataEncoder.from(filteredTypes).hash(value).slice(2);
-
-      sig = await this.ledgerApp?.signEIP712HashedMessage(this.derivationPath, domainSeparator, messageHash);
+    if (chainId !== undefined && !Number.isSafeInteger(chainId)) {
+      throw new SwapKitError("wallet_ledger_invalid_params", { chainId: populated.domain.chainId });
     }
 
-    if (!sig) throw new SwapKitError("wallet_ledger_signing_error");
+    const ledgerDomain = {
+      ...(populated.domain.chainId != null && { chainId }),
+      ...(populated.domain.name != null && { name: populated.domain.name }),
+      ...(populated.domain.salt != null && { salt: hexlify(populated.domain.salt) }),
+      ...(populated.domain.verifyingContract != null && { verifyingContract: populated.domain.verifyingContract }),
+      ...(populated.domain.version != null && { version: populated.domain.version }),
+    } satisfies LedgerTypedDataDomain;
 
-    sig.r = `0x${sig.r}`;
-    sig.s = `0x${sig.s}`;
-    return Signature.from(sig).serialized;
+    const ledgerSigner = await this.getLedgerSigner();
+    const signature = await executeLedgerDeviceAction({
+      action: ledgerSigner.signTypedData(this.derivationPath, {
+        domain: ledgerDomain,
+        message: populated.value,
+        primaryType,
+        types: { EIP712Domain: buildEIP712DomainType(populated.domain), ...filteredTypes },
+      }),
+      onDeviceActionState: this.onDeviceActionState,
+    });
+
+    return Signature.from(signature).serialized;
   };
 
   signTransaction = async (tx: TransactionRequest) => {
-    const { Transaction } = await import("ethers");
-    await this.createTransportAndLedger();
+    const { copyRequest, getAddress, getBytes, resolveAddress, resolveProperties, Transaction } = await import(
+      "ethers"
+    );
+    const request = copyRequest(tx);
 
-    const nonce = tx.nonce ?? undefined;
-    const transactionCount =
-      nonce === undefined ? await this.provider?.getTransactionCount(tx.from || (await this.getAddress())) : undefined;
+    if (request.type === 4 || request.authorizationList?.length) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        message: "Ledger Ethereum DSK does not support EIP-7702 transactions",
+      });
+    }
 
-    const baseTx = {
-      chainId: tx.chainId || this.chainId,
-      data: tx.data,
-      gasLimit: tx.gasLimit,
-      ...(tx.gasPrice && { gasPrice: tx.gasPrice }),
-      ...(!tx.gasPrice &&
-        tx.maxFeePerGas && { maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas }),
-      nonce: nonce !== undefined ? Number(nonce.toString()) : transactionCount,
-      to: tx.to?.toString(),
-      type: tx.type && !Number.isNaN(tx.type) ? tx.type : tx.maxFeePerGas ? 2 : 0,
-      value: tx.value,
-    };
+    const { from, to } = await resolveProperties({
+      from: request.from ? resolveAddress(request.from, this) : undefined,
+      to: request.to ? resolveAddress(request.to, this) : undefined,
+    });
+    const signerAddress = from || request.nonce == null ? await this.getAddress() : undefined;
 
-    // ledger expects the tx to be serialized without the 0x prefix
-    const unsignedTx = Transaction.from(baseTx).unsignedSerialized.slice(2);
+    if (from && signerAddress && getAddress(from) !== getAddress(signerAddress)) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        message: "Transaction from address does not match the Ledger account",
+      });
+    }
 
-    const { ledgerService } = await import("@ledgerhq/hw-app-eth");
+    if (to) request.to = to;
+    delete request.from;
+    delete request.authorizationList;
+    request.chainId ??= BigInt(this.chainId);
+    request.nonce ??= await this.provider?.getTransactionCount(signerAddress ?? (await this.getAddress()));
 
-    const resolution = await ledgerService.resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true });
+    const baseTx = Transaction.from(request as TransactionLike<string>);
+    const unsignedTransaction = getBytes(baseTx.unsignedSerialized);
+    const ledgerSigner = await this.getLedgerSigner();
+    const signature = await executeLedgerDeviceAction({
+      action: ledgerSigner.signTransaction(this.derivationPath, unsignedTransaction),
+      onDeviceActionState: this.onDeviceActionState,
+    });
 
-    const signature = await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
+    baseTx.signature = signature;
 
-    if (!signature) throw new SwapKitError("wallet_ledger_signing_error");
-
-    const { r, s, v } = signature;
-
-    return Transaction.from({ ...baseTx, signature: { r: `0x${r}`, s: `0x${s}`, v: parseLedgerSignatureV(v) } })
-      .serialized;
+    return baseTx.serialized;
   };
 }
 
-type LedgerParams = { provider: Provider; derivationPath?: DerivationPathArray; transport?: Transport };
+interface LedgerParams {
+  dmkSession: LedgerDMKSession;
+  provider: Provider;
+  derivationPath?: DerivationPathArray;
+  onDeviceActionState?: LedgerDeviceActionStateHandler;
+  originToken?: string;
+}
 
-export const ArbitrumLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.Arbitrum });
-export const AuroraLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Aurora });
-export const AvalancheLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.Avalanche });
-export const BaseLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Base });
-export const EthereumLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.Ethereum });
-export const GnosisLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Gnosis });
-export const OptimismLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.Optimism });
-export const PolygonLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Polygon });
-export const BinanceSmartChainLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.BinanceSmartChain });
-export const MonadLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Monad });
-export const XLayerLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.XLayer });
-export const BerachainLedger = (params: LedgerParams) =>
-  new EVMLedgerInterface({ ...params, chainId: ChainId.Berachain });
+export function ArbitrumLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Arbitrum });
+}
+
+export function AuroraLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Aurora });
+}
+
+export function AvalancheLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Avalanche });
+}
+
+export function BaseLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Base });
+}
+
+export function EthereumLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Ethereum });
+}
+
+export function GnosisLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Gnosis });
+}
+
+export function OptimismLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Optimism });
+}
+
+export function PolygonLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Polygon });
+}
+
+export function BinanceSmartChainLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.BinanceSmartChain });
+}
+
+export function MonadLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Monad });
+}
+
+export function XLayerLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.XLayer });
+}
+
+export function BerachainLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Berachain });
+}

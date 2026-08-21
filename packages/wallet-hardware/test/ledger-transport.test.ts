@@ -1,26 +1,55 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
-import { Chain } from "@swapkit/helpers";
-import { Transaction } from "ethers";
+import { Chain, WalletOption } from "@swapkit/helpers";
+import { hexlify, Signature, Transaction } from "ethers";
+import { of } from "rxjs";
 
 // Registries that capture constructor invocations on the mocked Ledger apps.
 // Tests assert that each inner-factory call wires through its own transport
 // rather than cross-contaminating via a shared outer closure.
 const bitcoinAppInvocations: Array<{ currency: string; transport: unknown }> = [];
 const bitcoinAppXpubInvocations: Array<{ path: string; xpubVersion?: number }> = [];
-const psbtAppClientInvocations: Array<unknown> = [];
-const psbtExtendedPubkeyInvocations: string[] = [];
-const psbtWalletAddressInvocations: Array<{ addressIndex: number; change: number }> = [];
-const ethereumAppInvocations: Array<unknown> = [];
-const ethereumSignTransactionInvocations: string[] = [];
-let ethereumSignatureV = "014985";
+const ethereumBuilderInvocations: Array<{ dmk: unknown; originToken?: string; sessionId: string }> = [];
+const ethereumGetAddressInvocations: Array<{ options?: { chainId?: number; checkOnDevice?: boolean }; path: string }> =
+  [];
+const ethereumSignMessageInvocations: Array<{ message: string | Uint8Array; path: string }> = [];
+const ethereumSignTransactionInvocations: Array<{ path: string; transaction: Uint8Array }> = [];
+const ethereumSignTypedDataInvocations: Array<{
+  path: string;
+  typedData: {
+    domain: Record<string, unknown>;
+    message: Record<string, unknown>;
+    primaryType: string;
+    types: Record<string, Array<{ name: string; type: string }>>;
+  };
+}> = [];
+let ethereumTransactionSignatureV = 84357;
+
+function deviceAction<Output>(output: Output) {
+  return {
+    cancel: mock(() => {}),
+    observable: of(
+      { intermediateValue: { requiredUserInteraction: "confirm-on-device" }, status: DeviceActionStatus.Pending },
+      { output, status: DeviceActionStatus.Completed },
+    ),
+  };
+}
 
 mock.module("@ledgerhq/hw-app-btc", () => ({
   default: class MockBitcoinApp {
+    private readonly currency: string;
+    private readonly transport: { send?: (...params: unknown[]) => Promise<unknown> };
+
     constructor(opts: { currency: string; transport: unknown }) {
       bitcoinAppInvocations.push(opts);
+      this.currency = opts.currency;
+      this.transport = opts.transport as { send?: (...params: unknown[]) => Promise<unknown> };
     }
-    getWalletPublicKey = async () => ({ bitcoinAddress: "ltc1qtestaddress" });
+    getWalletPublicKey = async () => {
+      await this.transport.send?.(0xe0, 0x40, 0, 0, Buffer.alloc(0));
+      return { bitcoinAddress: `${this.currency.toLowerCase().replace(" ", "-")}-ledger-address` };
+    };
     getWalletXpub = ({ path, xpubVersion }: { path: string; xpubVersion?: number }) => {
       bitcoinAppXpubInvocations.push({ path, xpubVersion });
       return "Ltub2SSUS19CirucV6jZg6pTzmtZtxhX1JZJYK7Uq16czQkfFb5m1zf6KV24enP679G9gYHDBYSjbgHn6CJK7VTqDEEnRSsUgJGQWhhmLQV5foV";
@@ -28,64 +57,72 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
   },
 }));
 
-mock.module("ledger-bitcoin", () => ({
-  AppClient: class MockAppClient {
-    constructor(transport: unknown) {
-      psbtAppClientInvocations.push(transport);
+mock.module("@ledgerhq/device-signer-kit-ethereum", () => ({
+  SignerEthBuilder: class MockSignerEthBuilder {
+    constructor(params: { dmk: unknown; originToken?: string; sessionId: string }) {
+      ethereumBuilderInvocations.push(params);
     }
-    getMasterFingerprint = async () => "deadbeef";
-    getExtendedPubkey = (path: string) => {
-      psbtExtendedPubkeyInvocations.push(path);
-      return "xpub661MyMwAqRbcF8SxkT6wT9y6rL4n9wBEmc6kAMPxQ4vYXvyfZ87Z84qxdjQbaAWkj2rW6zGyFNR7fsRG3Gzdhvj1io8GZF1dgNpTiFqouBZ";
-    };
-    getWalletAddress = (_policy: unknown, _hmac: unknown, change: number, addressIndex: number) => {
-      psbtWalletAddressInvocations.push({ addressIndex, change });
-      return "bc1qtestaddress";
-    };
-  },
-  DefaultWalletPolicy: class MockDefaultWalletPolicy {
-    // biome-ignore lint/complexity/noUselessConstructor: skip for tests
-    constructor(_template: string, _key: string) {}
+    build = () => ({
+      getAddress: (path: string, options?: { chainId?: number; checkOnDevice?: boolean }) => {
+        ethereumGetAddressInvocations.push({ options, path });
+        return deviceAction({
+          address: "0x0000000000000000000000000000000000000001",
+          publicKey: "0xledger-public-key",
+        });
+      },
+      signMessage: (path: string, message: string | Uint8Array) => {
+        ethereumSignMessageInvocations.push({ message, path });
+        return deviceAction({ r: `0x${"1".padStart(64, "0")}`, s: `0x${"2".padStart(64, "0")}`, v: 27 });
+      },
+      signTransaction: (path: string, transaction: Uint8Array) => {
+        ethereumSignTransactionInvocations.push({ path, transaction });
+        return deviceAction({
+          r: `0x${"1".padStart(64, "0")}`,
+          s: `0x${"2".padStart(64, "0")}`,
+          v: ethereumTransactionSignatureV,
+        });
+      },
+      signTypedData: (
+        path: string,
+        typedData: {
+          domain: Record<string, unknown>;
+          message: Record<string, unknown>;
+          primaryType: string;
+          types: Record<string, Array<{ name: string; type: string }>>;
+        },
+      ) => {
+        ethereumSignTypedDataInvocations.push({ path, typedData });
+        return deviceAction({ r: `0x${"1".padStart(64, "0")}`, s: `0x${"2".padStart(64, "0")}`, v: 27 });
+      },
+    });
   },
 }));
 
-mock.module("@ledgerhq/hw-app-eth", () => ({
-  default: class MockEthereumApp {
-    constructor(transport: unknown) {
-      ethereumAppInvocations.push(transport);
-    }
-    getAddress = async () => ({ address: "0x0000000000000000000000000000000000000001" });
-    signTransaction = (_path: string, unsignedTx: string) => {
-      ethereumSignTransactionInvocations.push(unsignedTx);
-      return { r: "1".padStart(64, "0"), s: "2".padStart(64, "0"), v: ethereumSignatureV };
-    };
-  },
-  ledgerService: { resolveTransaction: async () => null },
-}));
-
+import { BitcoinLedger } from "../src/ledger/clients/bitcoin";
 import { ArbitrumLedger, BinanceSmartChainLedger } from "../src/ledger/clients/evm";
-import { BitcoinLedger } from "../src/ledger/clients/utxo";
-import { BitcoinPsbtLedger } from "../src/ledger/clients/utxo-psbt";
+import { getLedgerClient } from "../src/ledger/helpers";
 import { ledgerWallet } from "../src/ledger/index";
 
-describe("wallet-hardware/ledger — closure isolation with injected transport", () => {
+const dmkSession = { dmk: { id: "test-dmk" } as unknown as DeviceManagementKit, sessionId: "test-session" };
+
+describe("wallet-hardware/ledger", () => {
   beforeEach(() => {
     bitcoinAppInvocations.length = 0;
     bitcoinAppXpubInvocations.length = 0;
-    psbtAppClientInvocations.length = 0;
-    psbtExtendedPubkeyInvocations.length = 0;
-    psbtWalletAddressInvocations.length = 0;
-    ethereumAppInvocations.length = 0;
+    ethereumBuilderInvocations.length = 0;
+    ethereumGetAddressInvocations.length = 0;
+    ethereumSignMessageInvocations.length = 0;
     ethereumSignTransactionInvocations.length = 0;
-    ethereumSignatureV = "014985";
+    ethereumSignTypedDataInvocations.length = 0;
+    ethereumTransactionSignatureV = 84357;
   });
 
   it("BitcoinLedger: two invocations with different transports get their own BitcoinApp each", async () => {
     const transportA = { id: "A" } as unknown as Transport;
     const transportB = { id: "B" } as unknown as Transport;
 
-    const clientA = BitcoinLedger("84'/0'/0'/0/0", transportA);
-    const clientB = BitcoinLedger("84'/0'/0'/0/1", transportB);
+    const clientA = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", transport: transportA });
+    const clientB = BitcoinLedger({ derivationPath: "84'/0'/0'/0/1", transport: transportB });
 
     await clientA.connect();
     await clientB.connect();
@@ -95,38 +132,13 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(bitcoinAppInvocations[1]?.transport).toBe(transportB);
   });
 
-  it("BitcoinPsbtLedger: two invocations with different transports get their own AppClient each", async () => {
-    const transportA = { id: "A" } as unknown as Transport;
-    const transportB = { id: "B" } as unknown as Transport;
-
-    const clientA = BitcoinPsbtLedger("84'/0'/0'/0/0", transportA);
-    const clientB = BitcoinPsbtLedger("84'/0'/0'/0/1", transportB);
-
-    await clientA.connect();
-    await clientB.connect();
-
-    expect(psbtAppClientInvocations).toHaveLength(2);
-    expect(psbtAppClientInvocations[0]).toBe(transportA);
-    expect(psbtAppClientInvocations[1]).toBe(transportB);
-  });
-
-  it("BitcoinPsbtLedger: normalizes m/ derivation paths before requesting account xpubs", async () => {
-    const transport = { id: "A" } as unknown as Transport;
-    const client = BitcoinPsbtLedger("m/84'/0'/0'/0/0", transport);
-
-    await client.getAddress();
-
-    expect(psbtExtendedPubkeyInvocations).toEqual(["m/84'/0'/0'"]);
-    expect(psbtWalletAddressInvocations).toEqual([{ addressIndex: 0, change: 0 }]);
-  });
-
   it("BitcoinLedger: reusing the same transport across calls does not deduplicate state", async () => {
     // Same transport instance passed twice should still produce two distinct
     // BitcoinApp instances — each call's inner closure owns its btcApp.
     const transport = { id: "shared" } as unknown as Transport;
 
-    const clientA = BitcoinLedger("84'/0'/0'/0/0", transport);
-    const clientB = BitcoinLedger("84'/0'/0'/0/1", transport);
+    const clientA = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", transport });
+    const clientB = BitcoinLedger({ derivationPath: "84'/0'/0'/0/1", transport });
 
     await clientA.connect();
     await clientB.connect();
@@ -138,9 +150,9 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
 
   it("BitcoinLedger: getExtendedPublicKey initializes the Bitcoin app before connect", async () => {
     const transport = { id: "xpub" } as unknown as Transport;
-    const client = BitcoinLedger("84'/0'/0'/0/0", transport);
+    const client = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", transport });
 
-    const xpub = await client.getExtendedPublicKey("84'/0'/0'", 76067358);
+    const xpub = await client.getExtendedPublicKey({ path: "84'/0'/0'" });
 
     expect(xpub).toBe(
       "Ltub2SSUS19CirucV6jZg6pTzmtZtxhX1JZJYK7Uq16czQkfFb5m1zf6KV24enP679G9gYHDBYSjbgHn6CJK7VTqDEEnRSsUgJGQWhhmLQV5foV",
@@ -150,10 +162,15 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     expect(bitcoinAppXpubInvocations).toEqual([{ path: "84'/0'/0'", xpubVersion: 76067358 }]);
   });
 
-  it("ArbitrumLedger: reuses the Ethereum app initialized during connect for later transaction signing", async () => {
+  it("ArbitrumLedger: reuses one DSK signer and passes transaction bytes", async () => {
     const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
-    const transport = { id: "ARB" } as unknown as Transport;
-    const client = ArbitrumLedger({ provider, transport });
+    const actionStatuses: string[] = [];
+    const client = ArbitrumLedger({
+      dmkSession,
+      onDeviceActionState: ({ status }) => actionStatuses.push(status),
+      originToken: "ledger-origin-token",
+      provider,
+    });
 
     await client.getAddress();
     const signedTx = await client.signTransaction({
@@ -166,16 +183,31 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
       value: 0n,
     });
 
-    expect(ethereumAppInvocations).toEqual([transport]);
+    expect(ethereumBuilderInvocations).toEqual([
+      { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
+    ]);
+    expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
     expect(ethereumSignTransactionInvocations).toHaveLength(1);
-    expect(Transaction.from(signedTx).chainId).toBe(42161n);
+    expect(hexlify(ethereumSignTransactionInvocations[0]?.transaction ?? new Uint8Array())).toBe(
+      Transaction.from({
+        chainId: 42161,
+        data: "0x",
+        gasLimit: 21000n,
+        gasPrice: 1n,
+        nonce: 0,
+        to: "0x0000000000000000000000000000000000000002",
+        type: 0,
+        value: 0n,
+      }).unsignedSerialized,
+    );
+    expect(Transaction.from(signedTx)).toMatchObject({ chainId: 42161n, type: 0 });
+    expect(actionStatuses).toEqual(["pending", "completed", "pending", "completed"]);
   });
 
-  it("BinanceSmartChainLedger: parses single-byte legacy Ledger v as hex", async () => {
-    ethereumSignatureV = "93";
+  it("BinanceSmartChainLedger: accepts the EIP-155 v returned by DSK", async () => {
+    ethereumTransactionSignatureV = 147;
     const provider = {} as Parameters<typeof BinanceSmartChainLedger>[0]["provider"];
-    const transport = { id: "BSC" } as unknown as Transport;
-    const client = BinanceSmartChainLedger({ provider, transport });
+    const client = BinanceSmartChainLedger({ dmkSession, provider });
 
     const signedTx = await client.signTransaction({
       data: "0x",
@@ -188,31 +220,231 @@ describe("wallet-hardware/ledger — closure isolation with injected transport",
     });
 
     expect(Transaction.from(signedTx).chainId).toBe(56n);
+    expect(Transaction.from(signedTx).signature?.networkV).toBe(147n);
   });
 
-  it("BitcoinLedger: connect reuses the app initialized by getExtendedPublicKey", async () => {
-    const transport = { id: "reused-xpub" } as unknown as Transport;
-    const client = BitcoinLedger("84'/0'/0'/0/0", transport);
+  it("ArbitrumLedger: UTF-8 encodes personal messages for DSK", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
 
-    await client.getExtendedPublicKey("84'/0'/0'", 76067358);
+    const signature = await client.signMessage("Zażółć 💩");
+
+    expect(ethereumSignMessageInvocations).toHaveLength(1);
+    expect(hexlify(ethereumSignMessageInvocations[0]?.message as Uint8Array)).toBe(
+      hexlify(new TextEncoder().encode("Zażółć 💩")),
+    );
+    expect(ethereumSignMessageInvocations[0]?.path).toBe("44'/60'/0'/0/0");
+    expect(Signature.from(signature).toJSON()).toMatchObject({
+      r: `0x${"1".padStart(64, "0")}`,
+      s: `0x${"2".padStart(64, "0")}`,
+      v: 27,
+    });
+  });
+
+  it("ArbitrumLedger: sends complete typed data to DSK", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+
+    await client.signTypedData(
+      {
+        chainId: 42161n,
+        name: "SwapKit",
+        verifyingContract: "0x0000000000000000000000000000000000000002",
+        version: "1",
+      },
+      { Message: [{ name: "contents", type: "string" }] },
+      { contents: "full typed data" },
+      "Message",
+    );
+
+    expect(ethereumSignTypedDataInvocations).toEqual([
+      {
+        path: "44'/60'/0'/0/0",
+        typedData: {
+          domain: {
+            chainId: 42161,
+            name: "SwapKit",
+            verifyingContract: "0x0000000000000000000000000000000000000002",
+            version: "1",
+          },
+          message: { contents: "full typed data" },
+          primaryType: "Message",
+          types: {
+            EIP712Domain: [
+              { name: "name", type: "string" },
+              { name: "version", type: "string" },
+              { name: "chainId", type: "uint256" },
+              { name: "verifyingContract", type: "address" },
+            ],
+            Message: [{ name: "contents", type: "string" }],
+          },
+        },
+      },
+    ]);
+  });
+
+  it("ArbitrumLedger: honors an explicit primary type when resolving names with an unrelated root", async () => {
+    const resolveName = mock((name: string) =>
+      Promise.resolve(name === "vault.eth" ? "0x0000000000000000000000000000000000000004" : null),
+    );
+    const provider = { resolveName } as unknown as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+
+    await client.signTypedData(
+      { chainId: 42161n },
+      { Message: [{ name: "recipient", type: "address" }], Unrelated: [{ name: "contents", type: "string" }] },
+      { recipient: "vault.eth" },
+      "Message",
+    );
+
+    expect(resolveName.mock.calls).toEqual([["vault.eth"]]);
+    expect(ethereumSignTypedDataInvocations[0]?.typedData).toMatchObject({
+      message: { recipient: "0x0000000000000000000000000000000000000004" },
+      primaryType: "Message",
+      types: { Message: [{ name: "recipient", type: "address" }], Unrelated: [{ name: "contents", type: "string" }] },
+    });
+  });
+
+  it("ArbitrumLedger: preserves EIP-2930 access lists", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+    const request = {
+      accessList: [{ address: "0x0000000000000000000000000000000000000003", storageKeys: [`0x${"4".repeat(64)}`] }],
+      data: "0x",
+      gasLimit: 25000n,
+      gasPrice: 1n,
+      nonce: 1,
+      to: "0x0000000000000000000000000000000000000002",
+      type: 1,
+      value: 0n,
+    };
+
+    await client.signTransaction(request);
+
+    expect(hexlify(ethereumSignTransactionInvocations[0]?.transaction ?? new Uint8Array())).toBe(
+      Transaction.from({ ...request, chainId: 42161 }).unsignedSerialized,
+    );
+  });
+
+  it("ArbitrumLedger: preserves EIP-4844 transaction fields", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+    const request = {
+      accessList: [],
+      blobVersionedHashes: [`0x01${"1".repeat(62)}`],
+      data: "0x",
+      gasLimit: 25000n,
+      maxFeePerBlobGas: 2n,
+      maxFeePerGas: 3n,
+      maxPriorityFeePerGas: 1n,
+      nonce: 2,
+      to: "0x0000000000000000000000000000000000000002",
+      type: 3,
+      value: 0n,
+    };
+
+    await client.signTransaction(request);
+
+    expect(hexlify(ethereumSignTransactionInvocations[0]?.transaction ?? new Uint8Array())).toBe(
+      Transaction.from({ ...request, chainId: 42161 }).unsignedSerialized,
+    );
+  });
+
+  it("ArbitrumLedger: resolves typed-data address names", async () => {
+    const resolveName = mock((name: string) =>
+      Promise.resolve(name === "vault.eth" ? "0x0000000000000000000000000000000000000004" : null),
+    );
+    const provider = { resolveName } as unknown as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+
+    await client.signTypedData(
+      { chainId: 42161n, verifyingContract: "vault.eth" },
+      { Message: [{ name: "recipient", type: "address" }] },
+      { recipient: "vault.eth" },
+    );
+
+    expect(resolveName.mock.calls).toEqual([["vault.eth"]]);
+    expect(ethereumSignTypedDataInvocations[0]?.typedData).toMatchObject({
+      domain: { verifyingContract: "0x0000000000000000000000000000000000000004" },
+      message: { recipient: "0x0000000000000000000000000000000000000004" },
+    });
+  });
+
+  it("ArbitrumLedger: rejects a transaction from another account", async () => {
+    const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+
+    await expect(
+      client.signTransaction({
+        from: "0x0000000000000000000000000000000000000002",
+        gasLimit: 21000n,
+        gasPrice: 1n,
+        nonce: 0,
+        to: "0x0000000000000000000000000000000000000003",
+        type: 0,
+      }),
+    ).rejects.toThrow("wallet_ledger_invalid_params");
+    expect(ethereumSignTransactionInvocations).toHaveLength(0);
+  });
+
+  it("getLedgerClient: rejects LedgerJS transport injection for EVM", async () => {
+    const transport = { id: "legacy-evm" } as unknown as Transport;
+
+    await expect(getLedgerClient({ chain: Chain.Arbitrum, transport })).rejects.toThrow("wallet_ledger_invalid_params");
+  });
+
+  it("BitcoinLedger: explicit transport creates a fresh app for each complete operation", async () => {
+    const transport = { id: "reused-xpub" } as unknown as Transport;
+    const client = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", transport });
+
+    await client.getExtendedPublicKey({ path: "84'/0'/0'" });
     await client.connect();
 
-    expect(bitcoinAppInvocations).toHaveLength(1);
-    expect(bitcoinAppInvocations[0]?.transport).toBe(transport);
+    expect(bitcoinAppInvocations).toHaveLength(2);
+    expect(bitcoinAppInvocations.map(({ transport: invokedTransport }) => invokedTransport)).toEqual([
+      transport,
+      transport,
+    ]);
   });
 
-  it("connectLedger: requests Litecoin account xpubs with the Litecoin version byte", async () => {
+  it("connectLedger: routes every UTXO account xpub path and version", async () => {
+    for (const chain of [Chain.Bitcoin, Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash]) {
+      const addChain = mock(() => {});
+      const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
+      const transport = { id: chain } as unknown as Transport;
+
+      await connectLedger([chain], undefined, { address: "provided-ledger-address", transport });
+      const walletMethods = addChain.mock.calls[0]?.[0] as
+        | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
+        | undefined;
+      await walletMethods?.getExtendedPublicKey?.({ accountIndex: 0 });
+    }
+
+    expect(bitcoinAppXpubInvocations).toEqual([
+      { path: "m/84'/0'/0'", xpubVersion: 76067358 },
+      { path: "44'/145'/0'", xpubVersion: 76067358 },
+      { path: "44'/5'/0'", xpubVersion: 76067358 },
+      { path: "44'/3'/0'", xpubVersion: 49990397 },
+      { path: "m/84'/2'/0'", xpubVersion: 27108450 },
+      { path: "44'/133'/0'", xpubVersion: 76067358 },
+    ]);
+  });
+
+  it("connectLedger: routes EVM chains through the EVM wallet methods", async () => {
     const addChain = mock(() => {});
     const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
-    const transport = { id: "LTC" } as unknown as Transport;
 
-    await connectLedger([Chain.Litecoin], undefined, { transport });
-    const walletMethods = addChain.mock.calls[0]?.[0] as
-      | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
-      | undefined;
-    await walletMethods?.getExtendedPublicKey?.({ accountIndex: 0 });
+    await connectLedger([Chain.Arbitrum], undefined, { dmkSession, originToken: "ledger-origin-token" });
 
-    expect(bitcoinAppXpubInvocations).toEqual([{ path: "m/84'/2'/0'", xpubVersion: 27108450 }]);
-    expect(psbtAppClientInvocations).toHaveLength(0);
+    expect(addChain).toHaveBeenCalledTimes(1);
+    expect(addChain.mock.calls[0]?.[0]).toMatchObject({
+      address: "0x0000000000000000000000000000000000000001",
+      chain: Chain.Arbitrum,
+      walletType: WalletOption.LEDGER,
+    });
+    expect(ethereumBuilderInvocations).toEqual([
+      { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
+    ]);
+    expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
   });
 });

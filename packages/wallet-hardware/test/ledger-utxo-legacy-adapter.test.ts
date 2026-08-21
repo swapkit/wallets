@@ -1,15 +1,16 @@
-import { describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { hex } from "@scure/base";
 import { Chain } from "@swapkit/helpers";
 import { RawTx, Transaction } from "@swapkit/utxo-signer";
 
 const rawTxRequests: Array<{ chain: string; txid: string }> = [];
+let getRawTxResponse = (_chain: string, _txid: string) => Promise.resolve("02000000000100");
 
 mock.module("@swapkit/toolboxes/utxo", () => ({
   getUtxoApi: (chain: string) => ({
     getRawTx: (txid: string) => {
       rawTxRequests.push({ chain, txid });
-      return Promise.resolve("02000000000100");
+      return getRawTxResponse(chain, txid);
     },
   }),
 }));
@@ -17,9 +18,12 @@ mock.module("@swapkit/toolboxes/utxo", () => ({
 import { extractInputsFromPsbt, signLegacyPsbtTransaction } from "../src/ledger/clients/utxo-legacy-adapter";
 
 describe("ledger legacy UTXO adapter", () => {
-  it("uses embedded previous tx hex for legacy Ledger UTXO chains", async () => {
+  beforeEach(() => {
     rawTxRequests.length = 0;
+    getRawTxResponse = (_chain, _txid) => Promise.resolve("02000000000100");
+  });
 
+  it("uses embedded previous tx hex for legacy Ledger UTXO chains", async () => {
     const previousTxHex = hex.encode(
       RawTx.encode({
         inputs: [
@@ -50,8 +54,6 @@ describe("ledger legacy UTXO adapter", () => {
   });
 
   it("fetches previous tx hex for witness-only PSBT inputs", async () => {
-    rawTxRequests.length = 0;
-
     const txid = "11".repeat(32);
     const tx = new Transaction({ allowUnknownOutputs: true });
     tx.addInput({
@@ -64,6 +66,46 @@ describe("ledger legacy UTXO adapter", () => {
 
     expect(rawTxRequests).toEqual([{ chain: Chain.Litecoin, txid }]);
     expect(input).toMatchObject({ hash: txid, index: 1, txHex: "02000000000100", value: 12_345 });
+  });
+
+  it("fetches distinct previous transactions concurrently and reuses duplicate requests", async () => {
+    let activeRequests = 0;
+    let maxActiveRequests = 0;
+    getRawTxResponse = async (_chain, txid) => {
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+      await Promise.resolve();
+      activeRequests -= 1;
+      return `raw-${txid}`;
+    };
+
+    const firstTxid = "11".repeat(32);
+    const secondTxid = "22".repeat(32);
+    const tx = new Transaction({ allowUnknownOutputs: true });
+    for (const [txid, index] of [
+      [firstTxid, 0],
+      [secondTxid, 1],
+      [firstTxid, 2],
+    ] as const) {
+      tx.addInput({
+        index,
+        txid: hex.decode(txid),
+        witnessUtxo: { amount: BigInt(index + 1), script: new Uint8Array([0, 20, ...Array(20).fill(index)]) },
+      });
+    }
+
+    const inputs = await extractInputsFromPsbt(tx, Chain.Litecoin);
+
+    expect(rawTxRequests).toEqual([
+      { chain: Chain.Litecoin, txid: firstTxid },
+      { chain: Chain.Litecoin, txid: secondTxid },
+    ]);
+    expect(inputs).toMatchObject([
+      { hash: firstTxid, index: 0, txHex: `raw-${firstTxid}` },
+      { hash: secondTxid, index: 1, txHex: `raw-${secondTxid}` },
+      { hash: firstTxid, index: 2, txHex: `raw-${firstTxid}` },
+    ]);
+    expect(maxActiveRequests).toBe(2);
   });
 
   it("returns finalized raw tx hex from legacy Ledger signing without PSBT finalization", async () => {
@@ -86,6 +128,27 @@ describe("ledger legacy UTXO adapter", () => {
       tx,
     });
 
+    expect(signedTxHex).toBe("0200000000");
+  });
+
+  it("reuses prepared inputs without fetching previous transactions again", async () => {
+    const tx = new Transaction({ allowUnknownOutputs: true });
+    const inputUtxos = [{ hash: "11".repeat(32), index: 1, txHex: "02000000000100", value: 12_345 }];
+    const signTransaction = mock((receivedTx: Transaction, receivedInputs: typeof inputUtxos) => {
+      expect(receivedTx).toBe(tx);
+      expect(receivedInputs).toEqual(inputUtxos);
+      return Promise.resolve("0200000000");
+    });
+
+    const signedTxHex = await signLegacyPsbtTransaction({
+      chain: Chain.Litecoin,
+      inputUtxos,
+      legacyClient: { signTransaction },
+      tx,
+    });
+
+    expect(rawTxRequests).toEqual([]);
+    expect(signTransaction).toHaveBeenCalledTimes(1);
     expect(signedTxHex).toBe("0200000000");
   });
 });
