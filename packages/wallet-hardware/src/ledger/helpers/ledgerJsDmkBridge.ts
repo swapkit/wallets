@@ -1,12 +1,8 @@
-import {
+import type {
   Apdu,
-  type ApduResponse,
-  CallTaskInAppDeviceAction,
-  type Command,
-  CommandResultFactory,
-  DmkResultFactory,
-  type InternalApi,
-  isSuccessCommandResult,
+  ApduResponse,
+  Command,
+  InternalApi,
   UnknownDeviceExchangeError,
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
@@ -14,7 +10,13 @@ import Transport, { TransportError } from "@ledgerhq/hw-transport";
 import { type DerivationPathArray, SwapKitError } from "@swapkit/helpers";
 
 import type { LedgerDMKSession } from "./dmk";
-import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "./executeDeviceAction";
+import {
+  executeLedgerDeviceAction,
+  LEDGER_USER_INTERACTION_REQUIRED,
+  type LedgerDeviceActionStateHandler,
+} from "./executeDeviceAction";
+
+export { LEDGER_USER_INTERACTION_REQUIRED };
 
 const STATUS_CODE_LENGTH = 2;
 const TransportBase =
@@ -27,7 +29,10 @@ interface RawApduResponse {
 class RawApduCommand implements Command<RawApduResponse> {
   readonly name = "ledgerJsRawApdu";
 
-  constructor(private readonly apdu: Apdu) {}
+  constructor(
+    private readonly apdu: Apdu,
+    private readonly dmkModule: typeof import("@ledgerhq/device-management-kit"),
+  ) {}
 
   getApdu() {
     return this.apdu;
@@ -35,8 +40,8 @@ class RawApduCommand implements Command<RawApduResponse> {
 
   parseResponse({ data, statusCode }: ApduResponse) {
     if (statusCode.length !== STATUS_CODE_LENGTH) {
-      return CommandResultFactory<RawApduResponse>({
-        error: new UnknownDeviceExchangeError(new Error("Ledger returned an invalid APDU status code")),
+      return this.dmkModule.CommandResultFactory<RawApduResponse>({
+        error: new this.dmkModule.UnknownDeviceExchangeError(new Error("Ledger returned an invalid APDU status code")),
       });
     }
 
@@ -44,7 +49,7 @@ class RawApduCommand implements Command<RawApduResponse> {
     response.set(data);
     response.set(statusCode, data.length);
 
-    return CommandResultFactory<RawApduResponse>({ data: { response } });
+    return this.dmkModule.CommandResultFactory<RawApduResponse>({ data: { response } });
   }
 }
 
@@ -66,7 +71,7 @@ function parseShortApdu(apdu: Buffer) {
     throw new TransportError("Ledger APDU header is incomplete", "InvalidAPDU");
   }
 
-  return new Apdu(cla, ins, p1, p2, apdu.subarray(5));
+  return { cla, data: apdu.subarray(5), ins, p1, p2 };
 }
 
 export class LedgerJsDmkTransport extends TransportBase {
@@ -75,10 +80,12 @@ export class LedgerJsDmkTransport extends TransportBase {
   }
 
   async exchange(apdu: Buffer, { abortTimeoutMs }: { abortTimeoutMs?: number } = {}) {
-    const command = new RawApduCommand(parseShortApdu(apdu));
+    const dmkModule = await import("@ledgerhq/device-management-kit");
+    const { cla, data, ins, p1, p2 } = parseShortApdu(apdu);
+    const command = new RawApduCommand(new dmkModule.Apdu(cla, ins, p1, p2, data), dmkModule);
     const result = await this.internalApi.sendCommand(command, abortTimeoutMs ?? this.exchangeTimeout);
 
-    if (!isSuccessCommandResult(result)) throw result.error;
+    if (!dmkModule.isSuccessCommandResult(result)) throw result.error;
     return Buffer.from(result.data.response);
   }
 
@@ -114,7 +121,7 @@ export async function runLedgerJsOperation<App, Output>({
   connection,
   createApp,
   operation,
-  requiredUserInteraction = UserInteractionRequired.None,
+  requiredUserInteraction = LEDGER_USER_INTERACTION_REQUIRED.None,
 }: {
   appName: string;
   connection: LedgerJsClientConnection;
@@ -137,6 +144,10 @@ export async function runLedgerJsOperation<App, Output>({
       message: "A Ledger DMK session or an injected LedgerJS transport is required",
     });
   }
+
+  const { CallTaskInAppDeviceAction, DmkResultFactory, UnknownDeviceExchangeError } = await import(
+    "@ledgerhq/device-management-kit"
+  );
 
   const deviceAction = new CallTaskInAppDeviceAction<
     { output: Output },

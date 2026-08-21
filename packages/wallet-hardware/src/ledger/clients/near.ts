@@ -1,10 +1,11 @@
-import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import type { SignedTransaction, Transaction } from "@near-js/transactions";
 import { Chain, type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
 
 import {
+  LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
@@ -71,7 +72,7 @@ export async function getNearLedgerClient(
       try {
         const signatureArray = await runNearOperation({
           operation: (app) => app.signTransaction(transaction.encode(), path),
-          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
         if (!signatureArray) throw new Error("Signature undefined");
 

@@ -239,24 +239,36 @@ export function BitcoinLedger({
   }
 
   function getAccountXpub() {
-    accountXpubPromise ??= getSigner().then(async (signer) => {
-      const { extendedPublicKey } = await executeLedgerDeviceAction({
-        action: signer.getExtendedPublicKey(configuredPath.accountPath),
-        onDeviceActionState,
+    if (!accountXpubPromise) {
+      accountXpubPromise = getSigner().then(async (signer) => {
+        const { extendedPublicKey } = await executeLedgerDeviceAction({
+          action: signer.getExtendedPublicKey(configuredPath.accountPath),
+          onDeviceActionState,
+        });
+        return extendedPublicKey;
       });
-      return extendedPublicKey;
-    });
+      const pendingXpub = accountXpubPromise;
+      void pendingXpub.catch(() => {
+        if (accountXpubPromise === pendingXpub) accountXpubPromise = undefined;
+      });
+    }
     return accountXpubPromise;
   }
 
   function getMasterFingerprint() {
-    fingerprintPromise ??= getSigner().then(async (signer) => {
-      const { masterFingerprint } = await executeLedgerDeviceAction({
-        action: signer.getMasterFingerprint(),
-        onDeviceActionState,
+    if (!fingerprintPromise) {
+      fingerprintPromise = getSigner().then(async (signer) => {
+        const { masterFingerprint } = await executeLedgerDeviceAction({
+          action: signer.getMasterFingerprint(),
+          onDeviceActionState,
+        });
+        return fingerprintToNumber(masterFingerprint);
       });
-      return fingerprintToNumber(masterFingerprint);
-    });
+      const pendingFingerprint = fingerprintPromise;
+      void pendingFingerprint.catch(() => {
+        if (fingerprintPromise === pendingFingerprint) fingerprintPromise = undefined;
+      });
+    }
     return fingerprintPromise;
   }
 

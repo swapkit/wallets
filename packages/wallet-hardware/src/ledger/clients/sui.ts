@@ -1,4 +1,4 @@
-import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Sui from "@ledgerhq/hw-app-sui";
 import type Transport from "@ledgerhq/hw-transport";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@swapkit/helpers";
 
 import {
+  LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
@@ -86,7 +87,7 @@ export class SuiLedgerInterface {
 
       const result = await this.runSuiOperation({
         operation: (app) => app.signTransaction(ledgerPath, intentMessage),
-        requiredUserInteraction: UserInteractionRequired.SignTransaction,
+        requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
       });
 
       if (!result?.signature) throw new SwapKitError("wallet_ledger_signing_error");

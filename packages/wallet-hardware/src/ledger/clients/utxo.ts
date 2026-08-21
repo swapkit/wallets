@@ -1,4 +1,4 @@
-import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type BitcoinApp from "@ledgerhq/hw-app-btc";
 import type { CreateTransactionArg } from "@ledgerhq/hw-app-btc/lib-es/createTransaction";
 import type Transport from "@ledgerhq/hw-transport";
@@ -14,6 +14,7 @@ import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { PCZT, Transaction } from "@swapkit/utxo-signer";
 
 import {
+  LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
@@ -296,7 +297,7 @@ const BaseLedgerUTXO = ({
                 lockTime: global.lockTime,
               },
             ),
-          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
 
         const signedTx = ZcashTransaction.fromHex(signedTxHex, { allowUnknownOutputs: true });
@@ -318,7 +319,7 @@ const BaseLedgerUTXO = ({
         return await runBtcOperation({
           operation: (app) =>
             signUTXOTransaction({ btcApp: app, chain, derivationPath, inputUtxos, tx }, additionalSignParams),
-          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
       },
 
@@ -333,7 +334,7 @@ const BaseLedgerUTXO = ({
               { btcApp: app, chain, derivationPaths, inputUtxos, tx },
               additionalSignParams,
             ),
-          requiredUserInteraction: UserInteractionRequired.SignTransaction,
+          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
       },
     };

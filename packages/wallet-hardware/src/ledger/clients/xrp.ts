@@ -1,4 +1,4 @@
-import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import Xrp from "@ledgerhq/hw-app-xrp";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, type DerivationPathArray, derivationPathToString, NetworkDerivationPath } from "@swapkit/helpers";
@@ -7,6 +7,7 @@ import { encode } from "ripple-binary-codec";
 import type { Payment } from "xrpl";
 
 import {
+  LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
@@ -58,7 +59,7 @@ export async function XRPLedger(paramsOrPath?: XRPLedgerParams | DerivationPathA
     const transactionToSignOnLedger = encode(transactionJSON);
     const txnSignature = await runXrpOperation({
       operation: (app) => app.signTransaction(path, transactionToSignOnLedger),
-      requiredUserInteraction: UserInteractionRequired.SignTransaction,
+      requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
     });
     const tx_blob = encode({ ...transactionJSON, TxnSignature: txnSignature });
     const hash = hashes.hashSignedTx(tx_blob);
