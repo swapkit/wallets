@@ -1,5 +1,19 @@
 # @swapkit/sdk
 
+## 4.6.47
+
+### Patch Changes
+
+- [#134](https://github.com/swapkit/wallets/pull/134) [`d68f8e7`](https://github.com/swapkit/wallets/commit/d68f8e7a674860f3dc190f1ab26ee2d816b715e8) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+- [#105](https://github.com/swapkit/wallets/pull/105) [`c400162`](https://github.com/swapkit/wallets/commit/c4001623aa2d7e1e384a16a200d8dcf29366be4f) Thanks [@towanTG](https://github.com/towanTG)! - Replace the injected-provider MetaMask path with the new MetaMask multichain connector. (via @swapkit/wallets@4.11.0)
+- [#108](https://github.com/swapkit/wallets/pull/108) [`61a7689`](https://github.com/swapkit/wallets/commit/61a76894332a061f2825cbe4c5ab2f51f1c8c5a4) Thanks [@GiMa-SwapKit](https://github.com/GiMa-SwapKit)! - Add TON Connect as a wallet option (`@swapkit/wallets/tonconnect`). (via @swapkit/wallets@4.11.0)
+- [#45](https://github.com/swapkit/wallets/pull/45) [`c1c5159`](https://github.com/swapkit/wallets/commit/c1c515956957e027ce7327843cb1aa604b921605) Thanks [@towanTG](https://github.com/towanTG)! - Reuse compatible WalletConnect sessions and pairings instead of force-resetting sessions on every connect. (via @swapkit/wallets@4.11.0)
+- [#135](https://github.com/swapkit/wallets/pull/135) [`e3f47a4`](https://github.com/swapkit/wallets/commit/e3f47a4f52b076e56375389b52303c6eaeeafe77) Thanks [@towanTG](https://github.com/towanTG)! - MetaMask multichain connect now connects the granted subset of requested chains instead of failing the whole connect when the wallet approves only some scopes; it throws only when nothing was granted. (via @swapkit/wallets@4.11.0)
+- [#136](https://github.com/swapkit/wallets/pull/136) [`91fed78`](https://github.com/swapkit/wallets/commit/91fed78e63eed0b0eba7875f978ec8f7ef010ec9) Thanks [@towanTG](https://github.com/towanTG)! - Retry stale WalletConnect pairings with a fresh QR pairing instead of failing the connect. (via @swapkit/wallets@4.11.0)
+- [#138](https://github.com/swapkit/wallets/pull/138) [`90ac313`](https://github.com/swapkit/wallets/commit/90ac313d36aa9f81588fd7aa76486193c55ead42) Thanks [@towanTG](https://github.com/towanTG)! - Adapt to the SwapKit SDK 5.0.0 release surface: (via @swapkit/wallets@4.11.0)
+- [#65](https://github.com/swapkit/wallets/pull/65) [`4c8dcda`](https://github.com/swapkit/wallets/commit/4c8dcda7ff06aaa6c0a053b82ed81e8b5a3d221f) Thanks [@towanTG](https://github.com/towanTG)! - Enable WalletConnect direct signing support for Cosmos, Kujira, Maya, Near, THORChain, and Tron. (via @swapkit/wallets@4.11.0)
+- [#133](https://github.com/swapkit/wallets/pull/133) [`14374d1`](https://github.com/swapkit/wallets/commit/14374d120f31e41a54786aa3d5e2e014b6f71b77) Thanks [@towanTG](https://github.com/towanTG)! - Derive WalletConnect direct-signing support from the approved session methods and accounts. (via @swapkit/wallets@4.11.0)
+
 ## 4.6.46
 
 ### Patch Changes
