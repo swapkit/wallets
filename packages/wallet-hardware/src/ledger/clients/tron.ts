@@ -1,4 +1,4 @@
-import { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type TronApp from "@ledgerhq/hw-app-trx";
 import type Transport from "@ledgerhq/hw-transport";
 import {
@@ -10,6 +10,7 @@ import {
 import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
 
 import {
+  LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
@@ -72,7 +73,7 @@ export class TronLedgerInterface implements TronSigner {
   showAddressAndPubKey = async () => {
     return await this.runTronOperation({
       operation: (app) => app.getAddress(this.derivationPath, true),
-      requiredUserInteraction: UserInteractionRequired.VerifyAddress,
+      requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.VerifyAddress,
     });
   };
 
@@ -80,7 +81,7 @@ export class TronLedgerInterface implements TronSigner {
     try {
       const signature = await this.runTronOperation({
         operation: (app) => app.signTransaction(this.derivationPath, transaction.raw_data_hex, []),
-        requiredUserInteraction: UserInteractionRequired.SignTransaction,
+        requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
       });
 
       if (!signature) throw new SwapKitError("wallet_ledger_signing_error");

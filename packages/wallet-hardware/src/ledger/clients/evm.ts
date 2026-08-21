@@ -27,6 +27,36 @@ interface EVMLedgerParams {
   originToken?: string;
 }
 
+function selectTypedDataTypes({
+  primaryType,
+  types,
+}: {
+  primaryType: string;
+  types: Record<string, TypedDataField[]>;
+}) {
+  const selectedTypes: Record<string, TypedDataField[]> = {};
+
+  function addType(typeName: string) {
+    if (Object.hasOwn(selectedTypes, typeName) || !Object.hasOwn(types, typeName)) return;
+    const fields = types[typeName];
+    if (!fields) return;
+
+    selectedTypes[typeName] = fields;
+    for (const field of fields) addType(field.type.replace(/\[[0-9]*\]/g, ""));
+  }
+
+  addType(primaryType);
+
+  if (!Object.hasOwn(selectedTypes, primaryType)) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      primaryType,
+      reason: "The EIP-712 primary type is not defined",
+    });
+  }
+
+  return selectedTypes;
+}
+
 class EVMLedgerInterface extends AbstractSigner {
   chainId: ChainId = ChainId.Ethereum;
   derivationPath = "";
@@ -122,7 +152,8 @@ class EVMLedgerInterface extends AbstractSigner {
     const { hexlify, Signature, TypedDataEncoder } = await import("ethers");
     const { EIP712Domain: _, ...filteredTypes } = types;
     const primaryType = explicitPrimaryType ?? TypedDataEncoder.from(filteredTypes).primaryType;
-    const populated = await TypedDataEncoder.resolveNames(domain, filteredTypes, value, async (name) => {
+    const resolutionTypes = selectTypedDataTypes({ primaryType, types: filteredTypes });
+    const populated = await TypedDataEncoder.resolveNames(domain, resolutionTypes, value, async (name) => {
       const resolvedAddress = await this.resolveName(name);
       if (!resolvedAddress) throw new SwapKitError("wallet_ledger_invalid_params", { name });
       return resolvedAddress;

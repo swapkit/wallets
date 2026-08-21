@@ -14,7 +14,10 @@ const walletAddressCalls: Array<{
 }> = [];
 const xpubCalls: Array<{ options?: { checkOnDevice?: boolean }; path: string }> = [];
 const signCalls: Array<{ psbt: Uint8Array; wallet: { derivationPath: string; template: string } }> = [];
+let fingerprintCalls = 0;
+let fingerprintFailuresRemaining = 0;
 let signedRaw = "";
+let xpubFailuresRemaining = 0;
 
 function deviceAction<Output>(output: Output) {
   return {
@@ -24,6 +27,10 @@ function deviceAction<Output>(output: Output) {
       { output, status: DeviceActionStatus.Completed },
     ),
   };
+}
+
+function failedDeviceAction(error: Error) {
+  return { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
 }
 
 mock.module("@ledgerhq/device-signer-kit-bitcoin", () => ({
@@ -44,9 +51,20 @@ mock.module("@ledgerhq/device-signer-kit-bitcoin", () => ({
       return {
         getExtendedPublicKey: (path: string, options?: { checkOnDevice?: boolean }) => {
           xpubCalls.push({ options, path });
+          if (xpubFailuresRemaining > 0) {
+            xpubFailuresRemaining -= 1;
+            return failedDeviceAction(new Error("Transient account xpub failure"));
+          }
           return deviceAction({ extendedPublicKey: accountXpub });
         },
-        getMasterFingerprint: () => deviceAction({ masterFingerprint: Uint8Array.of(0xde, 0xad, 0xbe, 0xef) }),
+        getMasterFingerprint: () => {
+          fingerprintCalls += 1;
+          if (fingerprintFailuresRemaining > 0) {
+            fingerprintFailuresRemaining -= 1;
+            return failedDeviceAction(new Error("Transient master fingerprint failure"));
+          }
+          return deviceAction({ masterFingerprint: Uint8Array.of(0xde, 0xad, 0xbe, 0xef) });
+        },
         getWalletAddress: (
           wallet: { derivationPath: string; template: string },
           addressIndex: number,
@@ -96,7 +114,10 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
     walletAddressCalls.length = 0;
     xpubCalls.length = 0;
     signCalls.length = 0;
+    fingerprintCalls = 0;
+    fingerprintFailuresRemaining = 0;
     signedRaw = "";
+    xpubFailuresRemaining = 0;
   });
 
   it("normalizes the address path and maps purpose 86 to a taproot wallet", async () => {
@@ -142,6 +163,34 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
       ],
     ]);
     expect(xpubCalls).toEqual([{ options: undefined, path: "84'/0'/0'" }]);
+  });
+
+  it("retries account xpub metadata after a transient device action failure", async () => {
+    const transaction = makeTransaction();
+    signedRaw = signedTransactionRaw(transaction);
+    xpubFailuresRemaining = 1;
+    const client = BitcoinLedger({ derivationPath: "m/84'/0'/0'/0/0", dmkSession });
+
+    await expect(client.signTransaction(transaction)).rejects.toThrow("Transient account xpub failure");
+    await client.signTransaction(transaction);
+
+    expect(xpubCalls).toHaveLength(2);
+    expect(fingerprintCalls).toBe(1);
+    expect(signCalls).toHaveLength(1);
+  });
+
+  it("retries master fingerprint metadata after a transient device action failure", async () => {
+    const transaction = makeTransaction();
+    signedRaw = signedTransactionRaw(transaction);
+    fingerprintFailuresRemaining = 1;
+    const client = BitcoinLedger({ derivationPath: "m/84'/0'/0'/0/0", dmkSession });
+
+    await expect(client.signTransaction(transaction)).rejects.toThrow("Transient master fingerprint failure");
+    await client.signTransaction(transaction);
+
+    expect(xpubCalls).toHaveLength(1);
+    expect(fingerprintCalls).toBe(2);
+    expect(signCalls).toHaveLength(1);
   });
 
   it("supports different leaf paths in one account and rejects account mixing", async () => {

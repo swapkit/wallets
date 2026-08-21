@@ -1,11 +1,24 @@
-import {
-  type DeviceActionIntermediateValue,
-  type DeviceActionState,
+import type {
+  DeviceActionIntermediateValue,
+  DeviceActionState,
   DeviceActionStatus,
-  type ExecuteDeviceActionReturnType,
+  ExecuteDeviceActionReturnType,
+  UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
 import { SwapKitError } from "@swapkit/helpers";
 import { match } from "ts-pattern";
+
+const DEVICE_ACTION_STATUS = {
+  Completed: "completed" as DeviceActionStatus.Completed,
+  Error: "error" as DeviceActionStatus.Error,
+  Stopped: "stopped" as DeviceActionStatus.Stopped,
+} as const;
+
+export const LEDGER_USER_INTERACTION_REQUIRED = {
+  None: "none" as UserInteractionRequired.None,
+  SignTransaction: "sign-transaction" as UserInteractionRequired.SignTransaction,
+  VerifyAddress: "verify-address" as UserInteractionRequired.VerifyAddress,
+} as const;
 
 export type LedgerDeviceActionState = DeviceActionState<unknown, unknown, DeviceActionIntermediateValue>;
 export type LedgerDeviceActionStateHandler = (state: LedgerDeviceActionState) => void;
@@ -47,9 +60,9 @@ export function executeLedgerDeviceAction<
         }
 
         match(state)
-          .with({ status: DeviceActionStatus.Completed }, ({ output }) => settle(() => resolve(output)))
-          .with({ status: DeviceActionStatus.Error }, ({ error }) => settle(() => reject(error)))
-          .with({ status: DeviceActionStatus.Stopped }, () =>
+          .with({ status: DEVICE_ACTION_STATUS.Completed }, ({ output }) => settle(() => resolve(output)))
+          .with({ status: DEVICE_ACTION_STATUS.Error }, ({ error }) => settle(() => reject(error)))
+          .with({ status: DEVICE_ACTION_STATUS.Stopped }, () =>
             settle(() => reject(new SwapKitError("wallet_ledger_connection_error"))),
           )
           .otherwise(() => undefined);

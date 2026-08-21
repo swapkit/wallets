@@ -1,24 +1,21 @@
 import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
 import { Secp256k1Signature } from "@cosmjs/crypto";
-import {
-  CallTaskInAppDeviceAction,
-  type DmkError,
-  DmkResultFactory,
-  isSuccessCommandResult,
-  UnknownDeviceExchangeError,
-  UserInteractionRequired,
-} from "@ledgerhq/device-management-kit";
+import type { Command, DmkError, UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
 import { type DerivationPathArray, NetworkDerivationPath, SKConfig, SwapKitError } from "@swapkit/helpers";
 
 import type { LedgerDMKSession } from "../../helpers/dmk";
-import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../../helpers/executeDeviceAction";
+import {
+  executeLedgerDeviceAction,
+  LEDGER_USER_INTERACTION_REQUIRED,
+  type LedgerDeviceActionStateHandler,
+} from "../../helpers/executeDeviceAction";
 import {
   getThorAddressCommand,
   getThorLegacyVersion,
   getThorSignCommands,
-  invalidThorAppVersion,
+  invalidThorAppVersionMessage,
   parseThorAddressResponse,
   sendThorLegacyCommand,
   type ThorCommand,
@@ -115,7 +112,10 @@ export class THORChainLedger {
   }) => {
     if (this.transport) {
       const version = await getThorLegacyVersion({ transport: this.transport });
-      if (!version.startsWith("2.")) throw invalidThorAppVersion({ version });
+      if (!version.startsWith("2.")) {
+        const { InvalidResponseFormatError } = await import("@ledgerhq/device-management-kit");
+        throw new InvalidResponseFormatError(invalidThorAppVersionMessage({ version }));
+      }
 
       let response = new Uint8Array();
       for (const command of commands) {
@@ -126,6 +126,34 @@ export class THORChainLedger {
 
     const dmkSession = this.dmkSession;
     if (!dmkSession) throw new SwapKitError("wallet_ledger_connection_error");
+
+    const {
+      Apdu,
+      CallTaskInAppDeviceAction,
+      CommandResultFactory,
+      DmkResultFactory,
+      InvalidResponseFormatError,
+      InvalidStatusWordError,
+      isSuccessCommandResult,
+      UnknownDeviceExchangeError,
+    } = await import("@ledgerhq/device-management-kit");
+    const toDmkCommand = (command: ThorCommand): Command<Uint8Array> => {
+      const apdu = command.getApdu();
+
+      return {
+        getApdu: () => new Apdu(apdu.cla, apdu.ins, apdu.p1, apdu.p2, apdu.data),
+        name: command.name,
+        parseResponse: (response) => {
+          try {
+            return CommandResultFactory<Uint8Array>({ data: command.parseResponse(response) });
+          } catch (error) {
+            return CommandResultFactory<Uint8Array>({
+              error: new InvalidStatusWordError(error instanceof Error ? error.message : String(error)),
+            });
+          }
+        },
+      };
+    };
 
     const deviceAction = new CallTaskInAppDeviceAction<{ response: Uint8Array }, DmkError, UserInteractionRequired>({
       input: {
@@ -138,13 +166,13 @@ export class THORChainLedger {
             const version = "currentApp" in sessionState ? sessionState.currentApp.version : undefined;
             if (!version?.startsWith("2.")) {
               return DmkResultFactory<{ response: Uint8Array }, DmkError>({
-                error: invalidThorAppVersion({ version }),
+                error: new InvalidResponseFormatError(invalidThorAppVersionMessage({ version })),
               });
             }
 
             let response: Uint8Array<ArrayBufferLike> = new Uint8Array();
             for (const command of commands) {
-              const result = await internalApi.sendCommand(command);
+              const result = await internalApi.sendCommand(toDmkCommand(command));
               if (!isSuccessCommandResult(result)) {
                 return DmkResultFactory<{ response: Uint8Array }, DmkError>({ error: result.error });
               }
@@ -175,7 +203,9 @@ export class THORChainLedger {
       commands: [
         getThorAddressCommand({ checkOnDevice, hrp: isStagenet ? "sthor" : "thor", path: this.derivationPath }),
       ],
-      requiredUserInteraction: checkOnDevice ? UserInteractionRequired.VerifyAddress : UserInteractionRequired.None,
+      requiredUserInteraction: checkOnDevice
+        ? LEDGER_USER_INTERACTION_REQUIRED.VerifyAddress
+        : LEDGER_USER_INTERACTION_REQUIRED.None,
     });
 
     return parseThorAddressResponse({ response });
@@ -184,7 +214,7 @@ export class THORChainLedger {
   private signBytes = async ({ message }: { message: Uint8Array }) => {
     const response = await this.executeCommands({
       commands: getThorSignCommands({ message, path: this.derivationPath }),
-      requiredUserInteraction: UserInteractionRequired.SignTransaction,
+      requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
     });
 
     return getFixedSignature({ signature: response });
