@@ -1,13 +1,11 @@
 import { WalletOption } from "@swapkit/helpers";
-// Registers WalletOption.TON_CONNECT before the match below reads it; the
-// heavy TON Connect client itself still loads lazily via the match arm.
-import "./tonconnect/register";
+import { TON_CONNECT, type TonConnectOption } from "./tonconnect/option";
 import type { SKWallets } from "./types";
 
 export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Promise<SKWallets[W]> {
   const { match } = await import("ts-pattern");
 
-  const wallet = await match(walletOption as WalletOption)
+  const wallet = await match(walletOption as WalletOption | TonConnectOption)
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
     .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
     .with(WalletOption.CTRL, async () => (await import("@swapkit/wallet-extensions/ctrl")).ctrlWallet)
@@ -53,7 +51,7 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
     .with(WalletOption.RADIX_WALLET, async () => (await import("./radix")).radixWallet)
     .with(WalletOption.TALISMAN, async () => (await import("@swapkit/wallet-extensions/talisman")).talismanWallet)
     .with(WalletOption.TRONLINK, async () => (await import("@swapkit/wallet-extensions/tronlink")).tronlinkWallet)
-    .with(WalletOption.TON_CONNECT, async () => (await import("./tonconnect")).tonconnectWallet)
+    .with(TON_CONNECT, async () => (await import("./tonconnect")).tonconnectWallet)
     .with(WalletOption.WALLET_SELECTOR, async () => (await import("./near-wallet-selector")).walletSelectorWallet)
     .with(WalletOption.XAMAN, async () => (await import("./xaman")).xamanWallet)
     .exhaustive();

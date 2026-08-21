@@ -418,7 +418,7 @@ async function getWalletMethods({
     }
 
     case Chain.Cosmos: {
-      const { createSigningStargateClient, getMsgSendDenom, getCosmosToolbox } = await import(
+      const { createSigningStargateClient, getDefaultChainFee, getMsgSendDenom, getCosmosToolbox } = await import(
         "@swapkit/toolboxes/cosmos"
       );
       const signer = await getLedgerClient({ chain, derivationPath, transport });
@@ -445,7 +445,7 @@ async function getWalletMethods({
         const { transactionHash } = await signingClient.signAndBroadcast(
           address,
           [{ typeUrl: "/cosmos.bank.v1beta1.MsgSend", value: sendCoinsMessage }],
-          2,
+          getDefaultChainFee(Chain.Cosmos),
           memo,
         );
 

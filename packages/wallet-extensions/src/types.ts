@@ -1,7 +1,10 @@
-import type { AminoSignResponse, OfflineAminoSigner, StdSignature, StdSignDoc } from "@cosmjs/amino";
-import type { OfflineDirectSigner } from "@cosmjs/proto-signing";
+import type { AminoSignResponse, StdSignature, StdSignDoc } from "@cosmjs/amino";
 import type { Keplr } from "@keplr-wallet/types";
 import type { EthereumWindowProvider } from "@swapkit/helpers";
+// The offline-signer handles feed straight into the cosmos toolbox, whose 5.0.0
+// client (backed by @swapkit/cosmos-signer) declares its own signer interfaces
+// replacing the @cosmjs ones — type the handles with those.
+import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
