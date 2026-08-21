@@ -1,11 +1,3 @@
-import {
-  ApduBuilder,
-  type ApduResponse,
-  type Command,
-  CommandResultFactory,
-  InvalidResponseFormatError,
-  InvalidStatusWordError,
-} from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { SwapKitError } from "@swapkit/helpers";
 
@@ -26,7 +18,12 @@ interface ThorCommandParams {
   p2?: number;
 }
 
-export class ThorCommand implements Command<Uint8Array> {
+interface ThorApduResponse {
+  data: Uint8Array;
+  statusCode: Uint8Array;
+}
+
+export class ThorCommand {
   readonly name = "THORChainCommand";
   private readonly params: ThorCommandParams;
 
@@ -36,18 +33,16 @@ export class ThorCommand implements Command<Uint8Array> {
 
   getApdu() {
     const { data = new Uint8Array(), ins, p1 = 0, p2 = 0 } = this.params;
-    return new ApduBuilder({ cla: CLA, ins, p1, p2 }).addBufferToData(data).build();
+    return { cla: CLA, data, ins, p1, p2 };
   }
 
-  parseResponse(response: ApduResponse) {
+  parseResponse(response: ThorApduResponse) {
     const status = (response.statusCode[0] ?? 0) * 0x100 + (response.statusCode[1] ?? 0);
     if (status !== STATUS_OK) {
-      return CommandResultFactory<Uint8Array>({
-        error: new InvalidStatusWordError(`THORChain app returned status 0x${status.toString(16).padStart(4, "0")}`),
-      });
+      throw new Error(`THORChain app returned status 0x${status.toString(16).padStart(4, "0")}`);
     }
 
-    return CommandResultFactory<Uint8Array>({ data: response.data });
+    return response.data;
   }
 }
 
@@ -158,6 +153,6 @@ export function parseThorAddressResponse({ response }: { response: Uint8Array })
   return { address, publicKey };
 }
 
-export function invalidThorAppVersion({ version }: { version?: string }) {
-  return new InvalidResponseFormatError(`THORChain Ledger app major 2 is required, received ${version || "unknown"}`);
+export function invalidThorAppVersionMessage({ version }: { version?: string }) {
+  return `THORChain Ledger app major 2 is required, received ${version || "unknown"}`;
 }

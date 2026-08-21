@@ -283,6 +283,28 @@ describe("wallet-hardware/ledger", () => {
     ]);
   });
 
+  it("ArbitrumLedger: honors an explicit primary type when resolving names with an unrelated root", async () => {
+    const resolveName = mock((name: string) =>
+      Promise.resolve(name === "vault.eth" ? "0x0000000000000000000000000000000000000004" : null),
+    );
+    const provider = { resolveName } as unknown as Parameters<typeof ArbitrumLedger>[0]["provider"];
+    const client = ArbitrumLedger({ dmkSession, provider });
+
+    await client.signTypedData(
+      { chainId: 42161n },
+      { Message: [{ name: "recipient", type: "address" }], Unrelated: [{ name: "contents", type: "string" }] },
+      { recipient: "vault.eth" },
+      "Message",
+    );
+
+    expect(resolveName.mock.calls).toEqual([["vault.eth"]]);
+    expect(ethereumSignTypedDataInvocations[0]?.typedData).toMatchObject({
+      message: { recipient: "0x0000000000000000000000000000000000000004" },
+      primaryType: "Message",
+      types: { Message: [{ name: "recipient", type: "address" }], Unrelated: [{ name: "contents", type: "string" }] },
+    });
+  });
+
   it("ArbitrumLedger: preserves EIP-2930 access lists", async () => {
     const provider = {} as Parameters<typeof ArbitrumLedger>[0]["provider"];
     const client = ArbitrumLedger({ dmkSession, provider });
