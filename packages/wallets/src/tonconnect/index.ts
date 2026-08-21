@@ -1,9 +1,7 @@
-import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
+import { Chain, filterSupportedChains, type WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-// Deep importers of @swapkit/wallets/tonconnect need the registration too;
-// the module cache keeps this idempotent with the eager import in utils.ts.
-import "./register";
 import { getWalletForChain } from "./helpers";
+import { TON_CONNECT } from "./option";
 import type { TonConnectConfig } from "./types";
 import { connectTonConnect, getTonConnectInstance } from "./walletMethods";
 
@@ -24,7 +22,7 @@ export const tonconnectWallet = createWallet({
           balance: [],
           chain,
           disconnect: () => tonConnectUI.disconnect(),
-          walletType: WalletOption.TON_CONNECT,
+          walletType: TON_CONNECT,
         });
       });
 
@@ -34,7 +32,10 @@ export const tonconnectWallet = createWallet({
   directSigningSupport: { [Chain.Ton]: true },
   name: "connectTonConnect",
   supportedChains: [Chain.Ton],
-  walletType: WalletOption.TON_CONNECT,
+  // createWallet constrains walletType to the WalletOption enum, which has no
+  // TON_CONNECT member until the registry lands upstream (swapkit/sdk#346) —
+  // the one sanctioned widening; runtime value is the same literal either way.
+  walletType: TON_CONNECT as unknown as WalletOption,
 });
 
 export const TON_CONNECT_SUPPORTED_CHAINS = getWalletSupportedChains(tonconnectWallet);

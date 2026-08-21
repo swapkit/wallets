@@ -3,7 +3,7 @@
     "@noble/curves": "2.2.0",
     "@noble/hashes": "~2.2.0",
     "@swapkit/sdk": "workspace:*",
-    "@swapkit/ui": "0.21.1",
+    "@swapkit/ui": "0.23.0",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
     "@swapkit/wallet-mobile": "workspace:*",
@@ -23,11 +23,7 @@
   },
   "name": "@internal/playground-vite-lite",
   "private": true,
-  "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "preview": "vite preview"
-  },
+  "scripts": { "build": "vite build", "dev": "vite", "preview": "vite preview" },
   "type": "module",
   "version": "0.0.9"
 }

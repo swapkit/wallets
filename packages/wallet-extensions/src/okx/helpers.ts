@@ -23,7 +23,7 @@ const cosmosTransfer =
     if (!(window.okxwallet && "keplr" in window.okxwallet)) {
       throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });
     }
-    const { createSigningStargateClient } = await import("@swapkit/toolboxes/cosmos");
+    const { createSigningStargateClient, getDefaultChainFee } = await import("@swapkit/toolboxes/cosmos");
 
     const { keplr: wallet } = window.okxwallet;
     const offlineSigner = wallet?.getOfflineSignerOnlyAmino(getChainConfig(Chain.Cosmos).chainId);
@@ -34,7 +34,13 @@ const cosmosTransfer =
     const denom = assetValue?.symbol === "MUON" ? "umuon" : "uatom";
     const coins = [{ amount: assetValue.getBaseValue("string"), denom }];
 
-    const { transactionHash } = await cosmJS.sendTokens(sender, recipient, coins, 1.6, memo);
+    const { transactionHash } = await cosmJS.sendTokens(
+      sender,
+      recipient,
+      coins,
+      getDefaultChainFee(Chain.Cosmos),
+      memo,
+    );
     return transactionHash;
   };
 
