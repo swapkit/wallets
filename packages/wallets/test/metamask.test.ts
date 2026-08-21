@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
+import * as ethersModule from "ethers";
 
 const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const ETHEREUM_ADDRESS = "0x1111111111111111111111111111111111111111";
@@ -52,7 +53,7 @@ mock.module("@metamask/connect-multichain", () => ({
   },
 }));
 
-mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
+mock.module("ethers", () => ({ ...ethersModule, BrowserProvider: MockBrowserProvider }));
 
 mock.module("@swapkit/wallet-extensions/evm-extensions", () => ({
   getWeb3WalletMethods: (options: Record<string, unknown>) => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Chain, WalletOption } from "@swapkit/helpers";
+import * as ethersModule from "ethers";
 
 let balanceAddressCalls: string[] = [];
 
@@ -56,7 +57,7 @@ class MockBrowserProvider {
   }
 }
 
-mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
+mock.module("ethers", () => ({ ...ethersModule, BrowserProvider: MockBrowserProvider }));
 
 mock.module("@swapkit/toolboxes/evm", () => ({
   getEvmToolboxAsync: async () => ({
