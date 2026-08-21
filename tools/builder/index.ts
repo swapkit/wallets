@@ -33,9 +33,11 @@ export async function buildPackage({
   };
 
   const buildESM = await Bun.build(buildOptions);
+  // Code splitting is esm-only — bun 1.4.0 rejects it for other formats
+  // (older bun silently ignored it on the cjs pass).
   const buildCJS = evmOnly
     ? { logs: [], outputs: [], success: true }
-    : await Bun.build({ ...buildOptions, format: "cjs", naming: "[dir]/[name].cjs" });
+    : await Bun.build({ ...buildOptions, format: "cjs", naming: "[dir]/[name].cjs", splitting: false });
 
   if (!(buildESM.success || buildCJS.success)) {
     throw new AggregateError(buildESM.logs.concat(buildCJS.logs), "Build failed");
