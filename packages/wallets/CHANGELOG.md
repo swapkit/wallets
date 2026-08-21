@@ -1,5 +1,71 @@
 # @swapkit-dev/wallets
 
+## 4.11.0
+
+### Minor Changes
+
+- [#105](https://github.com/swapkit/wallets/pull/105) [`c400162`](https://github.com/swapkit/wallets/commit/c4001623aa2d7e1e384a16a200d8dcf29366be4f) Thanks [@towanTG](https://github.com/towanTG)! - Replace the injected-provider MetaMask path with the new MetaMask multichain connector.
+
+- [#108](https://github.com/swapkit/wallets/pull/108) [`61a7689`](https://github.com/swapkit/wallets/commit/61a76894332a061f2825cbe4c5ab2f51f1c8c5a4) Thanks [@GiMa-SwapKit](https://github.com/GiMa-SwapKit)! - Add TON Connect as a wallet option (`@swapkit/wallets/tonconnect`).
+
+  TON Connect is the standard wallet connection protocol for the TON blockchain and supports only `Chain.Ton`, including its native token and Jettons. The integration wraps `@tonconnect/ui` for the connect modal, universal links, and bridge sessions, and delegates message building, balances, and fee estimation to the signerless `@swapkit/toolboxes/ton` toolbox. Signing and broadcasting are routed through the connected wallet's `sendTransaction`.
+
+  Notes:
+
+  - Requires a publicly hosted `tonconnect-manifest.json` (`manifestUrl`), or an existing `TonConnectUI` instance can be injected.
+  - Sweep transfers (`CARRY_ALL_REMAINING_BALANCE`) are rejected: the TON Connect protocol does not carry a send mode, the wallet chooses it.
+  - Detached signing (`sign`) is not supported by the protocol; use `signAndBroadcastTransaction` / `transfer`.
+
+- [#45](https://github.com/swapkit/wallets/pull/45) [`c1c5159`](https://github.com/swapkit/wallets/commit/c1c515956957e027ce7327843cb1aa604b921605) Thanks [@towanTG](https://github.com/towanTG)! - Reuse compatible WalletConnect sessions and pairings instead of force-resetting sessions on every connect.
+
+### Patch Changes
+
+- [#135](https://github.com/swapkit/wallets/pull/135) [`e3f47a4`](https://github.com/swapkit/wallets/commit/e3f47a4f52b076e56375389b52303c6eaeeafe77) Thanks [@towanTG](https://github.com/towanTG)! - MetaMask multichain connect now connects the granted subset of requested chains instead of failing the whole connect when the wallet approves only some scopes; it throws only when nothing was granted.
+
+- [#136](https://github.com/swapkit/wallets/pull/136) [`91fed78`](https://github.com/swapkit/wallets/commit/91fed78e63eed0b0eba7875f978ec8f7ef010ec9) Thanks [@towanTG](https://github.com/towanTG)! - Retry stale WalletConnect pairings with a fresh QR pairing instead of failing the connect.
+
+- [#138](https://github.com/swapkit/wallets/pull/138) [`90ac313`](https://github.com/swapkit/wallets/commit/90ac313d36aa9f81588fd7aa76486193c55ead42) Thanks [@towanTG](https://github.com/towanTG)! - Adapt to the SwapKit SDK 5.0.0 release surface:
+
+  - TON Connect no longer uses the extensible WalletOption registry — helpers 5.0.0
+    shipped without it (swapkit/sdk#346 is unmerged). `TON_CONNECT` is now a local
+    literal wallet option (`@swapkit/wallets/tonconnect` `option.ts`); runtime
+    values and connected-wallet shapes are unchanged, and the registry adoption
+    can be restored once a helpers release carries it again.
+  - Cosmos transfers (OKX extension, Ledger) pass `getDefaultChainFee(Chain.Cosmos)`
+    instead of a numeric gas multiplier — the toolboxes 5.0.0 cosmos client
+    (backed by `@swapkit/cosmos-signer`) accepts only an explicit `StdFee`.
+  - Root override pins `@swapkit/cosmos-signer` to 0.1.0: toolboxes 5.0.0 peers on
+    0.2.0, which was never published (release-run npm E404). 0.1.0 exports every
+    symbol toolboxes imports; drop the override once 0.2.0 is on npm.
+
+- [#134](https://github.com/swapkit/wallets/pull/134) [`d68f8e7`](https://github.com/swapkit/wallets/commit/d68f8e7a674860f3dc190f1ab26ee2d816b715e8) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - @swapkit/helpers: 4.20.1 → 0.0.0
+  - [#344](https://github.com/swapkit/sdk/pull/344) [`7f99d74`](https://github.com/swapkit/sdk/commit/7f99d74ec21d58d07b2cccc5b111f8fdae6c7afb) Thanks [@ice-chillios](https://github.com/ice-chillios)! - **ESM-only packages.** CommonJS output (`.cjs`) and `require` export conditions have been removed; every package now ships ESM only (code-splitting stays enabled), with a uniform `{ default, types }` exports shape. `buildPackage` from `@swapkit/tools-builder` no longer emits CJS and the unused `esmOnly` option has been removed.
+  - [#249](https://github.com/swapkit/sdk/pull/249) [`41505dc`](https://github.com/swapkit/sdk/commit/41505dc0f4f77dd301cfced063013efb6307b9bb) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Replace `@cosmjs/{amino,crypto,proto-signing,stargate}@0.39.0` with native `@swapkit/cosmos-signer` package. The new signer is ESM-native (no CJS↔ESM-only-noble breakage), uses only `@noble/curves`, `@noble/hashes`, `@scure/{base,bip32,bip39}` + `cosmjs-types` for proto encoders. **No `@cosmjs/*` runtime dependency.** (via @swapkit/toolboxes@5.0.0)
+  - [#298](https://github.com/swapkit/sdk/pull/298) [`3017621`](https://github.com/swapkit/sdk/commit/3017621ee5c2da15550036853df74d81f59d6ffb) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Speed up `createTransaction` across toolboxes by removing serial and redundant network round-trips from the build path. Two techniques, both backward-compatible: (via @swapkit/toolboxes@5.0.0)
+  - [#360](https://github.com/swapkit/sdk/pull/360) [`d6061d5`](https://github.com/swapkit/sdk/commit/d6061d58367cdf077acf60421a1e8b448363f486) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Add HyperCore `sendAsset` payin support. (via @swapkit/toolboxes@5.0.0)
+  - [#295](https://github.com/swapkit/sdk/pull/295) [`fd1d5d7`](https://github.com/swapkit/sdk/commit/fd1d5d7304eda3ff20c53b14d0eb5998fb6b8250) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Remove `ethers` and `@near-js/providers` from `@swapkit/helpers`. EVM address checksum/validation now uses an in-house EIP-55 implementation backed by `@noble/hashes`, ERC-20 symbol decoding reuses the existing dynamic-string ABI decoder, and NEAR token metadata is fetched via JSON-RPC through `RequestClient`. Public behaviour is preserved (ethers-parity semantics, including throw-on-bad-checksum). (via @swapkit/toolboxes@5.0.0)
+  - [#353](https://github.com/swapkit/sdk/pull/353) [`2d00760`](https://github.com/swapkit/sdk/commit/2d0076010f56b843295fa814922b46385d3fc52b) Thanks [@towanTG](https://github.com/towanTG)! - Update generated token lists (prod and dev). Remove the hand-maintained hypercore token list and its `hype`/`hypercore` list names — the api serves no HYPE provider, so the documented exception from 4.4.0 is retired and static lists are again 100% provider-generated. (via @swapkit/toolboxes@5.0.0)
+  - Update generated token lists. (via @swapkit/toolboxes@5.0.0)
+  - [#354](https://github.com/swapkit/sdk/pull/354) [`8d21eef`](https://github.com/swapkit/sdk/commit/8d21eefe8a5379347a6a9b92978b0336e1a155a4) Thanks [@towanTG](https://github.com/towanTG)! - Refresh generated token lists (prod and dev) — dev flashnet now carries the HyperEVM assets (`HYPEREVM.HYPE`, `USDC`, `USDe`, `USDT0`) alongside `HYPE.USDC`. Lists mirror provider output verbatim; no identifiers are filtered. (via @swapkit/toolboxes@5.0.0)
+  - @swapkit/helpers: 0.0.0
+  - [#335](https://github.com/swapkit/sdk/pull/335) [`d724200`](https://github.com/swapkit/sdk/commit/d7242000b765b5090013740dab893960bee1744c) Thanks [@towanTG](https://github.com/towanTG)! - Support the Zcash NU6.3 "Ironwood" network upgrade (mainnet activation at block 3,428,143, ~2026-07-28; testnet activated 2026-07-01). (via @swapkit/utxo-signer@2.3.0)
+  - Update generated token lists. (via @swapkit/toolboxes@4.28.0)
+  - [#340](https://github.com/swapkit/sdk/pull/340) [`13fc5d3`](https://github.com/swapkit/sdk/commit/13fc5d399e7bd3cf0b64326c0b97066a22ff8a2e) Thanks [@towanTG](https://github.com/towanTG)! - Load environment-specific static assets and add the SwapKit token search endpoint. (via @swapkit/helpers@4.20.0)
+  - [#338](https://github.com/swapkit/sdk/pull/338) [`b93b9cd`](https://github.com/swapkit/sdk/commit/b93b9cd04730e728cb2c9de0b7e1e19a0951e46b) Thanks [@towanTG](https://github.com/towanTG)! - Allow already-fetched Aleo records to be passed directly to `unshield({ records })` as an alternative to the transaction-scoped `unshield({ transactionId })` form. Callers that fetch records for display (e.g. a wallet UI showing shielded balances from known swap-delivery transactions via `getRecords`) can unshield those exact records without a second lookup. Spent records are filtered out; the split/fee-record/prove/broadcast flow and the `splitTransactionId` resume semantics are unchanged. (via @swapkit/toolboxes@4.27.0)
+  - Update generated token lists. (via @swapkit/tokens@4.4.1)
+  - Update generated token lists. (via @swapkit/helpers@5.0.0)
+  - Update generated token lists. (via @swapkit/helpers@4.20.1)
+
+- [#65](https://github.com/swapkit/wallets/pull/65) [`4c8dcda`](https://github.com/swapkit/wallets/commit/4c8dcda7ff06aaa6c0a053b82ed81e8b5a3d221f) Thanks [@towanTG](https://github.com/towanTG)! - Enable WalletConnect direct signing support for Cosmos, Kujira, Maya, Near, THORChain, and Tron.
+
+- [#133](https://github.com/swapkit/wallets/pull/133) [`14374d1`](https://github.com/swapkit/wallets/commit/14374d120f31e41a54786aa3d5e2e014b6f71b77) Thanks [@towanTG](https://github.com/towanTG)! - Derive WalletConnect direct-signing support from the approved session methods and accounts.
+
+- Updated dependencies [[`90ac313`](https://github.com/swapkit/wallets/commit/90ac313d36aa9f81588fd7aa76486193c55ead42), [`d68f8e7`](https://github.com/swapkit/wallets/commit/d68f8e7a674860f3dc190f1ab26ee2d816b715e8), [`90ac313`](https://github.com/swapkit/wallets/commit/90ac313d36aa9f81588fd7aa76486193c55ead42)]:
+  - @swapkit/wallet-extensions@4.5.29
+  - @swapkit/wallet-hardware@4.9.31
+
 ## 4.10.0
 
 ### Minor Changes
