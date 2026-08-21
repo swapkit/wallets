@@ -61,7 +61,7 @@ mock.module("@metamask/connect-multichain", () => ({
   },
 }));
 
-mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
+mock.module("ethers", () => ({ ...realEthersSnapshot, BrowserProvider: MockBrowserProvider }));
 
 mock.module("@swapkit/wallet-extensions/evm-extensions", () => ({
   getWeb3WalletMethods: (options: Record<string, unknown>) => {
