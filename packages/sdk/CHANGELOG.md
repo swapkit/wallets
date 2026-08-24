@@ -1,5 +1,22 @@
 # @swapkit/sdk
 
+## 4.6.48
+
+### Patch Changes
+
+- [#141](https://github.com/swapkit/wallets/pull/141) [`bcafa97`](https://github.com/swapkit/wallets/commit/bcafa9727e3bf6f5e246950c486c41605cbcd7f0) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - Update generated token lists. (via @swapkit/helpers@5.0.2)
+  - [#363](https://github.com/swapkit/sdk/pull/363) [`7b9f214`](https://github.com/swapkit/sdk/commit/7b9f2145e8644975620db1f2b39775c33cb40d20) Thanks [@towanTG](https://github.com/towanTG)! - HyperCore balances are now API-first: `getBalance` queries the SwapKit (via @swapkit/toolboxes@5.1.0)
+  - [#366](https://github.com/swapkit/sdk/pull/366) [`c64be1d`](https://github.com/swapkit/sdk/commit/c64be1d700ef8855495ca9d7ef0ebe18f46687ee) Thanks [@towanTG](https://github.com/towanTG)! - HyperCore chain-query balances take decimals from Hyperliquid spotMeta (via @swapkit/toolboxes@5.1.0)
+  - Update generated token lists. (via @swapkit/toolboxes@5.1.0)
+  - Update generated token lists. (via @swapkit/tokens@5.0.2)
+  - Update generated token lists. (via @swapkit/tokens@5.0.1)
+  - Update generated token lists. (via @swapkit/helpers@5.0.1)
+
+- Updated dependencies [[`bcafa97`](https://github.com/swapkit/wallets/commit/bcafa9727e3bf6f5e246950c486c41605cbcd7f0)]:
+  - @swapkit/wallets@4.11.1
+
 ## 4.6.47
 
 ### Patch Changes
