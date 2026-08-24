@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import * as realSolanaWeb3 from "@solana/web3.js";
 import { AssetValue, Chain } from "@swapkit/helpers";
+import * as realSolanaToolbox from "@swapkit/toolboxes/solana";
 
 let createTransactionParams: Record<string, unknown> | undefined;
+
+const realSolanaWeb3Snapshot = { ...realSolanaWeb3 };
+const realSolanaToolboxSnapshot = { ...realSolanaToolbox };
 
 mock.module("@solana/web3.js", () => ({
   PublicKey: class PublicKey {
@@ -59,4 +64,9 @@ describe("phantom wallet", () => {
 
     expect(createTransactionParams?.memo).toBe("=:ETH.ETH:0xabc");
   });
+});
+
+afterAll(() => {
+  mock.module("@solana/web3.js", () => realSolanaWeb3Snapshot);
+  mock.module("@swapkit/toolboxes/solana", () => realSolanaToolboxSnapshot);
 });

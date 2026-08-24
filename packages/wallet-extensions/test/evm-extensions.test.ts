@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Chain, WalletOption } from "@swapkit/helpers";
+import * as realEvmToolbox from "@swapkit/toolboxes/evm";
+import * as realEthers from "ethers";
 
 let balanceAddressCalls: string[] = [];
 
@@ -56,6 +58,11 @@ class MockBrowserProvider {
   }
 }
 
+// mock.module replaces the whole export namespace process-wide; snapshot the real
+// modules so afterAll can restore them for test files that run later.
+const realEthersSnapshot = { ...realEthers };
+const realEvmToolboxSnapshot = { ...realEvmToolbox };
+
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
 
 mock.module("@swapkit/toolboxes/evm", () => ({
@@ -108,4 +115,9 @@ describe("evm extensions wallet", () => {
     expect(provider.revokedPermissions).toBe(true);
     expect(provider.listeners.size).toBe(0);
   });
+});
+
+afterAll(() => {
+  mock.module("ethers", () => realEthersSnapshot);
+  mock.module("@swapkit/toolboxes/evm", () => realEvmToolboxSnapshot);
 });
