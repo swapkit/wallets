@@ -110,7 +110,10 @@ class WalletconnectSigner extends AbstractSigner {
       topic: session.topic,
     })) as string;
     if (typeof txHash !== "string" || !txHash) {
-      throw new SwapKitError("wallet_walletconnect_invalid_method", { method: "eth_sendTransaction", response: txHash });
+      throw new SwapKitError("wallet_walletconnect_invalid_method", {
+        method: "eth_sendTransaction",
+        response: txHash,
+      });
     }
     const hash = txHash.startsWith("0x") ? txHash : `0x${txHash}`;
 
