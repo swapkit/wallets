@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import * as realConnectMultichain from "@metamask/connect-multichain";
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
+import * as realSolanaToolbox from "@swapkit/toolboxes/solana";
+import * as realEvmExtensions from "@swapkit/wallet-extensions/evm-extensions";
+import * as realEthers from "ethers";
 
 const SOLANA_MAINNET_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const ETHEREUM_ADDRESS = "0x1111111111111111111111111111111111111111";
@@ -44,6 +48,11 @@ const mockClient = {
   },
   provider: { getSession: async () => sessionData },
 };
+
+const realConnectMultichainSnapshot = { ...realConnectMultichain };
+const realEthersSnapshot = { ...realEthers };
+const realEvmExtensionsSnapshot = { ...realEvmExtensions };
+const realSolanaToolboxSnapshot = { ...realSolanaToolbox };
 
 mock.module("@metamask/connect-multichain", () => ({
   createMultichainClient: (options: unknown) => {
@@ -217,4 +226,11 @@ describe("metamask multichain wallet", () => {
       }),
     ).rejects.toThrow("wallet_connection_rejected_by_user");
   });
+});
+
+afterAll(() => {
+  mock.module("@metamask/connect-multichain", () => realConnectMultichainSnapshot);
+  mock.module("ethers", () => realEthersSnapshot);
+  mock.module("@swapkit/wallet-extensions/evm-extensions", () => realEvmExtensionsSnapshot);
+  mock.module("@swapkit/toolboxes/solana", () => realSolanaToolboxSnapshot);
 });

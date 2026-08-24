@@ -1,9 +1,12 @@
-import { describe, expect, it, mock } from "bun:test";
+import { afterAll, describe, expect, it, mock } from "bun:test";
 import { hex } from "@scure/base";
 import { Chain } from "@swapkit/helpers";
+import * as realUtxoToolbox from "@swapkit/toolboxes/utxo";
 import { RawTx, Transaction } from "@swapkit/utxo-signer";
 
 const rawTxRequests: Array<{ chain: string; txid: string }> = [];
+
+const realUtxoToolboxSnapshot = { ...realUtxoToolbox };
 
 mock.module("@swapkit/toolboxes/utxo", () => ({
   getUtxoApi: (chain: string) => ({
@@ -88,4 +91,8 @@ describe("ledger legacy UTXO adapter", () => {
 
     expect(signedTxHex).toBe("0200000000");
   });
+});
+
+afterAll(() => {
+  mock.module("@swapkit/toolboxes/utxo", () => realUtxoToolboxSnapshot);
 });
