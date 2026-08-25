@@ -55,7 +55,7 @@ export type SKWallets = {
   [WalletOption.POLKADOT_JS]: typeof polkadotWallet;
   [WalletOption.RADIX_WALLET]: typeof radixWallet;
   [WalletOption.TALISMAN]: typeof talismanWallet;
-  TON_CONNECT: typeof tonconnectWallet;
+  [WalletOption.TON_CONNECT]: typeof tonconnectWallet;
   [WalletOption.TREZOR]: typeof trezorWallet;
   [WalletOption.TRONLINK]: typeof tronlinkWallet;
   [WalletOption.TRUSTWALLET_WEB]: typeof trustwalletWallet;
@@ -133,7 +133,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.POLKADOT_JS]: typeof polkadotWallet.connectPolkadotJs.supportedChains;
   [WalletOption.RADIX_WALLET]: typeof radixWallet.connectRadixWallet.supportedChains;
   [WalletOption.TALISMAN]: typeof talismanWallet.connectTalisman.supportedChains;
-  TON_CONNECT: typeof tonconnectWallet.connectTonConnect.supportedChains;
+  [WalletOption.TON_CONNECT]: typeof tonconnectWallet.connectTonConnect.supportedChains;
   [WalletOption.TREZOR]: typeof trezorWallet.connectTrezor.supportedChains;
   [WalletOption.TRONLINK]: typeof tronlinkWallet.connectTronLink.supportedChains;
   [WalletOption.TRUSTWALLET_WEB]: typeof trustwalletWallet.connectTrustWallet.supportedChains;

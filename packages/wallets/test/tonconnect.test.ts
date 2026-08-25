@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { SwapKitError } from "@swapkit/helpers";
+import { SwapKitError, WalletOption } from "@swapkit/helpers";
 import { Address, beginCell } from "@ton/core";
 import type { TonConnectUI } from "@tonconnect/ui";
 
-import { TON_CONNECT } from "../src/tonconnect/option";
+import "../src/tonconnect/register";
 import { sendTonConnectTransaction, toFriendlyDestination } from "../src/tonconnect/walletMethods";
 
 const RAW_ADDRESS = "0:83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8";
@@ -22,8 +22,8 @@ function makeFakeTonConnectUI(sentRequests: { address: string }[][]) {
 }
 
 describe("WalletOption", () => {
-  it("exposes the TON_CONNECT wallet option literal", () => {
-    expect(TON_CONNECT).toBe("TON_CONNECT");
+  it("registers TON_CONNECT in the extensible WalletOption registry", () => {
+    expect(WalletOption.TON_CONNECT).toBe("TON_CONNECT");
   });
 });
 
