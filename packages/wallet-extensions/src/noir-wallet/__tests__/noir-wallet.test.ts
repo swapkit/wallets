@@ -1,9 +1,8 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { beforeEach, describe, expect, test } from "bun:test";
-import { AssetValue, Chain } from "@swapkit/helpers";
+import { AssetValue, Chain, WalletOption } from "@swapkit/helpers";
 
 import { noirWallet } from "../index";
-import { NOIR_WALLET } from "../option";
 
 const TRANSPARENT_ADDRESS = "t1XVXWCvpMgBvUaed4XDqWtgQgJSu1Ghz7F";
 
@@ -75,13 +74,17 @@ describe("noirWallet", () => {
     expect(noirWallet.connectNoirWallet.supportedChains).toEqual([Chain.Zcash]);
   });
 
+  test("registers NOIR_WALLET in the extensible WalletOption registry", () => {
+    expect(WalletOption.NOIR_WALLET).toBe("NOIR_WALLET");
+  });
+
   test("connects via zcash_requestAccounts and registers the transparent address", async () => {
     const wallet = await connectAndGetWallet();
 
     expect(requests.some(({ method }) => method === "zcash_requestAccounts")).toBe(true);
     expect(wallet.address).toBe(TRANSPARENT_ADDRESS);
     expect(wallet.chain).toBe(Chain.Zcash);
-    expect(wallet.walletType).toBe(NOIR_WALLET);
+    expect(wallet.walletType).toBe(WalletOption.NOIR_WALLET);
     expect(wallet.walletType).toBe("NOIR_WALLET");
   });
 
@@ -109,7 +112,7 @@ describe("noirWallet", () => {
     const assetValue = AssetValue.from({ chain: Chain.Zcash, value: "0.5" });
 
     expect(() => wallet.transfer({ assetValue, memo: "=:BTC.BTC:bc1q...", recipient: "t1RecipientAddr" })).toThrow(
-      "wallet_walletconnect_method_not_supported",
+      "wallet_noir_wallet_memo_not_supported",
     );
   });
 
@@ -124,6 +127,6 @@ describe("noirWallet", () => {
 
     const connect = noirWallet.connectNoirWallet.connectWallet({ addChain: () => undefined });
 
-    expect(connect([Chain.Zcash])).rejects.toThrow("wallet_provider_not_found");
+    expect(connect([Chain.Zcash])).rejects.toThrow("wallet_noir_wallet_not_found");
   });
 });

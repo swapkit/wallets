@@ -44,7 +44,7 @@ export type SKWallets = {
   [WalletOption.LEAP]: typeof keplrWallet;
   [WalletOption.LEDGER]: typeof ledgerWallet;
   [WalletOption.METAMASK]: typeof metamaskWallet;
-  NOIR_WALLET: typeof noirWallet;
+  [WalletOption.NOIR_WALLET]: typeof noirWallet;
   [WalletOption.OKX]: typeof okxWallet;
   [WalletOption.OKX_MOBILE]: typeof evmWallet;
   [WalletOption.ONEKEY]: typeof onekeyWallet;
@@ -122,7 +122,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.LEAP]: typeof keplrWallet.connectKeplr.supportedChains;
   [WalletOption.LEDGER]: typeof ledgerWallet.connectLedger.supportedChains;
   [WalletOption.METAMASK]: typeof metamaskWallet.connectMetamask.supportedChains;
-  NOIR_WALLET: typeof noirWallet.connectNoirWallet.supportedChains;
+  [WalletOption.NOIR_WALLET]: typeof noirWallet.connectNoirWallet.supportedChains;
   [WalletOption.OKX]: typeof okxWallet.connectOkx.supportedChains;
   [WalletOption.OKX_MOBILE]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.ONEKEY]: typeof onekeyWallet.connectOnekeyWallet.supportedChains;

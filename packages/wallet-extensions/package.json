@@ -88,11 +88,11 @@
       "require": "./dist/src/noir-wallet/index.cjs",
       "types": "./dist/types/noir-wallet/index.d.ts"
     },
-    "./noir-wallet/option": {
-      "bun": "./src/noir-wallet/option.ts",
-      "default": "./dist/src/noir-wallet/option.js",
-      "require": "./dist/src/noir-wallet/option.cjs",
-      "types": "./dist/types/noir-wallet/option.d.ts"
+    "./noir-wallet/register": {
+      "bun": "./src/noir-wallet/register.ts",
+      "default": "./dist/src/noir-wallet/register.js",
+      "require": "./dist/src/noir-wallet/register.cjs",
+      "types": "./dist/types/noir-wallet/register.d.ts"
     },
     "./okx": {
       "bun": "./src/okx/index.ts",
