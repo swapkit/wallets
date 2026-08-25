@@ -88,6 +88,12 @@
       "require": "./dist/src/noir-wallet/index.cjs",
       "types": "./dist/types/noir-wallet/index.d.ts"
     },
+    "./noir-wallet/option": {
+      "bun": "./src/noir-wallet/option.ts",
+      "default": "./dist/src/noir-wallet/option.js",
+      "require": "./dist/src/noir-wallet/option.cjs",
+      "types": "./dist/types/noir-wallet/option.d.ts"
+    },
     "./okx": {
       "bun": "./src/okx/index.ts",
       "default": "./dist/src/okx/index.js",

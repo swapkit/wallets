@@ -1,13 +1,14 @@
-import { AssetValue, Chain, type GenericTransferParams, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { AssetValue, Chain, type GenericTransferParams, SwapKitError, type WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { NoirWalletZcashProvider } from "../types";
 import type { ExtensionWallet } from "../walletTypes";
+import { NOIR_WALLET } from "./option";
 
 export function getNoirWalletZcashProvider(): NoirWalletZcashProvider {
   const provider = window.noirwallet?.zcash;
 
   if (!provider) {
-    throw new SwapKitError("wallet_noir_wallet_not_found");
+    throw new SwapKitError("wallet_provider_not_found", { wallet: NOIR_WALLET });
   }
 
   return provider;
@@ -23,7 +24,7 @@ export const noirWallet: ExtensionWallet<"connectNoirWallet"> = createWallet({
       const account = await provider.request({ method: "zcash_requestAccounts" });
 
       if (!account?.transparent) {
-        throw new SwapKitError("wallet_noir_wallet_connection_failed");
+        throw new SwapKitError("core_wallet_connection_failed", { wallet: NOIR_WALLET });
       }
 
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
@@ -57,7 +58,11 @@ export const noirWallet: ExtensionWallet<"connectNoirWallet"> = createWallet({
          */
         transfer: ({ recipient, assetValue, memo }: GenericTransferParams) => {
           if (memo) {
-            throw new SwapKitError("wallet_noir_wallet_memo_not_supported");
+            throw new SwapKitError("wallet_walletconnect_method_not_supported", {
+              method: "transfer",
+              reason: "Noir Wallet cannot attach OP_RETURN memos to transparent recipients",
+              wallet: NOIR_WALLET,
+            });
           }
 
           if (!(recipient && assetValue)) {
@@ -79,7 +84,10 @@ export const noirWallet: ExtensionWallet<"connectNoirWallet"> = createWallet({
   directSigningSupport: {},
   name: "connectNoirWallet",
   supportedChains: [Chain.Zcash],
-  walletType: WalletOption.NOIR_WALLET,
+  // createWallet constrains walletType to the WalletOption enum, which has no
+  // NOIR_WALLET member until the registry lands upstream (swapkit/sdk#346) —
+  // see ./option.ts.
+  walletType: NOIR_WALLET as unknown as WalletOption,
 });
 
 export const NOIR_WALLET_SUPPORTED_CHAINS = getWalletSupportedChains(noirWallet);
