@@ -1,9 +1,7 @@
 import { WalletOption } from "@swapkit/helpers";
-// Registers WalletOption.NOIR_WALLET and WalletOption.TON_CONNECT before the
-// match below reads them; the connectors themselves still load lazily via
-// their match arms.
-import "@swapkit/wallet-extensions/noir-wallet/register";
-import "./tonconnect/register";
+// Registers the out-of-enum wallet options before the match below reads them;
+// the connectors themselves still load lazily via their match arms.
+import "./register";
 import type { SKWallets } from "./types";
 
 export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Promise<SKWallets[W]> {

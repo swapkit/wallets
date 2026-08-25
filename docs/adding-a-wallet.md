@@ -111,6 +111,13 @@ pulling the whole connector, which would defeat the lazy loading in the match
 arms. Apps that import the connector subpath directly need nothing extra —
 `index.ts` imports `./register` itself.
 
+Also add the new register module to `packages/wallets/src/register.ts` — the
+roll-up that `@swapkit/wallets/register` exposes to apps. An app that puts a
+registered option in a module-scope wallet list (as the SwapKit UI does in its
+wallet dialog) evaluates `WalletOption.MY_WALLET` before any connector loads;
+its entry module must `import "@swapkit/wallets/register"` first or the list
+silently contains `undefined`.
+
 ## 4. Wiring `@swapkit/wallets`
 
 Three touch points:

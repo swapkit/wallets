@@ -182,6 +182,12 @@
       "require": "./dist/src/radix/index.cjs",
       "types": "./dist/types/radix/index.d.ts"
     },
+    "./register": {
+      "bun": "./src/register.ts",
+      "default": "./dist/src/register.js",
+      "require": "./dist/src/register.cjs",
+      "types": "./dist/types/register.d.ts"
+    },
     "./talisman": {
       "bun": "./src/talisman.ts",
       "default": "./dist/src/talisman.js",
