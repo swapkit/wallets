@@ -1,5 +1,13 @@
 # @swapkit/sdk
 
+## 4.6.49
+
+### Patch Changes
+
+- [#144](https://github.com/swapkit/wallets/pull/144) [`da2aa01`](https://github.com/swapkit/wallets/commit/da2aa01feeec748ec023ac19f84df0c51dcb49b5) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+- [#144](https://github.com/swapkit/wallets/pull/144) [`da2aa01`](https://github.com/swapkit/wallets/commit/da2aa01feeec748ec023ac19f84df0c51dcb49b5) Thanks [@towanTG](https://github.com/towanTG)! - Add Noir Wallet connector for Zcash (`connectNoirWallet`). Noir Wallet is a shielded-first Zcash browser extension; the connector delegates balance and transaction building to the extension and supports deposit-address swap routes (e.g. NEAR Intents). OP*RETURN memo routes are rejected with `wallet_noir_wallet_memo_not_supported`. `NOIR_WALLET` and the `wallet_noir_wallet*\*`error codes (80101-80103) register through the`@swapkit/helpers` 5.1.0 extensible registries. (via @swapkit/wallets@4.12.0)
+- [#144](https://github.com/swapkit/wallets/pull/144) [`da2aa01`](https://github.com/swapkit/wallets/commit/da2aa01feeec748ec023ac19f84df0c51dcb49b5) Thanks [@towanTG](https://github.com/towanTG)! - `TON_CONNECT` now registers through the `@swapkit/helpers` 5.1.0 extensible `WalletOption` registry (swapkit/sdk#346) instead of the interim outside-the-enum literal shim. No behavior change — the runtime value stays `"TON_CONNECT"`. (via @swapkit/wallets@4.12.0)
+
 ## 4.6.48
 
 ### Patch Changes
