@@ -11,10 +11,10 @@
     "@near-js/transactions": "~2.5.0",
     "@scure/base": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^5.0.2",
-    "@swapkit/toolboxes": "^5.1.1",
+    "@swapkit/helpers": "^5.1.0",
+    "@swapkit/toolboxes": "^5.1.2",
     "@swapkit/utxo-signer": "^3.0.0",
-    "@swapkit/wallet-core": "^5.0.0",
+    "@swapkit/wallet-core": "^5.0.3",
     "@wallet-standard/app": "^1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "^6.14.0",
@@ -81,6 +81,18 @@
       "default": "./dist/src/keplr/index.js",
       "require": "./dist/src/keplr/index.cjs",
       "types": "./dist/types/keplr/index.d.ts"
+    },
+    "./noir-wallet": {
+      "bun": "./src/noir-wallet/index.ts",
+      "default": "./dist/src/noir-wallet/index.js",
+      "require": "./dist/src/noir-wallet/index.cjs",
+      "types": "./dist/types/noir-wallet/index.d.ts"
+    },
+    "./noir-wallet/register": {
+      "bun": "./src/noir-wallet/register.ts",
+      "default": "./dist/src/noir-wallet/register.js",
+      "require": "./dist/src/noir-wallet/register.cjs",
+      "types": "./dist/types/noir-wallet/register.d.ts"
     },
     "./okx": {
       "bun": "./src/okx/index.ts",

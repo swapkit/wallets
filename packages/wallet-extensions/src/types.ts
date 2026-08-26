@@ -25,6 +25,13 @@ export type VultisigCosmosProvider = {
   request(request: { method: string; params?: any[] | Record<string, any> }, callback?: Callback): Promise<any>;
 };
 
+export type NoirWalletZcashProvider = {
+  request(request: { method: string; params?: any[] }): Promise<any>;
+  on(event: string, handler: (...args: any[]) => void): void;
+  removeListener?(event: string, handler: (...args: any[]) => void): void;
+  disconnect(): Promise<any>;
+};
+
 type CtrlInjectedProviders = {
   binance: Eip1193Provider;
   bitcoin: Eip1193Provider;
@@ -54,6 +61,8 @@ declare global {
 
     ctrl?: CtrlInjectedProviders;
     xfi?: CtrlInjectedProviders;
+
+    noirwallet?: { isNoirWallet: boolean; version?: string; zcash: NoirWalletZcashProvider };
 
     vultisig?: {
       bitcoin: Eip1193Provider;

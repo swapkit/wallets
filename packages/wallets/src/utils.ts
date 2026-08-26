@@ -1,11 +1,13 @@
 import { WalletOption } from "@swapkit/helpers";
-import { TON_CONNECT, type TonConnectOption } from "./tonconnect/option";
+// Registers the out-of-enum wallet options before the match below reads them;
+// the connectors themselves still load lazily via their match arms.
+import "./register";
 import type { SKWallets } from "./types";
 
 export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Promise<SKWallets[W]> {
   const { match } = await import("ts-pattern");
 
-  const wallet = await match(walletOption as WalletOption | TonConnectOption)
+  const wallet = await match(walletOption as WalletOption)
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
     .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
     .with(WalletOption.CTRL, async () => (await import("@swapkit/wallet-extensions/ctrl")).ctrlWallet)
@@ -46,12 +48,13 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
     .with(WalletOption.LEDGER, async () => (await import("@swapkit/wallet-hardware/ledger")).ledgerWallet)
     .with(WalletOption.PASSKEYS, WalletOption.PASSKEY_WALLET, async () => (await import("./passkeys")).passkeysWallet)
     .with(WalletOption.PETRA, async () => (await import("@swapkit/wallet-extensions/petra")).petraWallet)
+    .with(WalletOption.NOIR_WALLET, async () => (await import("@swapkit/wallet-extensions/noir-wallet")).noirWallet)
     .with(WalletOption.PHANTOM, async () => (await import("@swapkit/wallet-extensions/phantom")).phantomWallet)
     .with(WalletOption.POLKADOT_JS, async () => (await import("@swapkit/wallet-extensions/polkadotjs")).polkadotWallet)
     .with(WalletOption.RADIX_WALLET, async () => (await import("./radix")).radixWallet)
     .with(WalletOption.TALISMAN, async () => (await import("@swapkit/wallet-extensions/talisman")).talismanWallet)
     .with(WalletOption.TRONLINK, async () => (await import("@swapkit/wallet-extensions/tronlink")).tronlinkWallet)
-    .with(TON_CONNECT, async () => (await import("./tonconnect")).tonconnectWallet)
+    .with(WalletOption.TON_CONNECT, async () => (await import("./tonconnect")).tonconnectWallet)
     .with(WalletOption.WALLET_SELECTOR, async () => (await import("./near-wallet-selector")).walletSelectorWallet)
     .with(WalletOption.XAMAN, async () => (await import("./xaman")).xamanWallet)
     .exhaustive();
