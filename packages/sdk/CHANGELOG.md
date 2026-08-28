@@ -1,5 +1,22 @@
 # @swapkit/sdk
 
+## 4.6.50
+
+### Patch Changes
+
+- [#146](https://github.com/swapkit/wallets/pull/146) [`4edcebe`](https://github.com/swapkit/wallets/commit/4edcebe5b8b7cf6f3f4e057630c37b8a65ddb013) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+
+  - [#376](https://github.com/swapkit/sdk/pull/376) [`b1a722a`](https://github.com/swapkit/sdk/commit/b1a722afc2aa41c27b74c041cc0521d350a68b18) Thanks [@towanTG](https://github.com/towanTG)! - SwapKitPlugin: accept the canonical HyperCore USDC HIP-1 identifier (`HYPE.USDC-USDC:0x6d1e7cde53ba9467b783cb7c530ce054`) that the API now emits for Hype sendAsset routes, alongside the legacy HyperEVM ERC-20 form (`HYPE.USDC-0xb88339…`). Previously such routes were rejected with `plugin_swapkit_invalid_transaction`. (via @swapkit/plugins@5.0.5)
+  - Update generated token lists. (via @swapkit/plugins@5.0.5)
+  - [`1c3d941`](https://github.com/swapkit/sdk/commit/1c3d941eecfe123aa29fd34cd710f848fcb1122f) Thanks [@ice-chillios](https://github.com/ice-chillios)! - **Derived addresses change for a non-zero index or an explicit derivation path.** Index 0 without a path is unchanged everywhere, which is why this ships as a minor rather than a major. EVM (every chain, including the OP-stack ones) declared `derivationPath` and `index` and read neither, so every phrase collapsed onto `m/44'/60'/0'/0/0`. Sui and Ripple had no path or index parameter at all and always used their library's default path. Cardano applied `index` to the address index but never read `derivationPath` and hardcoded the account to 0. Zcash overwrote the last slot of an explicit path with `index`. All of these now honour supported values, so the address returned for a non-zero index — or for an explicit path — differs from earlier versions. Nothing is lost: the funds stay at the previous address, which is unchanged and still reachable by requesting index 0 with no path. Cached addresses, saved address books, deposit instructions and in-flight quotes built against the old behaviour will no longer match, so audit anything that persisted an address before upgrading. (via @swapkit/helpers@5.2.0)
+  - Update generated token lists. (via @swapkit/helpers@5.2.0)
+  - Update generated token lists. (via @swapkit/tokens@5.0.5)
+  - Update generated token lists. (via @swapkit/tokens@5.0.4)
+  - Update generated token lists. (via @swapkit/helpers@5.2.1)
+
+- Updated dependencies [[`4edcebe`](https://github.com/swapkit/wallets/commit/4edcebe5b8b7cf6f3f4e057630c37b8a65ddb013)]:
+  - @swapkit/wallets@4.12.1
+
 ## 4.6.49
 
 ### Patch Changes
