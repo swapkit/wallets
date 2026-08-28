@@ -6,7 +6,7 @@
 "@swapkit/wallets": patch
 ---
 
-Update SwapKit SDK dependencies (picks up the HyperCore USDC HIP-1 identifier fix in plugins):
+Update SwapKit SDK dependencies:
 
 - @swapkit/core: 5.0.3 → 5.0.5
 - @swapkit/helpers: 5.1.0 → 5.2.1
