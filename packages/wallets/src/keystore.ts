@@ -171,7 +171,7 @@ export async function createKeystoreWallet<T extends Chain[]>({
       const derivationArrayToUpdate = NetworkDerivationPath[chain].slice(
         0,
         chain === Chain.Solana || chain === Chain.Aleo ? 4 : 5,
-      ) as DerivationPathArray;
+      ) as unknown as DerivationPathArray;
 
       const derivationPath: DerivationPathArray =
         derivationPathFromMap || updateDerivationPath(derivationArrayToUpdate, { index: derivationPathIndex });

@@ -931,7 +931,7 @@ async function getTrezorWallet<T extends Chain>({
       ) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const network = getNetworkForChain(chain as UTXOChain);
-        const baseAddressN = hardenDerivationPath(derivationPath.slice(0, 3) as DerivationPathArray);
+        const baseAddressN = hardenDerivationPath(derivationPath.slice(0, 3) as unknown as DerivationPathArray);
 
         const outputs = buildUtxoOutputsForTrezor(
           tx,
