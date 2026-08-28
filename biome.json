@@ -25,7 +25,7 @@
       "!**/coverage",
       "!**/MsgCompiled.ts",
       "!*.lock",
-      "!**/packages/ui/package.json"
+      "!**/package.json"
     ],
     "maxSize": 5242880
   },
