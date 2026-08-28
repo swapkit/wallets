@@ -148,7 +148,7 @@ export async function utxoWalletMethods({
   ) => {
     const accountAddressN = bip32ToAddressNList(
       derivationPath
-        ? derivationPathToString(derivationPath.slice(0, 3) as DerivationPathArray)
+        ? derivationPathToString(derivationPath.slice(0, 3) as unknown as DerivationPathArray)
         : DerivationPath[chain],
     );
 
