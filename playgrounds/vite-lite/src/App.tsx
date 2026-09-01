@@ -1,9 +1,8 @@
 "use client";
 
-import { SKConfig } from "@swapkit/helpers";
 import { SwapKitWidget } from "@swapkit/ui/react";
 import { SwapKitWidgetControls, useSwapKitWidgetControlsForm } from "@swapkit/ui/react/controls";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const SETTINGS_ICON = (
   <svg
@@ -42,127 +41,46 @@ const CLOSE_ICON = (
   </svg>
 );
 
-function resolveAuthConfig({
-  apiKey,
-  envApiKey,
-  envWidgetId,
-  envWidgetKey,
-  useApiKeyAuth,
-  widgetId,
-  widgetKey,
-}: {
-  apiKey: string;
-  envApiKey: string;
-  envWidgetId: string;
-  envWidgetKey: string;
-  useApiKeyAuth: boolean;
-  widgetId: string;
-  widgetKey: string;
-}) {
-  const hasExplicitWidgetAuth = Boolean(widgetId && widgetKey);
-  const shouldUseApiKeyAuth = useApiKeyAuth || (!hasExplicitWidgetAuth && Boolean(apiKey || envApiKey));
-
-  return {
-    effectiveApiKey: shouldUseApiKeyAuth ? apiKey || envApiKey : "",
-    effectiveWidgetId: shouldUseApiKeyAuth ? "" : widgetId || envWidgetId,
-    effectiveWidgetKey: shouldUseApiKeyAuth ? "" : widgetKey || envWidgetKey,
-  };
-}
-
 export default function App() {
   const {
     apiBaseUrl,
     apiKey,
     colors,
-    devApiUrl,
-    developMode,
+    effectiveEnabledWalletOptions,
+    inputAsset,
     isHydrated,
+    outputAsset,
     useApiKeyAuth,
-    useV3SwapFlow,
     widgetId,
     widgetKey,
   } = useSwapKitWidgetControlsForm();
   const [isControlsOpen, setControlsOpen] = useState(false);
-  const envApiBaseUrl = import.meta.env.VITE_SWAPKIT_API_BASE_URL || "";
-  const envApiKey = import.meta.env.VITE_SWAPKIT_API_KEY || "";
-  const envWidgetId = import.meta.env.VITE_SWAPKIT_WIDGET_ID || "";
-  const envWidgetKey = import.meta.env.VITE_SWAPKIT_WIDGET_KEY || "";
-  const effectiveApiBaseUrl = apiBaseUrl || envApiBaseUrl || "";
-  const normalizedDevApiUrl = (devApiUrl || "").trim();
-  const shouldUseDevApi = Boolean(developMode && normalizedDevApiUrl);
-  const { effectiveApiKey, effectiveWidgetId, effectiveWidgetKey } = resolveAuthConfig({
-    apiKey,
-    envApiKey,
-    envWidgetId,
-    envWidgetKey,
-    useApiKeyAuth,
-    widgetId,
-    widgetKey,
-  });
 
-  const applyEnvConfig = useCallback(() => {
-    SKConfig.set({
-      envs: {
-        apiUrl: effectiveApiBaseUrl,
-        devApiUrl: shouldUseDevApi ? normalizedDevApiUrl : "",
-        isDev: shouldUseDevApi,
-      },
-      v3SwapFlow: { enabled: useV3SwapFlow },
-    });
-  }, [effectiveApiBaseUrl, normalizedDevApiUrl, shouldUseDevApi, useV3SwapFlow]);
-
-  // Apply endpoint config during render so the widget's own mount effects
-  // (notably swap quote / swap-to requests that hit SwapKitApi directly)
-  // see the correct base URL on their very first pass.
-  const envBootRef = useRef("");
-  const envSignature = JSON.stringify({
-    apiUrl: effectiveApiBaseUrl,
-    devApiUrl: shouldUseDevApi ? normalizedDevApiUrl : "",
-    isDev: shouldUseDevApi,
-    useV3SwapFlow,
-  });
-  if (envBootRef.current !== envSignature) {
-    envBootRef.current = envSignature;
-    applyEnvConfig();
-  }
-
+  // Snap back to desktop layout when the viewport widens past the mobile breakpoint
+  // so the sheet state never lingers somewhere the user can't dismiss it.
   useEffect(() => {
     const mql = window.matchMedia("(min-width: 769px)");
     const handle = () => {
       if (mql.matches) setControlsOpen(false);
     };
-
     mql.addEventListener("change", handle);
-
     return () => mql.removeEventListener("change", handle);
   }, []);
-
-  useEffect(() => {
-    applyEnvConfig();
-  }, [applyEnvConfig]);
 
   return (
     <div className="studio-layout">
       <main className="studio-layout__widget">
         {isHydrated && (
           <SwapKitWidget
-            apiBaseUrl={effectiveApiBaseUrl}
-            apiKey={effectiveApiKey}
+            apiBaseUrl={apiBaseUrl}
+            apiKey={useApiKeyAuth ? apiKey || "" : ""}
             colors={colors}
-            inputAsset="BTC.BTC"
-            key={JSON.stringify({
-              apiKey: Boolean(effectiveApiKey),
-              apiUrl: effectiveApiBaseUrl,
-              devApiUrl: shouldUseDevApi ? normalizedDevApiUrl : "",
-              isDev: shouldUseDevApi,
-              useV3SwapFlow,
-              widgetId: effectiveWidgetId,
-              widgetKey: Boolean(effectiveWidgetKey),
-            })}
-            outputAsset="ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7"
-            wallets="all"
-            widgetId={effectiveWidgetId}
-            widgetKey={effectiveWidgetKey}
+            inputAsset={inputAsset || undefined}
+            outputAsset={outputAsset || undefined}
+            syncUrl
+            wallets={effectiveEnabledWalletOptions}
+            widgetId={useApiKeyAuth ? "" : widgetId || ""}
+            widgetKey={useApiKeyAuth ? "" : widgetKey || ""}
           />
         )}
       </main>
@@ -182,6 +100,8 @@ export default function App() {
         <SwapKitWidgetControls />
       </aside>
 
+      {/* Mobile-only floating toggle. Hoisted out of the widget area so it stays
+          tappable on top of the open sidebar (z-index: 60 > sidebar's 50). */}
       <button
         aria-label={isControlsOpen ? "Close Widget Studio settings" : "Open Widget Studio settings"}
         className="studio-layout__settings-trigger"

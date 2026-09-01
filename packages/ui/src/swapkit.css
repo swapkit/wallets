@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  .swapkit-ui-preflight {
+    --sk-ui-white: 0 0% 100%;
+    --sk-ui-black: 0 0% 0%;
+
+    /* Background System - User Customizable Base Variables */
+    /* These are set by controls and should be the source of truth */
+    --sk-bg: 140 6% 8%; /* Primary background (main widget background) */
+    --sk-bg-surface: 120 3% 13%; /* Secondary background (cards, dialogs) */
+    --sk-bg-hover: var(--sk-ui-white) / 0.08;
+    --sk-bg-active: var(--sk-ui-white) / 0.12;
+    --sk-bg-overlay: var(--sk-ui-black) / 0.8;
+    --sk-ui-radius: 0.5rem;
+    --sk-ui-font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+    /* Semantic UI Variables - Reference the customizable base */
+    --sk-ui-primary: var(--sk-bg);
+    --sk-ui-primary-foreground: var(--sk-ui-white) / 0.92;
+
+    --sk-ui-secondary: var(--sk-bg-surface);
+    --sk-ui-secondary-foreground: var(--sk-ui-white) / 0.92;
+
+    --sk-ui-background: var(--sk-bg);
+    --sk-ui-foreground: var(--sk-ui-primary-foreground);
+
+    --sk-ui-card: var(--sk-bg-surface);
+    --sk-ui-card-foreground: var(--sk-ui-secondary-foreground);
+
+    --sk-ui-popover: 20 14.3% 4.1%;
+    --sk-ui-popover-foreground: 60 9.1% 97.8%;
+
+    --sk-ui-tertiary: var(--sk-ui-white) / 0.92;
+    --sk-ui-tertiary-foreground: 120 3% 13%;
+
+    --sk-ui-muted: var(--sk-bg-surface);
+    --sk-ui-muted-foreground: var(--sk-ui-white) / 0.64;
+
+    --sk-ui-accent: 140 87% 79%;
+    --sk-ui-accent-foreground: 60 9.1% 97.8%;
+    --sk-ui-primary-button-text: 140 6% 8%; /* Dark text for bright button backgrounds */
+
+    --sk-ui-primary-button: var(--sk-ui-white) / 0.92; /* Primary button background - default white/92% */
+    --sk-ui-primary-button-foreground: 140 6% 8%; /* Primary button text - dark for contrast */
+
+    --sk-ui-destructive: 0 62.8% 30.6%;
+    --sk-ui-destructive-foreground: 60 9.1% 97.8%;
+
+    --sk-ui-success: 160 69% 45% / 0.16;
+    --sk-ui-success-foreground: 160 69% 45%;
+
+    --sk-ui-border: var(--sk-ui-white) / 0.12;
+    --sk-ui-input: var(--sk-ui-white) / 0.32;
+    --sk-ui-ring: 24 5.7% 82.9%;
+
+    --sk-ui-sidebar-background: var(--sk-bg);
+    --sk-ui-sidebar-foreground: var(--sk-ui-foreground);
+    --sk-ui-sidebar-primary: var(--sk-bg);
+    --sk-ui-sidebar-primary-foreground: var(--sk-ui-primary-foreground);
+    --sk-ui-sidebar-accent: var(--sk-ui-accent);
+    --sk-ui-sidebar-accent-foreground: var(--sk-ui-accent-foreground);
+    --sk-ui-sidebar-border: var(--sk-ui-border);
+    --sk-ui-sidebar-ring: var(--sk-ui-ring);
+
+    font-family: var(--sk-ui-font-family);
+    line-height: 1.5;
+    color: hsl(var(--sk-ui-foreground));
+    background-color: transparent;
+  }
+
+  :where(.swapkit-ui-preflight) * {
+    @apply sk-ui-border-border sk-ui-antialiased;
+  }
+}
+
+/* highlight.js token colours — themed against the existing palette so the embed
+   snippet preview reads naturally on dark + custom-themed backgrounds. The .hljs-tag
+   wrapper carries the brackets and whitespace inside a tag; .hljs-name is the tag
+   identifier proper. Splitting the two gives a clearer "punctuation vs name" read. */
+.swapkit-snippet .hljs-comment,
+.swapkit-snippet .hljs-quote {
+  color: hsl(var(--sk-ui-muted-foreground));
+  font-style: italic;
+}
+.swapkit-snippet .hljs-tag {
+  color: hsl(var(--sk-ui-muted-foreground));
+}
+.swapkit-snippet .hljs-name,
+.swapkit-snippet .hljs-selector-tag {
+  color: hsl(var(--sk-ui-accent));
+  font-weight: 500;
+}
+.swapkit-snippet .hljs-attr,
+.swapkit-snippet .hljs-attribute {
+  color: hsl(210 90% 75%);
+}
+.swapkit-snippet .hljs-string,
+.swapkit-snippet .hljs-doctag {
+  color: hsl(140 60% 70%);
+}
+.swapkit-snippet .hljs-meta,
+.swapkit-snippet .hljs-meta .hljs-keyword {
+  color: hsl(35 85% 70%);
+}
+.swapkit-snippet .hljs-number,
+.swapkit-snippet .hljs-literal {
+  color: hsl(280 70% 75%);
+}
+.swapkit-snippet .hljs-symbol,
+.swapkit-snippet .hljs-link {
+  color: hsl(190 80% 70%);
+}
+
+/* JSON editor token colours — Atom One Dark values (from highlight.js'
+   atom-one-dark.css), deliberately punchier than the pastel .swapkit-snippet
+   palette: the editor renders 12px mono on a dark card, where the softer
+   snippet colours read as near-white. Scoped so the embed snippet keeps its
+   own theme. */
+.swapkit-json-editor .hljs {
+  color: #abb2bf;
+}
+.swapkit-json-editor .hljs-attr {
+  color: #d19a66;
+}
+.swapkit-json-editor .hljs-string {
+  color: #98c379;
+}
+.swapkit-json-editor .hljs-number {
+  color: #d19a66;
+}
+.swapkit-json-editor .hljs-literal {
+  color: #56b6c2;
+}
+.swapkit-json-editor .hljs-keyword {
+  color: #c678dd;
+}

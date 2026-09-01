@@ -1,134 +1,98 @@
-import { resolve } from "node:path";
+import { createReadStream, existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type ViteDevServer } from "vite";
+import { cjsInterop } from "vite-plugin-cjs-interop";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
-const workspaceRoot = resolve(__dirname, "../..");
-const swapkitUiCss = fileURLToPath(import.meta.resolve("@swapkit/ui/swapkit.css"));
-const swapkitHelpers = fileURLToPath(import.meta.resolve("@swapkit/helpers"));
-const swapkitHelpersApi = fileURLToPath(import.meta.resolve("@swapkit/helpers/api"));
+// Resolve shims from this package's context so Rollup can find them when bundling other packages
+const polyfillsPkg = resolve(dirname(fileURLToPath(import.meta.resolve("vite-plugin-node-polyfills"))), "..");
 
+// Point @swapkit/ui imports at the workspace source so Vite HMRs sidebar/widget edits without a rebuild.
+const uiSrc = resolve(__dirname, "../../packages/ui/src");
+
+// https://vite.dev/config/
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH || "/",
+
   build: {
     commonjsOptions: { transformMixedEsModules: true },
     rollupOptions: { plugins: [nodePolyfills()] },
     sourcemap: true,
     target: "es2022",
   },
+
   define: { global: "globalThis", "process.browser": true, "process.env": {} },
+
   esbuild: { logOverride: { "this-is-undefined-in-esm": "silent" }, target: "es2022" },
+
   optimizeDeps: {
-    entries: [
-      "index.html",
-      "../../packages/wallets/src/**/*.ts",
-      "../../packages/wallet-extensions/src/**/*.ts",
-      "../../packages/wallet-hardware/src/**/*.ts",
-      "../../packages/wallet-mobile/src/**/*.ts",
-    ],
     esbuildOptions: { define: { global: "globalThis" } },
-    exclude: [
-      // Stencil lazy web components resolve chunks via import.meta.url; pre-bundling
-      // breaks that, so serve the MetaMask connect UI package as native ESM.
-      "@metamask/multichain-ui",
-      "@swapkit/helpers",
-      "@swapkit/helpers/api",
-      "@swapkit/wallets",
-      "@swapkit/wallet-extensions",
-      "@swapkit/wallet-hardware",
-      "@swapkit/wallet-mobile",
-      // Avoid splitting nuqs into separate chunks — the adapter and the
-      // useAdapter hook must share a single module instance to share React
-      // context.
-      "nuqs",
-      "nuqs/adapters/react",
-    ],
-    include: [
-      "@ledgerhq/devices",
-      "@ledgerhq/errors",
-      "@ledgerhq/hw-app-btc",
-      "@ledgerhq/hw-transport-webhid",
-      "@ledgerhq/hw-transport-webusb",
-      // CJS deps dynamically imported with NAMED imports by the MetaMask connect
-      // SDK; without listing them esbuild emits default-only interop and the
-      // mobile/QR flow throws on undefined named members.
-      "@metamask/mobile-wallet-protocol-core",
-      "@metamask/mobile-wallet-protocol-dapp-client",
-      "eciesjs",
-      "@near-js/accounts",
-      "@near-js/crypto",
-      "@near-js/providers",
-      "@near-js/transactions",
-      "@near-js/types",
-      "@near-js/utils",
-      "@solana/web3.js",
-      "@swapkit/toolboxes/utxo",
-      "@swapkit/utxo-signer",
-      "@swapkit/wallet-core",
-      "@trezor/connect-web",
-      "bn.js",
-      "depd",
-      "eventemitter3",
-      "ethers",
-      "hoist-non-react-statics",
-      "is-my-json-valid",
-      "jayson/lib/client/browser",
-      "lucide-react",
-      "mustache",
-      "rpc-websockets",
-      "secp256k1",
-      "ts-pattern",
-      "vite-plugin-node-polyfills/shims/buffer",
-      "vite-plugin-node-polyfills/shims/global",
-      "vite-plugin-node-polyfills/shims/process",
-    ],
+    // Pre-bundling breaks the import.meta.url-relative .wasm asset path inside the
+    // Aleo SDK's browser build — serve it as native ESM so WebAssembly loads.
+    exclude: ["@provablehq/sdk"],
+    // CJS dependencies of the excluded package still need pre-bundling to ESM.
+    include: ["@provablehq/sdk > core-js/proposals/json-parse-with-source.js"],
   },
-  plugins: [nodePolyfills({ globals: { Buffer: true, global: true, process: true } }), react()],
+
+  plugins: [
+    cjsInterop({ dependencies: ["lodash", "near-seed-phrase"] }),
+    nodePolyfills({ globals: { Buffer: true, global: true, process: true } }),
+    react(),
+    serveWidgetAssets(),
+  ],
+
   resolve: {
+    // Use array form so the longest-prefix workspace aliases are tried first.
+    // Object form gets re-sorted alphabetically by the linter, which then matches
+    // the bare `@swapkit/ui` prefix before subpaths like `@swapkit/ui/react`.
     alias: [
-      { find: "@noble/curves/ed25519", replacement: resolve(__dirname, "node_modules/@noble/curves/ed25519.js") },
-      { find: "@noble/hashes/utils", replacement: resolve(__dirname, "node_modules/@noble/hashes/utils.js") },
+      // Workspace source resolution for JS/TSX only — `swapkit.css` stays on dist
+      // because the source is raw Tailwind that needs the package build pipeline.
+      { find: /^@swapkit\/ui\/react\/controls$/, replacement: resolve(uiSrc, "react/controls/index.ts") },
+      { find: /^@swapkit\/ui\/react$/, replacement: resolve(uiSrc, "react/index.tsx") },
+      { find: /^@swapkit\/ui$/, replacement: resolve(uiSrc, "index.ts") },
+      { find: "lodash/isEqual.js", replacement: "lodash-es/isEqual.js" },
+      // ESM shim for randomfill to fix "exports is not defined" error in production builds
+      { find: "randomfill", replacement: resolve(__dirname, "shims/randomfill.js") },
       {
         find: "vite-plugin-node-polyfills/shims/buffer",
-        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/buffer/dist/index.js"),
+        replacement: resolve(polyfillsPkg, "shims/buffer/dist/index.js"),
       },
       {
         find: "vite-plugin-node-polyfills/shims/global",
-        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/global/dist/index.js"),
+        replacement: resolve(polyfillsPkg, "shims/global/dist/index.js"),
       },
       {
         find: "vite-plugin-node-polyfills/shims/process",
-        replacement: resolve(__dirname, "node_modules/vite-plugin-node-polyfills/shims/process/dist/index.js"),
-      },
-      { find: "@swapkit/ui/swapkit.css", replacement: swapkitUiCss },
-      { find: /^@swapkit\/helpers\/api$/, replacement: swapkitHelpersApi },
-      { find: /^@swapkit\/helpers$/, replacement: swapkitHelpers },
-      { find: "@swapkit/sdk", replacement: resolve(workspaceRoot, "packages/sdk/src/index.ts") },
-      { find: "@swapkit/wallets", replacement: resolve(workspaceRoot, "packages/wallets/src/index.ts") },
-      { find: "@swapkit/wallet-mobile", replacement: resolve(workspaceRoot, "packages/wallet-mobile/src/index.ts") },
-      {
-        find: /^@swapkit\/wallet-extensions\/(.+)$/,
-        replacement: `${resolve(workspaceRoot, "packages/wallet-extensions/src")}/$1/index.ts`,
-      },
-      {
-        find: "@swapkit/wallet-extensions",
-        replacement: resolve(workspaceRoot, "packages/wallet-extensions/src/index.ts"),
-      },
-      {
-        find: /^@swapkit\/wallet-hardware\/(.+)$/,
-        replacement: `${resolve(workspaceRoot, "packages/wallet-hardware/src")}/$1/index.ts`,
-      },
-      {
-        find: "@swapkit/wallet-hardware",
-        replacement: resolve(workspaceRoot, "packages/wallet-hardware/src/index.ts"),
+        replacement: resolve(polyfillsPkg, "shims/process/dist/index.js"),
       },
     ],
-    // Prefer the "bun" condition so vite resolves workspace packages to their
-    // src/ entrypoints instead of the (potentially stale) dist/ build.
-    conditions: ["bun", "module", "browser", "import", "default"],
-    // Force a single module instance for libraries that rely on React context —
-    // bun's content-addressed store can otherwise produce two physical copies
-    // even at the same version, breaking provider/context lookup.
-    dedupe: ["react", "react-dom", "nuqs"],
   },
 });
+
+function serveWidgetAssets() {
+  const widgetDir = join(__dirname, "../../packages/ui/dist/widget");
+
+  return {
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use("/widget-assets", (req, res, next) => {
+        const filePath = join(widgetDir, req.url || "");
+
+        if (!existsSync(filePath)) {
+          return next();
+        }
+
+        if (filePath.endsWith(".js")) {
+          res.setHeader("Content-Type", "application/javascript");
+        } else if (filePath.endsWith(".css")) {
+          res.setHeader("Content-Type", "text/css");
+        }
+
+        createReadStream(filePath).pipe(res);
+      });
+    },
+    name: "serve-widget-assets",
+  };
+}

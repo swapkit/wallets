@@ -1,7 +1,7 @@
 {
   "author": "swapkit-dev",
   "dependencies": {
-    "@stricahq/typhonjs": "~3.0.1",
+    "@stricahq/typhonjs": "3.1.0",
     "@swapkit/core": "^5.0.5",
     "@swapkit/helpers": "^5.2.1",
     "@swapkit/plugins": "^5.0.5",
@@ -10,7 +10,7 @@
     "@swapkit/wallet-core": "^5.0.5",
     "@swapkit/wallet-keystore": "^5.1.1",
     "@swapkit/wallets": "workspace:*",
-    "cosmjs-types": "0.10.1"
+    "cosmjs-types": "0.11.0"
   },
   "description": "SwapKit - SDK",
   "exports": {
@@ -45,21 +45,12 @@
       "types": "./dist/types/wallets.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/sdk",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/sdk",
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git"
-  },
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/sdk", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
