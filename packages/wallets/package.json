@@ -1,20 +1,20 @@
 {
   "dependencies": {
     "@coinbase/wallet-sdk": "~4.3.7",
-    "@cosmjs/amino": "~0.37.0",
-    "@cosmjs/proto-signing": "~0.37.0",
+    "@cosmjs/amino": "0.39.0",
+    "@cosmjs/proto-signing": "0.39.0",
     "@metamask/connect-multichain": "~1.1.0",
-    "@near-js/transactions": "~2.5.0",
+    "@near-js/transactions": "2.5.1",
     "@near-wallet-selector/bitget-wallet": "~10.1.4",
     "@near-wallet-selector/core": "~10.1.4",
     "@near-wallet-selector/modal-ui-js": "~10.1.4",
-    "@noble/hashes": "~2.2.0",
+    "@noble/hashes": "2.2.0",
     "@passkeys/core": "~4.1.0",
     "@passkeys/react": "~3.0.1",
     "@radixdlt/babylon-gateway-api-sdk": "~1.10.0",
     "@radixdlt/radix-dapp-toolkit": "~2.3.0",
     "@scure/base": "~2.2.0",
-    "@scure/bip39": "~2.2.0",
+    "@scure/bip39": "2.2.0",
     "@solana/web3.js": "~1.98.4",
     "@swapkit/helpers": "^5.2.1",
     "@swapkit/toolboxes": "^5.2.1",
@@ -26,19 +26,19 @@
     "@tonconnect/ui": "~3.0.0",
     "@walletconnect/modal": "~2.7.0",
     "@walletconnect/sign-client": "~2.23.9",
-    "cosmjs-types": "~0.10.1",
+    "cosmjs-types": "0.11.0",
     "ethers": "^6.14.0",
     "sats-connect": "~1.0.0",
-    "ts-pattern": "^5.9.0",
+    "ts-pattern": "5.9.0",
     "xumm": "1.8.0"
   },
   "description": "SwapKit - Wallets",
   "devDependencies": {
     "@coinbase/wallet-sdk": "4.3.7",
-    "@cosmjs/amino": "0.37.0",
-    "@cosmjs/proto-signing": "0.37.0",
+    "@cosmjs/amino": "0.39.0",
+    "@cosmjs/proto-signing": "0.39.0",
     "@metamask/connect-multichain": "1.1.0",
-    "@near-js/transactions": "2.5.0",
+    "@near-js/transactions": "2.5.1",
     "@near-wallet-selector/bitget-wallet": "10.1.4",
     "@near-wallet-selector/core": "10.1.4",
     "@near-wallet-selector/modal-ui-js": "10.1.4",
@@ -54,11 +54,11 @@
     "@walletconnect/modal": "2.7.0",
     "@walletconnect/sign-client": "2.23.9",
     "@walletconnect/types": "2.23.9",
-    "cosmjs-types": "0.10.1",
+    "cosmjs-types": "0.11.0",
     "ethers": "6.16.0",
     "pino-pretty": "13.1.3",
     "sats-connect": "1.0.0",
-    "ts-pattern": "^5.9.0",
+    "ts-pattern": "5.9.0",
     "xumm": "1.8.0"
   },
   "exports": {
@@ -231,21 +231,12 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/wallets",
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git"
-  },
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",
