@@ -3,6 +3,7 @@
     "@coinbase/wallet-sdk": "~4.3.7",
     "@cosmjs/amino": "~0.37.0",
     "@cosmjs/proto-signing": "~0.37.0",
+    "@ledgerhq/ledger-wallet-provider": "~1.4.2",
     "@metamask/connect-multichain": "~1.1.0",
     "@near-js/transactions": "~2.5.0",
     "@near-wallet-selector/bitget-wallet": "~10.1.4",
@@ -37,6 +38,7 @@
     "@coinbase/wallet-sdk": "4.3.7",
     "@cosmjs/amino": "0.37.0",
     "@cosmjs/proto-signing": "0.37.0",
+    "@ledgerhq/ledger-wallet-provider": "1.4.2",
     "@metamask/connect-multichain": "1.1.0",
     "@near-js/transactions": "2.5.0",
     "@near-wallet-selector/bitget-wallet": "10.1.4",
@@ -133,6 +135,18 @@
       "default": "./dist/src/ledger.js",
       "require": "./dist/src/ledger.cjs",
       "types": "./dist/types/ledger.d.ts"
+    },
+    "./ledger-wallet-provider": {
+      "bun": "./src/ledger-wallet-provider/index.ts",
+      "default": "./dist/src/ledger-wallet-provider/index.js",
+      "require": "./dist/src/ledger-wallet-provider/index.cjs",
+      "types": "./dist/types/ledger-wallet-provider/index.d.ts"
+    },
+    "./ledger-wallet-provider/register": {
+      "bun": "./src/ledger-wallet-provider/register.ts",
+      "default": "./dist/src/ledger-wallet-provider/register.js",
+      "require": "./dist/src/ledger-wallet-provider/register.cjs",
+      "types": "./dist/types/ledger-wallet-provider/register.d.ts"
     },
     "./metamask": {
       "bun": "./src/metamask/index.ts",
