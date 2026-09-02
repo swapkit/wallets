@@ -8,9 +8,9 @@ through a single `loadWallet` entry point and typed `SKWallets` registry.
 
 | Package | Contents |
 | --- | --- |
-| [`@swapkit/wallets`](packages/wallets) | aggregator: `loadWallet`, `SKWallets`/`SKWalletsSupportedChains` types, and connectors without their own package (keystore, tonconnect, xaman, radix, passkeys, …) |
+| [`@swapkit/wallets`](packages/wallets) | aggregator: `loadWallet`, `SKWallets`/`SKWalletsSupportedChains` types, and connectors without their own package (keystore, tonconnect, xaman, radix, passkeys, ledger-wallet-provider, …) |
 | [`@swapkit/wallet-extensions`](packages/wallet-extensions) | injected browser-extension providers (MetaMask/EVM, Keplr, Vultisig, Ctrl, Phantom, Petra, Noir Wallet, …) |
-| [`@swapkit/wallet-hardware`](packages/wallet-hardware) | Ledger, Trezor, KeepKey |
+| [`@swapkit/wallet-hardware`](packages/wallet-hardware) | Ledger, Trezor, KeepKey — direct WebHID/WebUSB transports |
 | [`@swapkit/wallet-mobile`](packages/wallet-mobile) | mobile wallet support |
 | [`@swapkit/sdk`](packages/sdk) | batteries-included bundle re-exporting core, plugins, toolboxes, and wallets |
 

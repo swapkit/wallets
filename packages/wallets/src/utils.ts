@@ -46,6 +46,10 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
     .with(WalletOption.KEYSTORE, async () => (await import("./keystore")).keystoreWallet)
     .with(WalletOption.TREZOR, async () => (await import("@swapkit/wallet-hardware/trezor")).trezorWallet)
     .with(WalletOption.LEDGER, async () => (await import("@swapkit/wallet-hardware/ledger")).ledgerWallet)
+    .with(
+      WalletOption.LEDGER_WALLET_PROVIDER,
+      async () => (await import("./ledger-wallet-provider")).ledgerWalletProviderWallet,
+    )
     .with(WalletOption.PASSKEYS, WalletOption.PASSKEY_WALLET, async () => (await import("./passkeys")).passkeysWallet)
     .with(WalletOption.PETRA, async () => (await import("@swapkit/wallet-extensions/petra")).petraWallet)
     .with(WalletOption.NOIR_WALLET, async () => (await import("@swapkit/wallet-extensions/noir-wallet")).noirWallet)

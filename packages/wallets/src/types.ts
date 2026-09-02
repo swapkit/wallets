@@ -20,6 +20,7 @@ import type { ledgerWallet } from "@swapkit/wallet-hardware/ledger";
 import type { trezorWallet } from "@swapkit/wallet-hardware/trezor";
 import type { coinbaseWallet } from "./coinbase";
 import type { keystoreWallet } from "./keystore";
+import type { ledgerWalletProviderWallet } from "./ledger-wallet-provider";
 import type { metamaskWallet } from "./metamask";
 import type { walletSelectorWallet } from "./near-wallet-selector";
 import type { passkeysWallet } from "./passkeys";
@@ -43,6 +44,7 @@ export type SKWallets = {
   [WalletOption.KEYSTORE]: typeof keystoreWallet;
   [WalletOption.LEAP]: typeof keplrWallet;
   [WalletOption.LEDGER]: typeof ledgerWallet;
+  [WalletOption.LEDGER_WALLET_PROVIDER]: typeof ledgerWalletProviderWallet;
   [WalletOption.METAMASK]: typeof metamaskWallet;
   [WalletOption.NOIR_WALLET]: typeof noirWallet;
   [WalletOption.OKX]: typeof okxWallet;
@@ -121,6 +123,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.KEYSTORE]: typeof keystoreWallet.connectKeystore.supportedChains;
   [WalletOption.LEAP]: typeof keplrWallet.connectKeplr.supportedChains;
   [WalletOption.LEDGER]: typeof ledgerWallet.connectLedger.supportedChains;
+  [WalletOption.LEDGER_WALLET_PROVIDER]: typeof ledgerWalletProviderWallet.connectLedgerWalletProvider.supportedChains;
   [WalletOption.METAMASK]: typeof metamaskWallet.connectMetamask.supportedChains;
   [WalletOption.NOIR_WALLET]: typeof noirWallet.connectNoirWallet.supportedChains;
   [WalletOption.OKX]: typeof okxWallet.connectOkx.supportedChains;
