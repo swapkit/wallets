@@ -11,8 +11,8 @@
     "@near-js/transactions": "~2.5.0",
     "@scure/base": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^5.2.1",
-    "@swapkit/toolboxes": "^5.2.1",
+    "@swapkit/helpers": "^5.3.0",
+    "@swapkit/toolboxes": "^5.3.0",
     "@swapkit/utxo-signer": "^3.0.0",
     "@swapkit/wallet-core": "^5.0.5",
     "@wallet-standard/app": "^1.1.1",
@@ -149,16 +149,11 @@
       "types": "./dist/types/vultisig/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
     "directory": "packages/wallet-extensions",
     "type": "git",
