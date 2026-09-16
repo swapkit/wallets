@@ -29,6 +29,7 @@ export const coinbaseWallet = createWallet({
     },
   directSigningSupport: {
     [Chain.Arbitrum]: true,
+    [Chain.Arc]: true,
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
     [Chain.BinanceSmartChain]: true,
@@ -40,6 +41,7 @@ export const coinbaseWallet = createWallet({
   name: "connectCoinbaseWallet",
   supportedChains: [
     Chain.Arbitrum,
+    Chain.Arc,
     Chain.Avalanche,
     Chain.Base,
     Chain.BinanceSmartChain,

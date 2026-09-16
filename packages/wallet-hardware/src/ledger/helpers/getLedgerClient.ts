@@ -4,6 +4,7 @@ import { Chain, type DerivationPathArray, type EVMChain, SwapKitError, WalletOpt
 import { CosmosLedger } from "../clients/cosmos";
 import {
   ArbitrumLedger,
+  ArcLedger,
   AuroraLedger,
   AvalancheLedger,
   BaseLedger,
@@ -32,6 +33,7 @@ import { XRPLedger } from "../clients/xrp";
 
 type LedgerSignerMap = {
   [Chain.Arbitrum]: ReturnType<typeof ArbitrumLedger>;
+  [Chain.Arc]: ReturnType<typeof ArcLedger>;
   [Chain.Aurora]: ReturnType<typeof AuroraLedger>;
   [Chain.Avalanche]: ReturnType<typeof AvalancheLedger>;
   [Chain.Base]: ReturnType<typeof BaseLedger>;
@@ -94,6 +96,7 @@ export const getLedgerClient = async <T extends LedgerSupportedChain>({
       })
       .with(
         Chain.Arbitrum,
+        Chain.Arc,
         Chain.Aurora,
         Chain.Avalanche,
         Chain.Berachain,
@@ -113,6 +116,7 @@ export const getLedgerClient = async <T extends LedgerSupportedChain>({
             .with(Chain.BinanceSmartChain, () => BinanceSmartChainLedger(params) as LedgerSignerMap[T])
             .with(Chain.Avalanche, () => AvalancheLedger(params) as LedgerSignerMap[T])
             .with(Chain.Arbitrum, () => ArbitrumLedger(params) as LedgerSignerMap[T])
+            .with(Chain.Arc, () => ArcLedger(params) as LedgerSignerMap[T])
             .with(Chain.Berachain, () => BerachainLedger(params) as LedgerSignerMap[T])
             .with(Chain.Optimism, () => OptimismLedger(params) as LedgerSignerMap[T])
             .with(Chain.Polygon, () => PolygonLedger(params) as LedgerSignerMap[T])

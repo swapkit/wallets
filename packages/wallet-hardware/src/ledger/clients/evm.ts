@@ -189,6 +189,7 @@ type LedgerParams = { provider: Provider; derivationPath?: DerivationPathArray; 
 
 export const ArbitrumLedger = (params: LedgerParams) =>
   new EVMLedgerInterface({ ...params, chainId: ChainId.Arbitrum });
+export const ArcLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Arc });
 export const AuroraLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Aurora });
 export const AvalancheLedger = (params: LedgerParams) =>
   new EVMLedgerInterface({ ...params, chainId: ChainId.Avalanche });
