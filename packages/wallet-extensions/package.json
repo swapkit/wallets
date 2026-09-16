@@ -149,11 +149,16 @@
       "types": "./dist/types/vultisig/index.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "directory": "packages/wallet-extensions",
     "type": "git",
@@ -167,5 +172,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.6.1"
+  "version": "4.6.2"
 }

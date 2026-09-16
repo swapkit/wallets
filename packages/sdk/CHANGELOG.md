@@ -1,5 +1,12 @@
 # @swapkit/sdk
 
+## 4.6.51
+
+### Patch Changes
+
+- [#150](https://github.com/swapkit/wallets/pull/150) [`db4f182`](https://github.com/swapkit/wallets/commit/db4f1820a8890abad0e956fcc45f87127c462478) Thanks [@towanTG](https://github.com/towanTG)! - Update SwapKit SDK dependencies:
+- [#149](https://github.com/swapkit/wallets/pull/149) [`ef6fb67`](https://github.com/swapkit/wallets/commit/ef6fb67d7eaa92dbf0ec0362f3f28646fce9ebdc) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Arc (`Chain.Arc`, chain id 5042, USDC native gas) to the connectors that keep an explicit chain list: WalletConnect (`eip155:5042` namespace), Coinbase Wallet SDK, Ledger, Trezor and KeepKey. Connectors built on `EVMChains` (MetaMask, EVM extensions / EIP-6963, Trust Wallet, Bitget, Passkeys) already picked Arc up from `@swapkit/helpers` 5.2.1. (via @swapkit/wallets@4.13.0)
+
 ## 4.6.50
 
 ### Patch Changes
