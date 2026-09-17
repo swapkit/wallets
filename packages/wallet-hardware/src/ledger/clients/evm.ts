@@ -26,8 +26,6 @@ import {
 
 const LOG_PREFIX = "[ledger/evm]";
 
-// Ethereum app status word returned when it rejects an APDU payload, e.g. a token
-// descriptor for a chain missing from the app's hardcoded network table.
 const LEDGER_INCORRECT_DATA = 0x6a80;
 
 type LedgerTransactionResolution = Awaited<
@@ -209,8 +207,6 @@ class EVMLedgerInterface extends AbstractSigner {
 
     const { ledgerService } = await import("@ledgerhq/hw-app-eth");
 
-    // Clear-signing metadata (ERC20 descriptors, plugins) is best effort: if Ledger's
-    // asset list can't be reached we fall back to blind signing instead of failing.
     const resolution = await ledgerService
       .resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true })
       .catch(() => null);
@@ -225,16 +221,6 @@ class EVMLedgerInterface extends AbstractSigner {
       .serialized;
   };
 
-  /**
-   * Signs with clear-signing metadata first.
-   *
-   * The app rejects token descriptors for chains missing from its hardcoded table (e.g. ARC)
-   * with INCORRECT_DATA before the transaction is displayed. Without the descriptor the
-   * internal ERC20 plugin falls back and the device demands blind signing, so we register
-   * the chain with its Ledger-signed network descriptor and retry. Only if the chain cannot
-   * be registered do we sign without metadata, which is what forces blind signing.
-   * `null` (not `undefined`) tells hw-app-eth to skip auto-resolution.
-   */
   private signWithLedgerApp = async (
     unsignedTx: string,
     resolution: LedgerTransactionResolution | null,
@@ -261,11 +247,6 @@ class EVMLedgerInterface extends AbstractSigner {
     }
   };
 
-  /**
-   * Registers the chain on the device so it accepts clear-signing metadata for it.
-   * Best effort: returns whether it succeeded, and reports why it did not. Diagnostics
-   * matter here because every failure path silently degrades to blind signing.
-   */
   private registerNetworkOnDevice = async (chainId: number) => {
     const deviceModelId = this.transport?.deviceModel?.id;
     const appConfiguration = await this.ledgerApp?.getAppConfiguration().catch(() => undefined);
@@ -287,8 +268,6 @@ class EVMLedgerInterface extends AbstractSigner {
         return false;
       }
 
-      // Recent app versions verify the descriptor against a certificate loaded at runtime,
-      // so this has to go first or the descriptor is rejected as invalid data.
       if (certificate) {
         await provideLedgerCertificate(this.transport, certificate);
       } else {
@@ -297,7 +276,6 @@ class EVMLedgerInterface extends AbstractSigner {
 
       const { iconAccepted } = await provideLedgerNetworkInformation(this.transport, descriptor);
 
-      // Ask the device what it actually holds instead of trusting the status words.
       const registered = await getRegisteredLedgerNetworks(this.transport).catch(() => null);
 
       if (registered && !registered.includes(chainId)) {

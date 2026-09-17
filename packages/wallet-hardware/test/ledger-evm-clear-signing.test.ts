@@ -65,7 +65,6 @@ import {
 const USDC_ARC = "0x3600000000000000000000000000000000000000";
 const usdcArcDescriptor = { domains: [], erc20Tokens: ["04555344433600"], externalPlugin: [], nfts: [], plugin: [] };
 
-// Real CAL payload for ARC (chain 5042) on Nano X: descriptor TLV, prod signature and 14x14 icon.
 const ARC_NANOX_DESCRIPTOR = {
   data: "010108020101510101230800000000000013b252034172632404555344435320f220b08815631e275dba75dd9ae6a30630980a2784a2393edd55bdc3cfdca021",
   icon: "0e000e0000190000001c0fe0ff8fcc783380ce03380ce001e003f003ff03fc0070",
@@ -73,7 +72,6 @@ const ARC_NANOX_DESCRIPTOR = {
     "3044022062db1ce5c6df646e26c23725dbbe7e7e5ba1b54764dd5d9d512ebf4707bebf0e022026b79ea6799c1d676ca073f2c58be23a538532f0eea9a5d52d04f9a7789bf18b",
 };
 
-// Real CAL certificate for the `network` key usage on Nano X.
 const ARC_CERTIFICATE = {
   data: "0101010201023501023601011004030100001302000214010120076e6574776f726b3002000a31010c32012134010133210272e8e8c69a8d9cec8fa22ea676a45099bcbc0301eba78ccca639e8173feafbab",
   signature:
@@ -186,7 +184,6 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
       "https://crypto-assets-service.api.ledger.com/v1/networks?chain_id=5042&output=chain_id,descriptors,icons",
     ]);
     expect(apdus.map(({ cla, ins, p1, p2 }) => ({ cla, ins, p1, p2 }))).toEqual([
-      // the certificate carrying the key the app verifies the descriptor with, first
       { cla: 0xb0, ins: 0x06, p1: 0x0c, p2: 0x00 },
       { cla: 0xe0, ins: 0x30, p1: 0x01, p2: 0x00 },
       { cla: 0xe0, ins: 0x30, p1: 0x01, p2: 0x01 },
@@ -195,7 +192,6 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     expect(apdus[0]?.data).toBe(`${ARC_CERTIFICATE.data}1546${ARC_CERTIFICATE.signature}`);
     expect(apdus[1]?.data).toBe(encodeNetworkInfoPayload(ARC_NANOX_DESCRIPTOR).toString("hex"));
     expect(apdus[2]?.data).toBe(ARC_NANOX_DESCRIPTOR.icon);
-    // clear-signing attempt, registration, clear-signing again — never signs without metadata
     expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
     expect(warnings).toHaveLength(0);
     expect(Transaction.from(signedTx).chainId).toBe(5042n);
@@ -206,7 +202,6 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     rejectClearSigningWith = 0x6a80;
     acceptClearSigningOnceNetworkIsKnown = true;
 
-    // ARC publishes descriptors for every model but Nano S.
     await makeClient("nanoS").signTransaction(approveTx);
 
     expect(apdus).toHaveLength(0);
@@ -264,7 +259,6 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
 
     await makeClient("nanoX").signTransaction(approveTx);
 
-    // config, icon (rejected, drops the network), config again, then the device check
     expect(apdus.map(({ cla, p2 }) => (cla === 0xb0 ? "cert" : p2))).toEqual(["cert", 0x00, 0x01, 0x00, 0x02]);
     expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
     expect(warnings[0]).toContain("without its icon");
