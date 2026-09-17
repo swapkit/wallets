@@ -28,6 +28,8 @@ const LOG_PREFIX = "[ledger/evm]";
 
 const LEDGER_INCORRECT_DATA = 0x6a80;
 
+const LEDGER_DYNAMIC_NETWORKS = new Set([Number(ChainId.Arc)]);
+
 type LedgerTransactionResolution = Awaited<
   ReturnType<typeof import("@ledgerhq/hw-app-eth")["ledgerService"]["resolveTransaction"]>
 >;
@@ -66,6 +68,7 @@ class EVMLedgerInterface extends AbstractSigner {
   ledgerTimeout = 50000;
   private transport?: Transport;
   private readonly injectedTransport?: Transport;
+  private readonly registeredChains = new Set<number>();
 
   constructor({
     provider,
@@ -211,7 +214,12 @@ class EVMLedgerInterface extends AbstractSigner {
       .resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true })
       .catch(() => null);
 
-    const signature = await this.signWithLedgerApp(unsignedTx, resolution, Number(baseTx.chainId));
+    const chainId = Number(baseTx.chainId);
+    const registrationAttempted = LEDGER_DYNAMIC_NETWORKS.has(chainId) && !this.registeredChains.has(chainId);
+
+    if (LEDGER_DYNAMIC_NETWORKS.has(chainId)) await this.ensureNetworkRegistered(chainId);
+
+    const signature = await this.signWithLedgerApp(unsignedTx, resolution, chainId, registrationAttempted);
 
     if (!signature) throw new SwapKitError("wallet_ledger_signing_error");
 
@@ -225,26 +233,45 @@ class EVMLedgerInterface extends AbstractSigner {
     unsignedTx: string,
     resolution: LedgerTransactionResolution | null,
     chainId: number,
+    registrationAttempted: boolean,
   ) => {
     try {
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
     } catch (error) {
       if (!(isLedgerIncorrectDataError(error) && hasClearSigningPayload(resolution))) throw error;
 
-      if (await this.registerNetworkOnDevice(chainId)) {
-        try {
-          return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
-        } catch (retryError) {
-          if (!isLedgerIncorrectDataError(retryError)) throw retryError;
+      if (!registrationAttempted) {
+        this.registeredChains.delete(chainId);
 
-          console.warn(
-            `${LOG_PREFIX} app still rejected clear-signing metadata for chain ${chainId} after registering it — signing blind`,
-          );
+        if (await this.ensureNetworkRegistered(chainId)) {
+          try {
+            return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
+          } catch (retryError) {
+            if (!isLedgerIncorrectDataError(retryError)) throw retryError;
+
+            console.warn(
+              `${LOG_PREFIX} app still rejected clear-signing metadata for chain ${chainId} after registering it — signing blind`,
+            );
+          }
         }
+      } else if (this.registeredChains.has(chainId)) {
+        console.warn(
+          `${LOG_PREFIX} app still rejected clear-signing metadata for chain ${chainId} after registering it — signing blind`,
+        );
       }
 
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, null);
     }
+  };
+
+  private ensureNetworkRegistered = async (chainId: number) => {
+    if (this.registeredChains.has(chainId)) return true;
+
+    const registered = await this.registerNetworkOnDevice(chainId);
+
+    if (registered) this.registeredChains.add(chainId);
+
+    return registered;
   };
 
   private registerNetworkOnDevice = async (chainId: number) => {

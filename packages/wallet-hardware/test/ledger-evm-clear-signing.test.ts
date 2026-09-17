@@ -55,7 +55,7 @@ mock.module("@ledgerhq/hw-app-eth", () => ({
   },
 }));
 
-import { ArcLedger } from "../src/ledger/clients/evm";
+import { ArcLedger, AuroraLedger } from "../src/ledger/clients/evm";
 import {
   encodeNetworkInfoPayload,
   fetchLedgerNetworkDescriptor,
@@ -172,7 +172,7 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     console.warn = originalWarn;
   });
 
-  it("registers the chain on the device and clear-signs instead of falling back to blind", async () => {
+  it("registers the chain up front so the app never rejects the metadata", async () => {
     resolutionToReturn = usdcArcDescriptor;
     rejectClearSigningWith = 0x6a80;
     acceptClearSigningOnceNetworkIsKnown = true;
@@ -192,7 +192,7 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     expect(apdus[0]?.data).toBe(`${ARC_CERTIFICATE.data}1546${ARC_CERTIFICATE.signature}`);
     expect(apdus[1]?.data).toBe(encodeNetworkInfoPayload(ARC_NANOX_DESCRIPTOR).toString("hex"));
     expect(apdus[2]?.data).toBe(ARC_NANOX_DESCRIPTOR.icon);
-    expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
+    expect(signInvocations).toEqual([usdcArcDescriptor]);
     expect(warnings).toHaveLength(0);
     expect(Transaction.from(signedTx).chainId).toBe(5042n);
   });
@@ -247,7 +247,7 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
 
     await makeClient("nanoX").signTransaction(approveTx);
 
-    expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor, null]);
+    expect(signInvocations).toEqual([usdcArcDescriptor, null]);
     expect(warnings[0]).toContain("still rejected");
   });
 
@@ -260,7 +260,7 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     await makeClient("nanoX").signTransaction(approveTx);
 
     expect(apdus.map(({ cla, p2 }) => (cla === 0xb0 ? "cert" : p2))).toEqual(["cert", 0x00, 0x01, 0x00, 0x02]);
-    expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
+    expect(signInvocations).toEqual([usdcArcDescriptor]);
     expect(warnings[0]).toContain("without its icon");
   });
 
@@ -283,15 +283,28 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     expect(warnings[0]).toContain("holds: none");
   });
 
-  it("signs once with metadata when the app accepts it, without touching the CAL", async () => {
+  it("registers the chain once per client and reuses it on later signatures", async () => {
     resolutionToReturn = usdcArcDescriptor;
 
-    await makeClient("nanoX").signTransaction(approveTx);
+    const client = makeClient("nanoX");
+    await client.signTransaction(approveTx);
+    await client.signTransaction(approveTx);
 
-    expect(fetchedUrls).toHaveLength(0);
-    expect(apdus).toHaveLength(0);
-    expect(signInvocations).toEqual([usdcArcDescriptor]);
+    expect(fetchedUrls).toHaveLength(2);
+    expect(apdus).toHaveLength(4);
+    expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
     expect(warnings).toHaveLength(0);
+  });
+
+  it("keeps registering reactively for chains outside the list", async () => {
+    resolutionToReturn = usdcArcDescriptor;
+    rejectClearSigningWith = 0x6a80;
+    const provider = {} as Parameters<typeof AuroraLedger>[0]["provider"];
+
+    await AuroraLedger({ provider, transport: makeTransport("nanoX") }).signTransaction(approveTx);
+
+    expect(signInvocations).toEqual([usdcArcDescriptor, null]);
+    expect(fetchedUrls.some((url) => url.includes("chain_id=1313161554"))).toBe(true);
   });
 
   it("does not retry when there was no metadata to blame", async () => {
