@@ -1,5 +1,25 @@
 # @swapkit-dev/wallet-hardware
 
+## 4.11.0
+
+### Minor Changes
+
+- [#151](https://github.com/swapkit/wallets/pull/151) [`7abc5ef`](https://github.com/swapkit/wallets/commit/7abc5ef5be20ce512cf5ed13a7efa38e945dcc97) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Arc (`Chain.Arc`, chain id 5042) to the Trezor connector. Trezor ships a signed network definition for chain 5042 (name `Arc`, symbol `USDC`, slip44 60), so the device shows the network and the native gas token correctly without any extra handling.
+
+  Fix EIP-1559 detection in the Trezor EVM signer: it treated a zero-wei priority fee as missing fee data and failed the transaction with `wallet_missing_params`. Arc pays a tip of a few wei, and an idle RPC reports zero. The signer now checks whether the fee fields are present instead of whether they are non-zero.
+
+### Patch Changes
+
+- [#152](https://github.com/swapkit/wallets/pull/152) [`b9f735c`](https://github.com/swapkit/wallets/commit/b9f735cd730385a752a32ccb5575e58c154a75d5) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Ledger EVM: clear-sign ERC20 approvals on ARC, a chain the Ethereum app doesn't know yet.
+
+  The app rejects ERC20 descriptors for chains missing from its hardcoded network table with `INCORRECT_DATA` (0x6a80) before the transaction is displayed, which made every approve on ARC fail with `toolbox_evm_error_sending_transaction`. Handling that error alone was not enough: without the token descriptor the app's internal ERC20 plugin falls back, and the device then demands blind signing for an approve it could otherwise decode.
+
+  We now register ARC on the device the way Ledger Live does, before the first signature and once per client. First load the PKI certificate for the `network` key usage, since recent app versions verify network descriptors against a certificate loaded at runtime rather than a key baked into the firmware. Then send the Ledger-signed network descriptor from the Crypto Assets List (`PROVIDE_NETWORK_INFORMATION`, app >= 1.13.0) and its icon, re-sending the configuration if the icon is refused because a rejected icon makes the app drop the network it just registered. No other chain changes behaviour.
+
+  Both blind-signing fallbacks are scoped to Arc. On Arc, an `INCORRECT_DATA` the metadata can be blamed for, or a Ledger asset list we cannot reach, falls back to signing without metadata and warns. Every other chain keeps throwing exactly as before, so an outage — or someone blocking Ledger's domain — cannot silently turn an ERC20 approve into a blind signature.
+
+  Also bumps `@ledgerhq/hw-app-eth` to 7.8.18. No API changes on the surface we use; the only signature difference is an extra optional constructor argument.
+
 ## 4.10.0
 
 ### Minor Changes
