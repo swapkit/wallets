@@ -19,16 +19,13 @@ import { getLedgerTransport } from "../helpers/getLedgerTransport";
 import {
   fetchLedgerNetworkCertificate,
   fetchLedgerNetworkDescriptor,
-  getRegisteredLedgerNetworks,
   provideLedgerCertificate,
   provideLedgerNetworkInformation,
 } from "../helpers/ledgerNetworkInfo";
 
-const LOG_PREFIX = "[ledger/evm]";
-
 const LEDGER_INCORRECT_DATA = 0x6a80;
 
-const LEDGER_DYNAMIC_NETWORKS = new Set([Number(ChainId.Arc)]);
+const ARC_CHAIN_ID = Number(ChainId.Arc);
 
 type LedgerTransactionResolution = Awaited<
   ReturnType<typeof import("@ledgerhq/hw-app-eth")["ledgerService"]["resolveTransaction"]>
@@ -43,15 +40,7 @@ function isLedgerIncorrectDataError(error: unknown) {
 }
 
 function hasClearSigningPayload(resolution: LedgerTransactionResolution | null) {
-  if (!resolution) return false;
-
-  return [
-    resolution.erc20Tokens,
-    resolution.externalPlugin,
-    resolution.plugin,
-    resolution.nfts,
-    resolution.domains,
-  ].some((entries) => entries?.length);
+  return Object.values(resolution ?? {}).some((entries) => Array.isArray(entries) && entries.length);
 }
 
 function parseLedgerSignatureV(v: number | string) {
@@ -68,7 +57,7 @@ class EVMLedgerInterface extends AbstractSigner {
   ledgerTimeout = 50000;
   private transport?: Transport;
   private readonly injectedTransport?: Transport;
-  private readonly registeredChains = new Set<number>();
+  private arcNetworkRegistered = false;
 
   constructor({
     provider,
@@ -215,11 +204,10 @@ class EVMLedgerInterface extends AbstractSigner {
       .catch(() => null);
 
     const chainId = Number(baseTx.chainId);
-    const registrationAttempted = LEDGER_DYNAMIC_NETWORKS.has(chainId) && !this.registeredChains.has(chainId);
 
-    if (LEDGER_DYNAMIC_NETWORKS.has(chainId)) await this.ensureNetworkRegistered(chainId);
+    if (chainId === ARC_CHAIN_ID && !this.arcNetworkRegistered) await this.registerNetworkOnDevice(chainId);
 
-    const signature = await this.signWithLedgerApp(unsignedTx, resolution, chainId, registrationAttempted);
+    const signature = await this.signWithLedgerApp(unsignedTx, resolution, chainId);
 
     if (!signature) throw new SwapKitError("wallet_ledger_signing_error");
 
@@ -233,56 +221,22 @@ class EVMLedgerInterface extends AbstractSigner {
     unsignedTx: string,
     resolution: LedgerTransactionResolution | null,
     chainId: number,
-    registrationAttempted: boolean,
   ) => {
     try {
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
     } catch (error) {
       if (!(isLedgerIncorrectDataError(error) && hasClearSigningPayload(resolution))) throw error;
 
-      if (!registrationAttempted) {
-        this.registeredChains.delete(chainId);
-
-        if (await this.ensureNetworkRegistered(chainId)) {
-          try {
-            return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
-          } catch (retryError) {
-            if (!isLedgerIncorrectDataError(retryError)) throw retryError;
-
-            console.warn(
-              `${LOG_PREFIX} app still rejected clear-signing metadata for chain ${chainId} after registering it — signing blind`,
-            );
-          }
-        }
-      } else if (this.registeredChains.has(chainId)) {
-        console.warn(
-          `${LOG_PREFIX} app still rejected clear-signing metadata for chain ${chainId} after registering it — signing blind`,
-        );
-      }
+      console.warn(`Ledger: could not clear-sign on chain ${chainId}, signing blind`);
 
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, null);
     }
   };
 
-  private ensureNetworkRegistered = async (chainId: number) => {
-    if (this.registeredChains.has(chainId)) return true;
-
-    const registered = await this.registerNetworkOnDevice(chainId);
-
-    if (registered) this.registeredChains.add(chainId);
-
-    return registered;
-  };
-
   private registerNetworkOnDevice = async (chainId: number) => {
     const deviceModelId = this.transport?.deviceModel?.id;
-    const appConfiguration = await this.ledgerApp?.getAppConfiguration().catch(() => undefined);
-    const context = `chain ${chainId}, device ${deviceModelId ?? "unknown"}, app ${appConfiguration?.version ?? "unknown"} (needs >= 1.13.0), blind signing ${appConfiguration?.arbitraryDataEnabled ? "on" : "off"}`;
 
-    if (!(this.transport && deviceModelId)) {
-      console.warn(`${LOG_PREFIX} cannot register network, no device model on transport — ${context}`);
-      return false;
-    }
+    if (!(this.transport && deviceModelId)) return;
 
     try {
       const [descriptor, certificate] = await Promise.all([
@@ -290,36 +244,15 @@ class EVMLedgerInterface extends AbstractSigner {
         fetchLedgerNetworkCertificate(deviceModelId),
       ]);
 
-      if (!descriptor) {
-        console.warn(`${LOG_PREFIX} Ledger publishes no network descriptor for this device — ${context}`);
-        return false;
-      }
+      if (!descriptor) return;
 
-      if (certificate) {
-        await provideLedgerCertificate(this.transport, certificate);
-      } else {
-        console.warn(`${LOG_PREFIX} no network certificate published for this device — ${context}`);
-      }
+      if (certificate) await provideLedgerCertificate(this.transport, certificate);
 
-      const { iconAccepted } = await provideLedgerNetworkInformation(this.transport, descriptor);
+      await provideLedgerNetworkInformation(this.transport, descriptor);
 
-      const registered = await getRegisteredLedgerNetworks(this.transport).catch(() => null);
-
-      if (registered && !registered.includes(chainId)) {
-        console.warn(
-          `${LOG_PREFIX} device accepted the descriptor but did not register the chain (holds: ${registered.join(", ") || "none"}) — ${context}`,
-        );
-        return false;
-      }
-
-      if (!iconAccepted) {
-        console.warn(`${LOG_PREFIX} chain registered without its icon, the device will show no logo — ${context}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.warn(`${LOG_PREFIX} device refused the network descriptor — ${context}`, error);
-      return false;
+      this.arcNetworkRegistered = true;
+    } catch {
+      // the app will reject the metadata and signWithLedgerApp falls back to blind signing
     }
   };
 }

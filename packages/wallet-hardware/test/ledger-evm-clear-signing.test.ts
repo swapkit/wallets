@@ -55,7 +55,7 @@ mock.module("@ledgerhq/hw-app-eth", () => ({
   },
 }));
 
-import { ArcLedger, AuroraLedger } from "../src/ledger/clients/evm";
+import { ArcLedger } from "../src/ledger/clients/evm";
 import {
   encodeNetworkInfoPayload,
   fetchLedgerNetworkDescriptor,
@@ -99,16 +99,6 @@ let fetchedUrls: string[] = [];
 let warnings: string[] = [];
 let calResponse: { ok: boolean; body: unknown } = { body: calNetworksResponse, ok: true };
 
-function encodeRegisteredNetworks(chainIds: number[]) {
-  const buffer = Buffer.alloc(1 + chainIds.length * 8 + 2);
-  buffer[0] = chainIds.length;
-  for (const [index, chainId] of chainIds.entries()) {
-    buffer.writeBigUInt64BE(BigInt(chainId), 1 + index * 8);
-  }
-  buffer.writeUInt16BE(0x9000, 1 + chainIds.length * 8);
-  return buffer;
-}
-
 function makeTransport(deviceModelId?: string) {
   return {
     deviceModel: deviceModelId ? { id: deviceModelId } : undefined,
@@ -116,9 +106,6 @@ function makeTransport(deviceModelId?: string) {
       apdus.push({ cla, data: data?.toString("hex") ?? "", ins, p1, p2 });
 
       if (cla === 0xb0) return Promise.resolve(Buffer.from("9000", "hex"));
-      if (ins === 0x30 && p2 === 0x02) {
-        return Promise.resolve(encodeRegisteredNetworks(networkKnownByDevice ? [5042] : []));
-      }
       if (ins === 0x30 && p2 === 0x01 && iconIsRejected) {
         networkKnownByDevice = false;
         return Promise.reject(new MockTransportStatusError(0x6a80, "INCORRECT_DATA"));
@@ -187,7 +174,6 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
       { cla: 0xb0, ins: 0x06, p1: 0x0c, p2: 0x00 },
       { cla: 0xe0, ins: 0x30, p1: 0x01, p2: 0x00 },
       { cla: 0xe0, ins: 0x30, p1: 0x01, p2: 0x01 },
-      { cla: 0xe0, ins: 0x30, p1: 0x00, p2: 0x02 },
     ]);
     expect(apdus[0]?.data).toBe(`${ARC_CERTIFICATE.data}1546${ARC_CERTIFICATE.signature}`);
     expect(apdus[1]?.data).toBe(encodeNetworkInfoPayload(ARC_NANOX_DESCRIPTOR).toString("hex"));
@@ -197,7 +183,7 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     expect(Transaction.from(signedTx).chainId).toBe(5042n);
   });
 
-  it("reports the device model and app version when Ledger has no descriptor for that model", async () => {
+  it("signs blind when Ledger publishes no descriptor for that device model", async () => {
     resolutionToReturn = usdcArcDescriptor;
     rejectClearSigningWith = 0x6a80;
     acceptClearSigningOnceNetworkIsKnown = true;
@@ -207,13 +193,10 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     expect(apdus).toHaveLength(0);
     expect(signInvocations).toEqual([usdcArcDescriptor, null]);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("no network descriptor");
-    expect(warnings[0]).toContain("chain 5042");
-    expect(warnings[0]).toContain("device nanoS");
-    expect(warnings[0]).toContain("app 1.20.1");
+    expect(warnings[0]).toContain("signing blind");
   });
 
-  it("reports when the transport exposes no device model", async () => {
+  it("signs blind when the transport exposes no device model", async () => {
     resolutionToReturn = usdcArcDescriptor;
     rejectClearSigningWith = 0x6a80;
 
@@ -221,10 +204,10 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
 
     expect(fetchedUrls).toHaveLength(0);
     expect(signInvocations).toEqual([usdcArcDescriptor, null]);
-    expect(warnings[0]).toContain("no device model");
+    expect(warnings[0]).toContain("signing blind");
   });
 
-  it("reports when the device refuses the network descriptor, e.g. an app older than 1.13", async () => {
+  it("signs blind when the device refuses the network descriptor, e.g. an app older than 1.13", async () => {
     resolutionToReturn = usdcArcDescriptor;
     rejectClearSigningWith = 0x6a80;
     acceptClearSigningOnceNetworkIsKnown = true;
@@ -237,18 +220,17 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     await ArcLedger({ provider, transport }).signTransaction(approveTx);
 
     expect(signInvocations).toEqual([usdcArcDescriptor, null]);
-    expect(warnings[0]).toContain("refused the network descriptor");
-    expect(warnings[0]).toContain("needs >= 1.13.0");
+    expect(warnings[0]).toContain("signing blind");
   });
 
-  it("reports when the app still rejects metadata after the chain was registered", async () => {
+  it("signs blind when the app still rejects metadata after the chain was registered", async () => {
     resolutionToReturn = usdcArcDescriptor;
     rejectClearSigningWith = 0x6a80;
 
     await makeClient("nanoX").signTransaction(approveTx);
 
     expect(signInvocations).toEqual([usdcArcDescriptor, null]);
-    expect(warnings[0]).toContain("still rejected");
+    expect(warnings[0]).toContain("signing blind");
   });
 
   it("re-registers the chain when the device rejects the icon, which would drop the network", async () => {
@@ -259,28 +241,9 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
 
     await makeClient("nanoX").signTransaction(approveTx);
 
-    expect(apdus.map(({ cla, p2 }) => (cla === 0xb0 ? "cert" : p2))).toEqual(["cert", 0x00, 0x01, 0x00, 0x02]);
+    expect(apdus.map(({ cla, p2 }) => (cla === 0xb0 ? "cert" : p2))).toEqual(["cert", 0x00, 0x01, 0x00]);
     expect(signInvocations).toEqual([usdcArcDescriptor]);
-    expect(warnings[0]).toContain("without its icon");
-  });
-
-  it("reports when the device confirms the chain was not registered", async () => {
-    resolutionToReturn = usdcArcDescriptor;
-    rejectClearSigningWith = 0x6a80;
-    const provider = {} as Parameters<typeof ArcLedger>[0]["provider"];
-    const transport = {
-      deviceModel: { id: "nanoX" },
-      send: (_cla: number, ins: number, _p1: number, p2: number) =>
-        ins === 0x30 && p2 === 0x02
-          ? Promise.resolve(encodeRegisteredNetworks([]))
-          : Promise.resolve(Buffer.from("9000", "hex")),
-    } as unknown as Transport;
-
-    await ArcLedger({ provider, transport }).signTransaction(approveTx);
-
-    expect(signInvocations).toEqual([usdcArcDescriptor, null]);
-    expect(warnings[0]).toContain("did not register the chain");
-    expect(warnings[0]).toContain("holds: none");
+    expect(warnings).toHaveLength(0);
   });
 
   it("registers the chain once per client and reuses it on later signatures", async () => {
@@ -291,23 +254,12 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     await client.signTransaction(approveTx);
 
     expect(fetchedUrls).toHaveLength(2);
-    expect(apdus).toHaveLength(4);
+    expect(apdus).toHaveLength(3);
     expect(signInvocations).toEqual([usdcArcDescriptor, usdcArcDescriptor]);
     expect(warnings).toHaveLength(0);
   });
 
-  it("keeps registering reactively for chains outside the list", async () => {
-    resolutionToReturn = usdcArcDescriptor;
-    rejectClearSigningWith = 0x6a80;
-    const provider = {} as Parameters<typeof AuroraLedger>[0]["provider"];
-
-    await AuroraLedger({ provider, transport: makeTransport("nanoX") }).signTransaction(approveTx);
-
-    expect(signInvocations).toEqual([usdcArcDescriptor, null]);
-    expect(fetchedUrls.some((url) => url.includes("chain_id=1313161554"))).toBe(true);
-  });
-
-  it("does not retry when there was no metadata to blame", async () => {
+  it("does not sign blind when there was no metadata to blame", async () => {
     resolutionToReturn = { domains: [], erc20Tokens: [], externalPlugin: [], nfts: [], plugin: [] };
     rejectClearSigningWith = 0x6a80;
 
