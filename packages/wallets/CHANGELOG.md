@@ -1,5 +1,12 @@
 # @swapkit-dev/wallets
 
+## 4.13.1
+
+### Patch Changes
+
+- [#151](https://github.com/swapkit/wallets/pull/151) [`7abc5ef`](https://github.com/swapkit/wallets/commit/7abc5ef5be20ce512cf5ed13a7efa38e945dcc97) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Arc (`Chain.Arc`, chain id 5042) to the Trezor connector. Trezor ships a signed network definition for chain 5042 (name `Arc`, symbol `USDC`, slip44 60), so the device shows the network and the native gas token correctly without any extra handling. (via @swapkit/wallet-hardware@4.11.0)
+- [#152](https://github.com/swapkit/wallets/pull/152) [`b9f735c`](https://github.com/swapkit/wallets/commit/b9f735cd730385a752a32ccb5575e58c154a75d5) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Ledger EVM: clear-sign ERC20 approvals on ARC, a chain the Ethereum app doesn't know yet. (via @swapkit/wallet-hardware@4.11.0)
+
 ## 4.13.0
 
 ### Minor Changes
