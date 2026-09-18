@@ -199,13 +199,20 @@ class EVMLedgerInterface extends AbstractSigner {
 
     const { ledgerService } = await import("@ledgerhq/hw-app-eth");
 
+    const chainId = Number(baseTx.chainId);
+    const isArc = chainId === ARC_CHAIN_ID;
+
     const resolution = await ledgerService
       .resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true })
-      .catch(() => null);
+      .catch((error) => {
+        if (!isArc) throw error;
 
-    const chainId = Number(baseTx.chainId);
+        console.warn("Ledger: could not fetch clear-signing metadata for Arc, signing blind");
 
-    if (chainId === ARC_CHAIN_ID && !this.arcNetworkRegistered) await this.registerNetworkOnDevice(chainId);
+        return null;
+      });
+
+    if (isArc && !this.arcNetworkRegistered) await this.registerNetworkOnDevice(chainId);
 
     const signature = await this.signWithLedgerApp(unsignedTx, resolution, chainId);
 
@@ -225,9 +232,12 @@ class EVMLedgerInterface extends AbstractSigner {
     try {
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
     } catch (error) {
-      if (!(isLedgerIncorrectDataError(error) && hasClearSigningPayload(resolution))) throw error;
+      const canSignBlind =
+        chainId === ARC_CHAIN_ID && isLedgerIncorrectDataError(error) && hasClearSigningPayload(resolution);
 
-      console.warn(`Ledger: could not clear-sign on chain ${chainId}, signing blind`);
+      if (!canSignBlind) throw error;
+
+      console.warn("Ledger: the app rejected the Arc metadata, signing blind");
 
       return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, null);
     }

@@ -55,7 +55,7 @@ mock.module("@ledgerhq/hw-app-eth", () => ({
   },
 }));
 
-import { ArcLedger } from "../src/ledger/clients/evm";
+import { ArcLedger, AuroraLedger } from "../src/ledger/clients/evm";
 import {
   encodeNetworkInfoPayload,
   fetchLedgerNetworkDescriptor,
@@ -281,6 +281,31 @@ describe("ledger EVM signer — chains the Ethereum app doesn't know", () => {
     await makeClient("nanoX").signTransaction(approveTx);
 
     expect(signInvocations).toEqual([null]);
+    expect(warnings[0]).toContain("signing blind");
+  });
+
+  it("keeps failing loudly on other chains when the Ledger asset list can't be fetched", async () => {
+    resolveShouldThrow = true;
+    const provider = {} as Parameters<typeof AuroraLedger>[0]["provider"];
+
+    await expect(
+      AuroraLedger({ provider, transport: makeTransport("nanoX") }).signTransaction(approveTx),
+    ).rejects.toThrow("CAL unreachable");
+
+    expect(signInvocations).toHaveLength(0);
+  });
+
+  it("never signs blind on other chains, even on INCORRECT_DATA", async () => {
+    resolutionToReturn = usdcArcDescriptor;
+    rejectClearSigningWith = 0x6a80;
+    const provider = {} as Parameters<typeof AuroraLedger>[0]["provider"];
+
+    await expect(
+      AuroraLedger({ provider, transport: makeTransport("nanoX") }).signTransaction(approveTx),
+    ).rejects.toMatchObject({ statusCode: 0x6a80 });
+
+    expect(signInvocations).toEqual([usdcArcDescriptor]);
+    expect(fetchedUrls).toHaveLength(0);
   });
 });
 
