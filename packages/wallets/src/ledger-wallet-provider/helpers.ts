@@ -69,7 +69,9 @@ let initialization: Promise<() => void> | undefined;
 export function initializeLedgerWalletProvider(
   options: InitializeLedgerWalletProviderOptions = {},
 ): Promise<() => void> {
-  initialization ||= mountLedgerWalletProvider(options).catch((error) => {
+  if (initialization) return initialization;
+
+  initialization = mountLedgerWalletProvider(options).catch((error) => {
     // Don't cache a failure — the next connect attempt gets to try again.
     initialization = undefined;
     throw error;
