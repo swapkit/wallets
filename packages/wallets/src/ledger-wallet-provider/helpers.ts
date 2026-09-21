@@ -10,17 +10,8 @@ import type {
 
 const LEDGER_WALLET_PROVIDER_RDNS = "com.ledger.wallet.provider";
 const DEFAULT_DISCOVERY_TIMEOUT = 10_000;
-/**
- * The SDK re-announces synchronously on every `eip6963:requestProvider`, so a
- * provider the host app already mounted resolves within a tick. Anything longer
- * only delays the `initializeLedgerProvider` fallback.
- */
 const ANNOUNCED_PROVIDER_PROBE_TIMEOUT = 250;
 
-/**
- * Requests EIP-6963 announcements and resolves the Ledger Wallet Provider's
- * EIP-1193 provider, or `undefined` when none announces within `timeout`.
- */
 export function discoverLedgerWalletProvider({
   timeout = DEFAULT_DISCOVERY_TIMEOUT,
 }: {
@@ -49,30 +40,18 @@ export function discoverLedgerWalletProvider({
     const timer = setTimeout(() => settle(undefined), timeout);
 
     window.addEventListener("eip6963:announceProvider", onAnnounce);
-    // Announcements are dispatched synchronously from this event, so an
-    // already-mounted provider settles before `dispatchEvent` returns.
     window.dispatchEvent(new Event("eip6963:requestProvider"));
   });
 }
 
 let initialization: Promise<() => void> | undefined;
 
-/**
- * Loads and initializes the Ledger Wallet Provider SDK, mounting its UI and
- * announcing its EIP-1193 provider over EIP-6963. Idempotent — repeat calls
- * return the same teardown function and never mount a second UI.
- *
- * Host apps that want the Ledger UI inside their own layout can call this with
- * a `target` up front and pass the discovered provider to
- * `connectLedgerWalletProvider` via `options.provider`.
- */
 export function initializeLedgerWalletProvider(
   options: InitializeLedgerWalletProviderOptions = {},
 ): Promise<() => void> {
   if (initialization) return initialization;
 
   initialization = mountLedgerWalletProvider(options).catch((error) => {
-    // Don't cache a failure — the next connect attempt gets to try again.
     initialization = undefined;
     throw error;
   });
@@ -80,7 +59,6 @@ export function initializeLedgerWalletProvider(
   return initialization;
 }
 
-/** Removes the Ledger UI and lets the next `initializeLedgerWalletProvider` mount again. */
 export async function teardownLedgerWalletProvider() {
   const cleanup = await initialization;
   initialization = undefined;
@@ -90,17 +68,10 @@ export async function teardownLedgerWalletProvider() {
 async function mountLedgerWalletProvider(options: InitializeLedgerWalletProviderOptions) {
   if (typeof window === "undefined" || typeof document === "undefined") {
     throw new SwapKitError("wallet_ledger_wallet_provider_unsupported_platform", {
-      message: "The Ledger Wallet Provider needs a browser environment.",
+      message: "Requires a browser environment.",
     });
   }
 
-  // Both imports stay dynamic so this module's static graph holds nothing a
-  // server runtime cannot evaluate: the SDK touches window/document at module
-  // scope, and a static stylesheet import makes `import`ing this connector
-  // throw ERR_UNKNOWN_FILE_EXTENSION under plain Node (and trips Next's
-  // global-CSS rule). The UI mounts as a light-DOM
-  // `<ledger-button-app class="ledger-wallet-provider">` that the SDK's global
-  // stylesheet styles, so the two belong together anyway.
   const [{ initializeLedgerProvider }] = await Promise.all([
     import("@ledgerhq/ledger-wallet-provider"),
     import("@ledgerhq/ledger-wallet-provider/styles.css"),
@@ -109,10 +80,6 @@ async function mountLedgerWalletProvider(options: InitializeLedgerWalletProvider
   return initializeLedgerProvider(options);
 }
 
-/**
- * Resolves the provider to connect with: an injected one, one the page already
- * announced, or one from a fresh `initializeLedgerProvider` call.
- */
 export async function resolveLedgerWalletProvider({
   provider,
   initialize = true,
@@ -128,39 +95,23 @@ export async function resolveLedgerWalletProvider({
 
   if (!initialize) {
     throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message: "No Ledger Wallet Provider was announced. Initialize the SDK first or pass `options.provider`.",
+      message: "No Ledger provider announced; initialize the SDK or pass provider.",
     });
   }
 
   await initializeLedgerWalletProvider(initializeOptions);
 
-  // The provider announces from the mounted web component's first render, so it
-  // arrives a few ticks after `initializeLedgerProvider` returns.
   const initialized = await discoverLedgerWalletProvider({ timeout: discoveryTimeout });
 
   if (!initialized) {
-    // `initializeLedgerProvider` mounts nothing, and so announces nothing, when
-    // the SDK finds no usable transport: `isSupportedPlatform()` is
-    // `isMobile() || dmk.isEnvironmentSupported()`, and the latter needs
-    // `navigator.hid` or `navigator.bluetooth`. That rules out desktop Firefox
-    // and Safari, and any cross-origin iframe the embedder did not grant
-    // `allow="hid; bluetooth"`. Mobile is fine — the SDK hands off to Ledger Live.
     throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message:
-        'The Ledger Wallet Provider did not announce itself. It needs WebHID or Web Bluetooth in this document — check the browser (desktop Firefox and Safari have neither) and, when embedded, that the iframe carries allow="hid; bluetooth".',
+      message: "Ledger provider did not announce; WebHID or Bluetooth unavailable.",
     });
   }
 
   return initialized;
 }
 
-/**
- * Methods the Ledger provider owns. Everything else goes to the chain's SwapKit
- * RPC: the provider rejects most read methods outright (EIP-1193 4200), and the
- * handful it does proxy (`eth_call`, `eth_getBalance`, `eth_estimateGas`, …) it
- * proxies against its own selected chain — which is the wrong chain for every
- * adapter but the one currently being signed on.
- */
 const LEDGER_HANDLED_METHODS = new Set([
   "eth_chainId",
   "eth_sendRawTransaction",
@@ -174,16 +125,6 @@ const LEDGER_HANDLED_METHODS = new Set([
   "wallet_switchEthereumChain",
 ]);
 
-/**
- * Fans an EIP-1193 surface out over the Ledger provider (accounts, chain
- * selection and signing) and the chain's SwapKit RPC (reads), so the standard
- * `getWeb3WalletMethods` → `getEvmToolboxAsync` path works unchanged.
- *
- * `eth_chainId` and `wallet_switchEthereumChain` deliberately go to Ledger:
- * the provider signs against a single selected chain, and `prepareNetworkSwitch`
- * (applied by `getWeb3WalletMethods`) uses those two methods to pin it to the
- * chain being used before every write.
- */
 export async function createLedgerEip1193Adapter({
   chain,
   getAddress,
@@ -200,13 +141,9 @@ export async function createLedgerEip1193Adapter({
   const eip1193Provider: Eip1193Provider = {
     request: ({ method, params }) => {
       switch (method) {
-        // Answered locally: the Ledger provider serializes account requests and
-        // rejects concurrent ones with "Ledger Provider is busy", and
-        // `eth_requestAccounts` would re-open its account-selection modal.
         case "eth_accounts":
         case "eth_requestAccounts":
           return Promise.resolve([getAddress()]);
-        // Ledger Wallet exposes a fixed network list, so there is nothing to add.
         case "wallet_addEthereumChain":
           return Promise.resolve(null);
         default:

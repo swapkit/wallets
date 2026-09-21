@@ -80,7 +80,6 @@ const ledgerProvider = {
   },
 };
 
-// Mirrors the SDK's announcer: it re-announces on every requestProvider event.
 function announceLedgerProvider() {
   window.dispatchEvent(
     new CustomEvent("eip6963:announceProvider", {
@@ -96,7 +95,6 @@ const realHelpersSnapshot = { ...realHelpers };
 const realEthersSnapshot = { ...realEthers };
 const realEvmExtensionsSnapshot = { ...realEvmExtensions };
 
-// getRPCUrl probes the network for a live node — the adapter only needs a URL.
 mock.module("@swapkit/helpers", () => ({ ...realHelpers, getRPCUrl: () => Promise.resolve(RPC_URL) }));
 
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider, JsonRpcProvider: MockJsonRpcProvider }));
@@ -138,7 +136,6 @@ describe("ledger wallet provider connector", () => {
       if (announcesProvider) announceLedgerProvider();
     });
 
-    // The SDK is browser-only; bun's test runtime has no DOM.
     Object.assign(globalThis, { document: { body: {} }, window: eventTarget });
   });
 
@@ -167,7 +164,6 @@ describe("ledger wallet provider connector", () => {
       addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
     })([Chain.Ethereum, Chain.Polygon]);
 
-    // No initializeLedgerProvider call — the page had already announced one.
     expect(initializeCalls).toEqual([]);
     expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
     expect(addChainCalls.map(({ chain }) => chain)).toEqual([Chain.Ethereum, Chain.Polygon]);
@@ -203,8 +199,6 @@ describe("ledger wallet provider connector", () => {
 
     const adapter = browserProviders[0]?.walletProvider;
 
-    // Answered locally: the device provider rejects concurrent account requests
-    // and eth_requestAccounts would re-open its account picker.
     expect(await adapter?.request({ method: "eth_accounts" })).toEqual([ADDRESS]);
     expect(await adapter?.request({ method: "eth_requestAccounts" })).toEqual([ADDRESS]);
     expect(ledgerRequests).toEqual([]);
@@ -222,7 +216,6 @@ describe("ledger wallet provider connector", () => {
       { method: "wallet_switchEthereumChain", params: [{ chainId: "0x89" }] },
     ]);
 
-    // Ledger Wallet exposes a fixed network list, so there is nothing to add.
     expect(await adapter?.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0x89" }] })).toBe(null);
 
     expect(await adapter?.request({ method: "eth_getTransactionCount", params: [ADDRESS, "pending"] })).toBe(
@@ -240,12 +233,10 @@ describe("ledger wallet provider connector", () => {
     })([Chain.Ethereum]);
 
     const [handleAccountsChanged] = [...accountsChangedListeners];
-    // The connector re-adds the chains in the background, off the event handler.
     handleAccountsChanged?.([NEXT_ADDRESS]);
     while (addChainCalls.length < 2) await Bun.sleep(0);
 
     expect(addChainCalls.map(({ address }) => address)).toEqual([ADDRESS, NEXT_ADDRESS]);
-    // The read RPC does not depend on the account, so adapters are reused.
     expect(rpcProviderCount).toBeGreaterThan(0);
     expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([NEXT_ADDRESS]);
   });
@@ -333,16 +324,12 @@ describe("ledger wallet provider connector", () => {
       addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
     })([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
 
-    // Every chain rides one provider, so the device is prompted once however
-    // many chains the caller asks for — what lets a picker offer "all EVM".
     expect(addChainCalls.map(({ chain }) => chain)).toEqual([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
     expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
   });
 
   test("supports exactly the SwapKit chains on Ledger Wallet's network list", async () => {
     const { LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import("../src/ledger-wallet-provider");
-    // Ledger Wallet's own network list (SDK 1.4.3). zkSync (324) has no SwapKit
-    // chain, so the connector covers the other eleven.
     const ledgerChainIds = ["1", "10", "56", "137", "146", "324", "4663", "5042", "8453", "42161", "43114", "59144"];
 
     const connectorChainIds = LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS.map(

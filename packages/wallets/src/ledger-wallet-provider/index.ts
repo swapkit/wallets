@@ -1,5 +1,3 @@
-// Registers WalletOption.LEDGER_WALLET_PROVIDER and the
-// wallet_ledger_wallet_provider_* error codes before anything below reads them.
 import "./register";
 
 import { Chain, type EVMChain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
@@ -12,13 +10,6 @@ import type { ConnectLedgerWalletProviderOptions } from "./types";
 export * from "./helpers";
 export * from "./types";
 
-/**
- * Ledger Wallet's own network list, intersected with SwapKit's EVM chains.
- * Ledger additionally supports zkSync (324), which SwapKit has no chain for.
- * `wallet_switchEthereumChain` rejects everything outside this list, so a chain
- * missing here cannot be signed for — keep it in step with the SDK version
- * pinned in package.json (Arc arrived in 1.4.3).
- */
 const LEDGER_WALLET_PROVIDER_CHAINS = [
   Chain.Arbitrum,
   Chain.Arc,
@@ -33,23 +24,12 @@ const LEDGER_WALLET_PROVIDER_CHAINS = [
   Chain.Sonic,
 ] as EVMChain[];
 
-/**
- * Ledger Wallet connector built on the Ledger Wallet Provider SDK
- * (https://developers.ledger.com/docs/ledger-wallet-provider/overview).
- *
- * Unlike `@swapkit/wallets/ledger`, this connector never talks to the device
- * directly: the SDK owns device discovery, account selection and the signing
- * UI, and exposes it all through one EIP-1193 provider. That makes it the
- * connector to use where SwapKit cannot own the WebHID/WebUSB transport — the
- * widget above all — at the cost of being EVM-only.
- */
 export const ledgerWalletProviderWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectLedgerWalletProvider(chains: Chain[], options: ConnectLedgerWalletProviderOptions = {}) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const provider = await resolveLedgerWalletProvider(options);
 
-      // Opens the SDK's connect flow: device pairing, then account selection.
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[] | undefined;
       const [address] = accounts ?? [];
 
@@ -59,8 +39,6 @@ export const ledgerWalletProviderWallet = createWallet({
 
       let connectedAddress = address;
       let accountChangeVersion = 0;
-      // The read RPC of an adapter does not depend on the account, so the
-      // adapters outlive account switches and are only torn down on disconnect.
       const adapters = await Promise.all(
         filteredChains.map(async (chain) => ({
           chain,
@@ -81,7 +59,6 @@ export const ledgerWalletProviderWallet = createWallet({
           })),
         );
 
-        // A newer account change started while the toolboxes were building.
         if (version !== accountChangeVersion) return;
 
         for (const { chain, walletMethods } of connectedChains) {
