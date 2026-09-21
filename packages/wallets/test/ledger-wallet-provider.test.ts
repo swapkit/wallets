@@ -325,9 +325,9 @@ describe("ledger wallet provider connector", () => {
 
   test("supports exactly the SwapKit chains on Ledger Wallet's network list", async () => {
     const { LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import("../src/ledger-wallet-provider");
-    // Ledger Wallet's own network list. zkSync (324) has no SwapKit chain, so
-    // the connector covers the other ten.
-    const ledgerChainIds = ["1", "10", "56", "137", "146", "324", "4663", "8453", "42161", "43114", "59144"];
+    // Ledger Wallet's own network list (SDK 1.4.3). zkSync (324) has no SwapKit
+    // chain, so the connector covers the other eleven.
+    const ledgerChainIds = ["1", "10", "56", "137", "146", "324", "4663", "5042", "8453", "42161", "43114", "59144"];
 
     const connectorChainIds = LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS.map(
       (chain) => realHelpers.getChainConfig(chain).chainId as string,

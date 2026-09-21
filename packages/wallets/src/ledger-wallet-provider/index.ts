@@ -16,10 +16,12 @@ export * from "./types";
  * Ledger Wallet's own network list, intersected with SwapKit's EVM chains.
  * Ledger additionally supports zkSync (324), which SwapKit has no chain for.
  * `wallet_switchEthereumChain` rejects everything outside this list, so a chain
- * missing here cannot be signed for.
+ * missing here cannot be signed for — keep it in step with the SDK version
+ * pinned in package.json (Arc arrived in 1.4.3).
  */
 const LEDGER_WALLET_PROVIDER_CHAINS = [
   Chain.Arbitrum,
+  Chain.Arc,
   Chain.Avalanche,
   Chain.Base,
   Chain.BinanceSmartChain,
