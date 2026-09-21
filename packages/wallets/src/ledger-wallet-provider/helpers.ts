@@ -1,7 +1,3 @@
-// The Ledger UI mounts as a light-DOM `<ledger-button-app class="ledger-wallet-provider">`
-// host element that the SDK's global stylesheet styles.
-import "@ledgerhq/ledger-wallet-provider/styles.css";
-
 import { type EVMChain, getChainConfig, getRPCUrl, SwapKitError } from "@swapkit/helpers";
 import type { Eip1193Provider } from "ethers";
 
@@ -92,12 +88,21 @@ export async function teardownLedgerWalletProvider() {
 async function mountLedgerWalletProvider(options: InitializeLedgerWalletProviderOptions) {
   if (typeof window === "undefined" || typeof document === "undefined") {
     throw new SwapKitError("wallet_ledger_wallet_provider_unsupported_platform", {
-      message: "The Ledger Wallet Provider needs a browser environment (WebHID / Web Bluetooth).",
+      message: "The Ledger Wallet Provider needs a browser environment.",
     });
   }
 
-  // The SDK touches window/document at module scope — keep it out of SSR bundles.
-  const { initializeLedgerProvider } = await import("@ledgerhq/ledger-wallet-provider");
+  // Both imports stay dynamic so this module's static graph holds nothing a
+  // server runtime cannot evaluate: the SDK touches window/document at module
+  // scope, and a static stylesheet import makes `import`ing this connector
+  // throw ERR_UNKNOWN_FILE_EXTENSION under plain Node (and trips Next's
+  // global-CSS rule). The UI mounts as a light-DOM
+  // `<ledger-button-app class="ledger-wallet-provider">` that the SDK's global
+  // stylesheet styles, so the two belong together anyway.
+  const [{ initializeLedgerProvider }] = await Promise.all([
+    import("@ledgerhq/ledger-wallet-provider"),
+    import("@ledgerhq/ledger-wallet-provider/styles.css"),
+  ]);
 
   return initializeLedgerProvider(options);
 }
@@ -132,11 +137,15 @@ export async function resolveLedgerWalletProvider({
   const initialized = await discoverLedgerWalletProvider({ timeout: discoveryTimeout });
 
   if (!initialized) {
-    // `initializeLedgerProvider` bails out silently on platforms without
-    // WebHID/Web Bluetooth (mobile browsers), leaving nothing to announce.
+    // `initializeLedgerProvider` mounts nothing, and so announces nothing, when
+    // the SDK finds no usable transport: `isSupportedPlatform()` is
+    // `isMobile() || dmk.isEnvironmentSupported()`, and the latter needs
+    // `navigator.hid` or `navigator.bluetooth`. That rules out desktop Firefox
+    // and Safari, and any cross-origin iframe the embedder did not grant
+    // `allow="hid; bluetooth"`. Mobile is fine — the SDK hands off to Ledger Live.
     throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
       message:
-        "The Ledger Wallet Provider did not announce itself. Ledger Wallet needs a desktop browser with WebHID or Web Bluetooth support.",
+        'The Ledger Wallet Provider did not announce itself. It needs WebHID or Web Bluetooth in this document — check the browser (desktop Firefox and Safari have neither) and, when embedded, that the iframe carries allow="hid; bluetooth".',
     });
   }
 
