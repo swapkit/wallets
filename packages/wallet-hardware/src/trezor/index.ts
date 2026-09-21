@@ -498,6 +498,7 @@ async function getTrezorWallet<T extends Chain>({
 }) {
   switch (chain) {
     case Chain.Arbitrum:
+    case Chain.Arc:
     case Chain.Aurora:
     case Chain.Avalanche:
     case Chain.Base:
@@ -1358,6 +1359,7 @@ export const trezorWallet = createWallet({
     },
   directSigningSupport: {
     [Chain.Arbitrum]: true,
+    [Chain.Arc]: true,
     [Chain.Aurora]: true,
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
@@ -1380,6 +1382,7 @@ export const trezorWallet = createWallet({
   name: "connectTrezor",
   supportedChains: [
     Chain.Arbitrum,
+    Chain.Arc,
     Chain.Aurora,
     Chain.Avalanche,
     Chain.Base,

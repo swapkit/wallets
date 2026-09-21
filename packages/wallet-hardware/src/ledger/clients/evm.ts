@@ -16,6 +16,32 @@ import {
 } from "ethers";
 
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
+import {
+  fetchLedgerNetworkCertificate,
+  fetchLedgerNetworkDescriptor,
+  provideLedgerCertificate,
+  provideLedgerNetworkInformation,
+} from "../helpers/ledgerNetworkInfo";
+
+const LEDGER_INCORRECT_DATA = 0x6a80;
+
+const ARC_CHAIN_ID = Number(ChainId.Arc);
+
+type LedgerTransactionResolution = Awaited<
+  ReturnType<typeof import("@ledgerhq/hw-app-eth")["ledgerService"]["resolveTransaction"]>
+>;
+
+function isLedgerIncorrectDataError(error: unknown) {
+  return (
+    error instanceof Error &&
+    "statusCode" in error &&
+    (error as { statusCode: number }).statusCode === LEDGER_INCORRECT_DATA
+  );
+}
+
+function hasClearSigningPayload(resolution: LedgerTransactionResolution | null) {
+  return Object.values(resolution ?? {}).some((entries) => Array.isArray(entries) && entries.length);
+}
 
 function parseLedgerSignatureV(v: number | string) {
   if (typeof v === "number") return v;
@@ -31,6 +57,7 @@ class EVMLedgerInterface extends AbstractSigner {
   ledgerTimeout = 50000;
   private transport?: Transport;
   private readonly injectedTransport?: Transport;
+  private arcNetworkRegistered = false;
 
   constructor({
     provider,
@@ -172,9 +199,22 @@ class EVMLedgerInterface extends AbstractSigner {
 
     const { ledgerService } = await import("@ledgerhq/hw-app-eth");
 
-    const resolution = await ledgerService.resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true });
+    const chainId = Number(baseTx.chainId);
+    const isArc = chainId === ARC_CHAIN_ID;
 
-    const signature = await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
+    const resolution = await ledgerService
+      .resolveTransaction(unsignedTx, {}, { erc20: true, externalPlugins: true })
+      .catch((error) => {
+        if (!isArc) throw error;
+
+        console.warn("Ledger: could not fetch clear-signing metadata for Arc, signing blind");
+
+        return null;
+      });
+
+    if (isArc && !this.arcNetworkRegistered) await this.registerNetworkOnDevice(chainId);
+
+    const signature = await this.signWithLedgerApp(unsignedTx, resolution, chainId);
 
     if (!signature) throw new SwapKitError("wallet_ledger_signing_error");
 
@@ -183,12 +223,55 @@ class EVMLedgerInterface extends AbstractSigner {
     return Transaction.from({ ...baseTx, signature: { r: `0x${r}`, s: `0x${s}`, v: parseLedgerSignatureV(v) } })
       .serialized;
   };
+
+  private signWithLedgerApp = async (
+    unsignedTx: string,
+    resolution: LedgerTransactionResolution | null,
+    chainId: number,
+  ) => {
+    try {
+      return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, resolution);
+    } catch (error) {
+      const canSignBlind =
+        chainId === ARC_CHAIN_ID && isLedgerIncorrectDataError(error) && hasClearSigningPayload(resolution);
+
+      if (!canSignBlind) throw error;
+
+      console.warn("Ledger: the app rejected the Arc metadata, signing blind");
+
+      return await this.ledgerApp?.signTransaction(this.derivationPath, unsignedTx, null);
+    }
+  };
+
+  private registerNetworkOnDevice = async (chainId: number) => {
+    const deviceModelId = this.transport?.deviceModel?.id;
+
+    if (!(this.transport && deviceModelId)) return;
+
+    try {
+      const [descriptor, certificate] = await Promise.all([
+        fetchLedgerNetworkDescriptor(chainId, deviceModelId),
+        fetchLedgerNetworkCertificate(deviceModelId),
+      ]);
+
+      if (!descriptor) return;
+
+      if (certificate) await provideLedgerCertificate(this.transport, certificate);
+
+      await provideLedgerNetworkInformation(this.transport, descriptor);
+
+      this.arcNetworkRegistered = true;
+    } catch {
+      // the app will reject the metadata and signWithLedgerApp falls back to blind signing
+    }
+  };
 }
 
 type LedgerParams = { provider: Provider; derivationPath?: DerivationPathArray; transport?: Transport };
 
 export const ArbitrumLedger = (params: LedgerParams) =>
   new EVMLedgerInterface({ ...params, chainId: ChainId.Arbitrum });
+export const ArcLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Arc });
 export const AuroraLedger = (params: LedgerParams) => new EVMLedgerInterface({ ...params, chainId: ChainId.Aurora });
 export const AvalancheLedger = (params: LedgerParams) =>
   new EVMLedgerInterface({ ...params, chainId: ChainId.Avalanche });

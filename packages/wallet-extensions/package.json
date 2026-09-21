@@ -11,10 +11,10 @@
     "@near-js/transactions": "~2.5.0",
     "@scure/base": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^5.2.1",
-    "@swapkit/toolboxes": "^5.2.1",
-    "@swapkit/utxo-signer": "^3.0.0",
-    "@swapkit/wallet-core": "^5.0.5",
+    "@swapkit/helpers": "^5.4.1",
+    "@swapkit/toolboxes": "^5.4.1",
+    "@swapkit/utxo-signer": "^3.1.0",
+    "@swapkit/wallet-core": "^5.0.8",
     "@wallet-standard/app": "^1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "^6.14.0",
@@ -172,5 +172,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.6.1"
+  "version": "4.6.2"
 }

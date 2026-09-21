@@ -60,6 +60,7 @@ export const ledgerWallet = createWallet({
     },
   directSigningSupport: {
     [Chain.Arbitrum]: true,
+    [Chain.Arc]: true,
     [Chain.Aurora]: true,
     [Chain.Avalanche]: true,
     [Chain.Base]: true,
@@ -88,6 +89,7 @@ export const ledgerWallet = createWallet({
   name: "connectLedger",
   supportedChains: [
     Chain.Arbitrum,
+    Chain.Arc,
     Chain.Aurora,
     Chain.Avalanche,
     Chain.Base,
@@ -400,6 +402,7 @@ async function getWalletMethods({
     case Chain.Ethereum:
     case Chain.Avalanche:
     case Chain.Arbitrum:
+    case Chain.Arc:
     case Chain.Berachain:
     case Chain.Optimism:
     case Chain.Polygon:

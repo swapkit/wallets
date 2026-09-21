@@ -78,6 +78,7 @@ export const getWalletMethods = async ({
     case Chain.Ethereum:
     case Chain.Avalanche:
     case Chain.Arbitrum:
+    case Chain.Arc:
     case Chain.Optimism:
     case Chain.Polygon:
     case Chain.Base:

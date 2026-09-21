@@ -123,13 +123,12 @@ export async function getEVMSigner({ chain, derivationPath, provider }: TrezorEV
       if (!to) throw new SwapKitError({ errorKey: "wallet_missing_params", info: { to } });
       if (!gasLimit) throw new SwapKitError({ errorKey: "wallet_missing_params", info: { gasLimit } });
 
-      const isEIP1559 = maxFeePerGas && maxPriorityFeePerGas;
+      // Check presence, not truthiness: a zero-wei tip is legitimate on chains with a negligible
+      // priority fee, such as Arc, where it used to be read as missing fee data.
+      const isEIP1559 = maxFeePerGas != null || maxPriorityFeePerGas != null;
 
       if (isEIP1559 && !maxFeePerGas) {
         throw new SwapKitError({ errorKey: "wallet_missing_params", info: { maxFeePerGas } });
-      }
-      if (isEIP1559 && !maxPriorityFeePerGas) {
-        throw new SwapKitError({ errorKey: "wallet_missing_params", info: { maxPriorityFeePerGas } });
       }
       if (!(isEIP1559 || gasPrice)) {
         throw new SwapKitError({ errorKey: "wallet_missing_params", info: { gasPrice } });
