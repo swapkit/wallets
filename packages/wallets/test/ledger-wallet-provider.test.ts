@@ -323,6 +323,22 @@ describe("ledger wallet provider connector", () => {
     ).rejects.toThrow("wallet_chain_not_supported");
   });
 
+  test("connects every supported chain from a single device approval", async () => {
+    const { ledgerWalletProviderWallet, LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import(
+      "../src/ledger-wallet-provider"
+    );
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
+
+    // Every chain rides one provider, so the device is prompted once however
+    // many chains the caller asks for — what lets a picker offer "all EVM".
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
+    expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
+  });
+
   test("supports exactly the SwapKit chains on Ledger Wallet's network list", async () => {
     const { LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import("../src/ledger-wallet-provider");
     // Ledger Wallet's own network list (SDK 1.4.3). zkSync (324) has no SwapKit
