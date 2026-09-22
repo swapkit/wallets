@@ -13,7 +13,6 @@ import type { createWallet } from "@swapkit/wallets";
 
 import { bitgetWallet } from "@swapkit/wallets/bitget";
 import { coinbaseWallet } from "@swapkit/wallets/coinbase";
-import { ctrlWallet } from "@swapkit/wallets/ctrl";
 import { evmWallet } from "@swapkit/wallets/evm-extensions";
 import { keepkeyWallet } from "@swapkit/wallets/keepkey";
 import { keepkeyBexWallet } from "@swapkit/wallets/keepkey-bex";
@@ -59,7 +58,6 @@ const exodusWallet = { ...passkeysWallet, connectExodusWallet: passkeysWallet.co
 export {
   bitgetWallet,
   coinbaseWallet,
-  ctrlWallet,
   evmWallet,
   exodusWallet,
   keepkeyBexWallet,
@@ -97,7 +95,6 @@ export const defaultPlugins = {
 export const defaultWallets = {
   ...bitgetWallet,
   ...coinbaseWallet,
-  ...ctrlWallet,
   ...evmWallet,
   ...exodusWallet,
   ...keepkeyBexWallet,

@@ -32,20 +32,6 @@ export type NoirWalletZcashProvider = {
   disconnect(): Promise<any>;
 };
 
-type CtrlInjectedProviders = {
-  binance: Eip1193Provider;
-  bitcoin: Eip1193Provider;
-  bitcoincash: Eip1193Provider;
-  dogecoin: Eip1193Provider;
-  ethereum: Eip1193Provider;
-  keplr: Keplr;
-  litecoin: Eip1193Provider;
-  thorchain: Eip1193Provider;
-  mayachain: Eip1193Provider;
-  solana: SolanaProvider & { isXDEFI: boolean };
-  near: NearBrowserWalletProvider;
-};
-
 declare global {
   interface Window {
     injectedWeb3?: SubstrateInjectedExtension;
@@ -58,9 +44,6 @@ declare global {
     leap: Keplr;
     trustwallet: EthereumWindowProvider & { ton?: import("./trustwallet").TrustWalletTonProvider };
     phantom: { solana: SolanaProvider };
-
-    ctrl?: CtrlInjectedProviders;
-    xfi?: CtrlInjectedProviders;
 
     noirwallet?: { isNoirWallet: boolean; version?: string; zcash: NoirWalletZcashProvider };
 
