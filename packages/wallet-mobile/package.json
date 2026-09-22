@@ -1,9 +1,9 @@
 {
   "author": "swapkit",
   "dependencies": {
-    "@swapkit/helpers": "^5.4.1",
-    "@swapkit/toolboxes": "^5.4.1",
-    "@swapkit/wallet-core": "^5.0.8"
+    "@swapkit/helpers": "0.0.0-nightly-20260922144832",
+    "@swapkit/toolboxes": "0.0.0-nightly-20260922144832",
+    "@swapkit/wallet-core": "0.0.0-nightly-20260922144832"
   },
   "description": "SwapKit - Wallet Mobile",
   "exports": {
