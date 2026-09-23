@@ -5,9 +5,12 @@ import {
   type DerivationPathArray,
   EVMChains,
   filterSupportedChains,
+  getUTXOScriptTypeForPath,
   NetworkDerivationPath,
+  SwapKitError,
   type UTXOChain,
   UTXOChains,
+  type UTXOScriptType,
   updateDerivationPath,
   WalletOption,
 } from "@swapkit/helpers";
@@ -21,6 +24,45 @@ export {
   type Keystore,
   validatePhrase,
 } from "./keystore-helpers";
+
+export type KeystoreUTXOChainDerivation = { derivationPath: DerivationPathArray; scriptType: UTXOScriptType };
+export type KeystoreChainDerivation =
+  | DerivationPathArray
+  | { derivationPath: DerivationPathArray }
+  | KeystoreUTXOChainDerivation;
+
+/**
+ * A UTXO chain states the script type its path encodes; other chains take a bare path or `{ derivationPath }`.
+ * `getUTXOScriptTypeForPath(derivationPath)` gives the type a standard path implies.
+ */
+export type KeystoreDerivationPathMap = {
+  [C in Chain]?: C extends UTXOChain
+    ? KeystoreUTXOChainDerivation
+    : DerivationPathArray | { derivationPath: DerivationPathArray };
+};
+export type KeystoreDerivationPathMapOrIndex = KeystoreDerivationPathMap | number;
+
+function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | undefined) {
+  if (!entry) return { derivationPath: undefined, scriptType: undefined };
+
+  const isUTXO = UTXOChains.includes(chain as UTXOChain);
+  const derivationPath = "derivationPath" in entry ? entry.derivationPath : entry;
+  const scriptType = "scriptType" in entry ? entry.scriptType : undefined;
+
+  if (isUTXO && !scriptType) {
+    throw new SwapKitError("toolbox_utxo_invalid_params", {
+      chain,
+      error:
+        `${chain}: a UTXO derivation entry must state its scriptType: { derivationPath, scriptType }. ` +
+        "getUTXOScriptTypeForPath(derivationPath) gives the encoding the path implies.",
+    });
+  }
+
+  return { derivationPath, scriptType: isUTXO ? scriptType : undefined };
+}
+
+// Configuration errors recur on every connect, so they fail the whole connect instead of skipping the chain.
+const deterministicErrorKeys = new Set(["toolbox_utxo_unsupported_script_type", "toolbox_utxo_invalid_params"]);
 
 type UTXOToolboxWithHD = {
   deriveAddressAtIndex: (params: { index: number; change?: boolean }) => DerivedAddress | undefined;
@@ -91,7 +133,7 @@ export const keystoreWallet = createWallet({
     async function connectKeystore(
       chains: Chain[],
       phrase: string,
-      derivationPathMapOrIndex?: { [chain in Chain]?: DerivationPathArray } | number,
+      derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
 
@@ -147,7 +189,7 @@ export async function createKeystoreWallet<T extends Chain[]>({
 }: {
   chains: T;
   phrase: string;
-  derivationPathMapOrIndex?: { [chain in Chain]?: DerivationPathArray } | number;
+  derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex;
 }) {
   const filteredChains = filterSupportedChains({
     chains,
@@ -162,10 +204,12 @@ export async function createKeystoreWallet<T extends Chain[]>({
       const { getToolbox } = await import("@swapkit/toolboxes");
 
       const derivationPathIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
-      const derivationPathFromMap =
+      const { derivationPath: derivationPathFromMap, scriptType } = readChainDerivation(
+        chain,
         derivationPathMapOrIndex && typeof derivationPathMapOrIndex === "object"
-          ? derivationPathMapOrIndex[chain]
-          : undefined;
+          ? (derivationPathMapOrIndex[chain] as KeystoreChainDerivation | undefined)
+          : undefined,
+      );
 
       // Solana and Aleo use 4-element hardened paths; everything else uses 5.
       const derivationArrayToUpdate = NetworkDerivationPath[chain].slice(
@@ -176,7 +220,16 @@ export async function createKeystoreWallet<T extends Chain[]>({
       const derivationPath: DerivationPathArray =
         derivationPathFromMap || updateDerivationPath(derivationArrayToUpdate, { index: derivationPathIndex });
 
-      const toolbox = await getToolbox(chain, { derivationPath, phrase });
+      // A UTXO toolbox given a path must be told the script type; the default path implies its own.
+      const resolvedScriptType = UTXOChains.includes(chain as UTXOChain)
+        ? (scriptType ?? getUTXOScriptTypeForPath(derivationPath))
+        : undefined;
+
+      const toolbox = await getToolbox(chain, {
+        derivationPath,
+        phrase,
+        ...(resolvedScriptType ? { scriptType: resolvedScriptType } : {}),
+      });
       const address = (await toolbox.getAddress()) || "";
 
       const hdWalletMethods =
@@ -198,9 +251,12 @@ export async function createKeystoreWallet<T extends Chain[]>({
   }
 
   for (const [index, result] of settled.entries()) {
-    if (result.status === "rejected") {
-      console.error(`connectKeystore: skipping ${filteredChains[index]} — derivation failed`, result.reason);
-    }
+    if (result.status !== "rejected") continue;
+
+    const errorKey = (result.reason as { errorKey?: string } | undefined)?.errorKey;
+    if (errorKey && deterministicErrorKeys.has(errorKey)) throw result.reason;
+
+    console.error(`connectKeystore: skipping ${filteredChains[index]} — derivation failed`, result.reason);
   }
 
   return wallets.reduce(
