@@ -301,8 +301,12 @@ describe("wallet-hardware/ledger", () => {
     expect(ethereumSignTypedDataInvocations[0]?.typedData).toMatchObject({
       message: { recipient: "0x0000000000000000000000000000000000000004" },
       primaryType: "Message",
-      types: { Message: [{ name: "recipient", type: "address" }], Unrelated: [{ name: "contents", type: "string" }] },
+      types: {
+        EIP712Domain: [{ name: "chainId", type: "uint256" }],
+        Message: [{ name: "recipient", type: "address" }],
+      },
     });
+    expect(ethereumSignTypedDataInvocations[0]?.typedData.types).not.toHaveProperty("Unrelated");
   });
 
   it("ArbitrumLedger: preserves EIP-2930 access lists", async () => {
