@@ -83,7 +83,9 @@ export class LedgerJsDmkTransport extends TransportBase {
     const dmkModule = await import("@ledgerhq/device-management-kit");
     const { cla, data, ins, p1, p2 } = parseShortApdu(apdu);
     const command = new RawApduCommand(new dmkModule.Apdu(cla, ins, p1, p2, data), dmkModule);
-    const result = await this.internalApi.sendCommand(command, abortTimeoutMs ?? this.exchangeTimeout);
+    // Forward only an explicit timeout: hw-transport's 30 s default would cut off a user still confirming
+    // on the device once DMK honours the argument.
+    const result = await this.internalApi.sendCommand(command, abortTimeoutMs);
 
     if (!dmkModule.isSuccessCommandResult(result)) throw result.error;
     return Buffer.from(result.data.response);

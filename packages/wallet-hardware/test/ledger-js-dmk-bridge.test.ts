@@ -83,6 +83,15 @@ describe("LedgerJS DMK bridge transport", () => {
     expect([...response]).toEqual([0xde, 0xad, 0x90, 0x00]);
   });
 
+  it("does not impose hw-transport's default exchange timeout", async () => {
+    const { abortTimeouts, internalApi } = createInternalApi({ responseData: new Uint8Array() });
+    const transport = new LedgerJsDmkTransport(internalApi);
+
+    await transport.exchange(Buffer.from([0xe0, 0x02, 0x00, 0x00, 0x00]));
+
+    expect(abortTimeouts).toEqual([undefined]);
+  });
+
   it("rejects malformed short APDUs before touching DMK", async () => {
     const { internalApi, sendCommand } = createInternalApi();
     const transport = new LedgerJsDmkTransport(internalApi);
