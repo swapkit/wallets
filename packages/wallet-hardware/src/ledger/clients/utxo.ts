@@ -3,15 +3,9 @@ import type BitcoinApp from "@ledgerhq/hw-app-btc";
 import type { CreateTransactionArg } from "@ledgerhq/hw-app-btc/lib-es/createTransaction";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
-import {
-  Chain,
-  type DerivationPathArray,
-  derivationPathToString,
-  getWalletFormatFor,
-  SwapKitError,
-} from "@swapkit/helpers";
+import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
-import type { PCZT, Transaction } from "@swapkit/utxo-signer";
+import type { Transaction } from "@swapkit/utxo-signer";
 
 import {
   LEDGER_USER_INTERACTION_REQUIRED,
@@ -19,19 +13,11 @@ import {
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
 } from "../helpers/ledgerJsDmkBridge";
-import { createCachedRawTxResolver } from "../helpers/rawTx";
 
 const nonSegwitLedgerChains = ["bitcoin-cash", "dash", "dogecoin", "zcash"];
 
 type LedgerUTXOChain = "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
 type UTXOLedgerParams = LedgerJsClientParams<DerivationPathArray | string>;
-
-interface ZcashPreviousTransactionInput {
-  index: number;
-  scriptPubkey: Uint8Array;
-  txid: Uint8Array;
-  value: bigint;
-}
 
 const ledgerAppNames: Record<LedgerUTXOChain, string> = {
   bitcoin: "Bitcoin",
@@ -54,48 +40,6 @@ type MultiPathParams = Omit<Params, "derivationPath"> & {
   /** Derivation paths for each input - one per input */
   derivationPaths: string[];
 };
-
-export async function resolveZcashPreviousTransaction({
-  getRawTx,
-  input,
-  inputIndex,
-}: {
-  getRawTx: (txid: string) => Promise<string>;
-  input: ZcashPreviousTransactionInput;
-  inputIndex: number;
-}) {
-  const txid = hex.encode(input.txid);
-  const txHex = await getRawTx(txid);
-  if (!txHex) {
-    throw new SwapKitError("wallet_ledger_invalid_params", {
-      chain: Chain.Zcash,
-      inputIndex,
-      reason: "Unable to resolve previous transaction hex for Ledger signing",
-      txid,
-    });
-  }
-
-  return {
-    hash: txid,
-    index: input.index,
-    txHex,
-    value: Number(input.value),
-    witnessUtxo: { script: input.scriptPubkey, value: Number(input.value) },
-  } as UTXOType;
-}
-
-export function resolveZcashPreviousTransactions({
-  getRawTx,
-  inputs,
-}: {
-  getRawTx: (txid: string) => Promise<string>;
-  inputs: ZcashPreviousTransactionInput[];
-}) {
-  const cachedGetRawTx = createCachedRawTxResolver(getRawTx);
-  return Promise.all(
-    inputs.map((input, inputIndex) => resolveZcashPreviousTransaction({ getRawTx: cachedGetRawTx, input, inputIndex })),
-  );
-}
 
 const signUTXOTransaction = (
   { tx, inputUtxos, btcApp, derivationPath, chain }: Params,
@@ -240,81 +184,6 @@ const BaseLedgerUTXO = ({
         return await runBtcOperation({ operation: (app) => app.getWalletXpub({ path, xpubVersion }) });
       },
 
-      signPCZT: async (pczt: PCZT): Promise<PCZT> => {
-        if (chain !== "zcash") {
-          throw new SwapKitError("wallet_ledger_chain_not_supported", {
-            message: "PCZT signing is only supported for Zcash",
-          });
-        }
-
-        const { ZcashTransaction, Script } = await import("@swapkit/utxo-signer");
-        const { getUtxoApi } = await import("@swapkit/toolboxes/utxo");
-
-        const global = pczt.getGlobal();
-
-        const unsignedTx = new ZcashTransaction({
-          consensusBranchId: global.consensusBranchId,
-          expiryHeight: global.expiryHeight,
-          lockTime: global.lockTime,
-          version: global.txVersion,
-          versionGroupId: global.versionGroupId,
-        });
-
-        const inputs = Array.from({ length: pczt.inputsLength }, (_, inputIndex) => pczt.getInput(inputIndex));
-
-        for (const input of inputs) {
-          unsignedTx.addInput({
-            index: input.index,
-            script: new Uint8Array(),
-            sequence: input.sequence ?? 0xffffffff,
-            txid: input.txid,
-            value: input.value,
-          });
-        }
-
-        const zcashApi = getUtxoApi(Chain.Zcash);
-        const inputUtxos = await resolveZcashPreviousTransactions({
-          getRawTx: (txid) => zcashApi.getRawTx(txid),
-          inputs,
-        });
-
-        for (let i = 0; i < pczt.outputsLength; i++) {
-          const output = pczt.getOutput(i);
-          unsignedTx.addOutput({ amount: output.value, script: output.scriptPubkey });
-        }
-
-        const signedTxHex = await runBtcOperation({
-          operation: (app) =>
-            signUTXOTransaction(
-              { btcApp: app, chain, derivationPath, inputUtxos, tx: unsignedTx as unknown as Transaction },
-              {
-                ...additionalSignParams,
-                expiryHeight: (() => {
-                  const buf = Buffer.alloc(4);
-                  buf.writeUInt32LE(global.expiryHeight);
-                  return buf;
-                })(),
-                lockTime: global.lockTime,
-              },
-            ),
-          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
-        });
-
-        const signedTx = ZcashTransaction.fromHex(signedTxHex, { allowUnknownOutputs: true });
-        const signedPczt = pczt.clone();
-
-        for (let i = 0; i < signedTx.inputsLength; i++) {
-          const signedInput = signedTx.getInput(i);
-          if (signedInput.script && signedInput.script.length > 0) {
-            const scriptParts = Script.decode(signedInput.script);
-            if (scriptParts.length >= 2) {
-              signedPczt.addSignature(i, scriptParts[1] as Uint8Array, scriptParts[0] as Uint8Array);
-            }
-          }
-        }
-
-        return signedPczt;
-      },
       signTransaction: async (tx: Transaction, inputUtxos: UTXOType[]) => {
         return await runBtcOperation({
           operation: (app) =>
