@@ -1,3 +1,4 @@
+import type { BlindSigningReporter } from "@ledgerhq/context-module";
 import type { TypedDataDomain as LedgerTypedDataDomain, SignerEth } from "@ledgerhq/device-signer-kit-ethereum";
 import {
   ChainId,
@@ -57,6 +58,11 @@ function selectTypedDataTypes({
   return selectedTypes;
 }
 
+const disabledBlindSigningReporter: BlindSigningReporter = {
+  // The context module ignores the result; the cast avoids depending on purify-ts for an unused Either.
+  report: () => Promise.resolve(undefined as unknown as Awaited<ReturnType<BlindSigningReporter["report"]>>),
+};
+
 class EVMLedgerInterface extends AbstractSigner {
   chainId: ChainId = ChainId.Ethereum;
   derivationPath = "";
@@ -84,8 +90,21 @@ class EVMLedgerInterface extends AbstractSigner {
     this.originToken = originToken;
     this.getLedgerSigner = createLedgerSessionSigner({
       build: async (session) => {
-        const { SignerEthBuilder } = await import("@ledgerhq/device-signer-kit-ethereum");
-        return new SignerEthBuilder({ ...session, originToken }).build();
+        const [{ ContextModuleBuilder, ContextModuleChainID }, { SignerEthBuilder }] = await Promise.all([
+          import("@ledgerhq/context-module"),
+          import("@ledgerhq/device-signer-kit-ethereum"),
+        ]);
+        // Same context module the signer kit builds by default, minus the blind-signing reporter that
+        // would post chain, target address and device model to Ledger on every signature.
+        const contextModule = new ContextModuleBuilder({
+          loggerFactory: (tag) => session.dmk.getLoggerFactory()(["ContextModule", tag]),
+          originToken,
+        })
+          .setChain(ContextModuleChainID.Ethereum)
+          .setBlindSigningReporter(disabledBlindSigningReporter)
+          .build();
+
+        return new SignerEthBuilder({ ...session, originToken }).withContextModule(contextModule).build();
       },
       dmkSession,
     });
