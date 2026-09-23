@@ -2,7 +2,7 @@ import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
 import type { Command, DmkError, UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { base64, hex } from "@scure/base";
-import { type DerivationPathArray, NetworkDerivationPath, SKConfig, SwapKitError } from "@swapkit/helpers";
+import { type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 
 import { getLedgerDMKSession, type LedgerDMKSession } from "../../helpers/dmk";
 import {
@@ -201,11 +201,8 @@ export class THORChainLedger {
   };
 
   private getAddressData = async ({ checkOnDevice }: { checkOnDevice: boolean }) => {
-    const { isStagenet } = SKConfig.get("envs");
     const response = await this.executeCommands({
-      commands: [
-        getThorAddressCommand({ checkOnDevice, hrp: isStagenet ? "sthor" : "thor", path: this.derivationPath }),
-      ],
+      commands: [getThorAddressCommand({ checkOnDevice, hrp: "thor", path: this.derivationPath })],
       requiredUserInteraction: checkOnDevice
         ? LEDGER_USER_INTERACTION_REQUIRED.VerifyAddress
         : LEDGER_USER_INTERACTION_REQUIRED.None,
