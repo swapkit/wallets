@@ -1,7 +1,7 @@
 import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
 import type { Command, DmkError, UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
-import { base64 } from "@scure/base";
+import { base64, hex } from "@scure/base";
 import { type DerivationPathArray, NetworkDerivationPath, SKConfig, SwapKitError } from "@swapkit/helpers";
 
 import type { LedgerDMKSession } from "../../helpers/dmk";
@@ -148,8 +148,12 @@ export class THORChainLedger {
           try {
             return CommandResultFactory<Uint8Array>({ data: command.parseResponse(response) });
           } catch (error) {
+            // Keep the status word so rejections and wrong-app errors map to typed SwapKit errors.
+            const errorCode = hex.encode(response.statusCode);
             return CommandResultFactory<Uint8Array>({
-              error: new InvalidStatusWordError(error instanceof Error ? error.message : String(error)),
+              error: Object.assign(new InvalidStatusWordError(error instanceof Error ? error.message : String(error)), {
+                errorCode,
+              }),
             });
           }
         },
