@@ -178,7 +178,9 @@ class EVMLedgerInterface extends AbstractSigner {
         domain: ledgerDomain,
         message: populated.value,
         primaryType,
-        types: { EIP712Domain: buildEIP712DomainType(populated.domain), ...filteredTypes },
+        // Only the primary type and its dependencies: the signer kit's legacy fallback hashes with ethers,
+        // which rejects unused types.
+        types: { EIP712Domain: buildEIP712DomainType(populated.domain), ...resolutionTypes },
       }),
       onDeviceActionState: this.onDeviceActionState,
     });
