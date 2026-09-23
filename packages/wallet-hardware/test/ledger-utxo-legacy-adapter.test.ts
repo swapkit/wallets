@@ -18,7 +18,11 @@ mock.module("@swapkit/toolboxes/utxo", () => ({
   }),
 }));
 
-import { extractInputsFromPsbt, signLegacyPsbtTransaction } from "../src/ledger/clients/utxo-legacy-adapter";
+import {
+  createLegacyPsbtSigner,
+  extractInputsFromPsbt,
+  signLegacyPsbtTransaction,
+} from "../src/ledger/clients/utxo-legacy-adapter";
 
 describe("ledger legacy UTXO adapter", () => {
   beforeEach(() => {
@@ -153,6 +157,32 @@ describe("ledger legacy UTXO adapter", () => {
     expect(rawTxRequests).toEqual([]);
     expect(signTransaction).toHaveBeenCalledTimes(1);
     expect(signedTxHex).toBe("0200000000");
+  });
+
+  it("parses signed transactions carrying an OP_RETURN memo", async () => {
+    const memo = new Uint8Array([0x6a, 0x04, ...new TextEncoder().encode("=:r:")]);
+    const signedTxHex = hex.encode(
+      RawTx.encode({
+        inputs: [{ finalScriptSig: new Uint8Array([0x00]), index: 0, sequence: 0xffffffff, txid: new Uint8Array(32) }],
+        lockTime: 0,
+        outputs: [{ amount: 0n, script: memo }],
+        segwitFlag: undefined,
+        version: 1,
+        witnesses: undefined,
+      }),
+    );
+
+    const tx = new Transaction({ allowUnknownOutputs: true });
+    tx.addInput({ index: 0, txid: new Uint8Array(32).fill(3) });
+    const signer = createLegacyPsbtSigner({
+      address: "ltc1qledger",
+      chain: Chain.Litecoin,
+      legacyClient: { signTransaction: () => Promise.resolve(signedTxHex) },
+    });
+
+    const parsed = await signer.signTransaction(tx);
+
+    expect(parsed.getOutput(0).script).toEqual(memo);
   });
 });
 

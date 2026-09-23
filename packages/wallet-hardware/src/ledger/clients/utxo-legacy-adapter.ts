@@ -88,7 +88,8 @@ export function createLegacyPsbtSigner({
       const { Transaction: TxClass } = await import("@swapkit/utxo-signer");
       // `Transaction.fromRaw` parses a serialised tx (no PSBT envelope) — exactly
       // what `createPaymentTransaction` returns.
-      return TxClass.fromRaw(hex.decode(signedTxHex));
+      // Memo transactions carry an OP_RETURN output, which the parser treats as unknown.
+      return TxClass.fromRaw(hex.decode(signedTxHex), { allowUnknownOutputs: true });
     },
   };
 }
