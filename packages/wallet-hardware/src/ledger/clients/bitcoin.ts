@@ -249,6 +249,26 @@ export function BitcoinLedger({
     return fingerprintPromise;
   }
 
+  /**
+   * The configured address's compressed public key, derived from the account xpub. The toolbox needs it to
+   * attach a nested SegWit input's redeemScript and a taproot input's internal key when it builds a transaction.
+   */
+  async function getPublicKey() {
+    const accountXpub = legacyClient
+      ? await legacyClient.getExtendedPublicKey(configuredPath.accountPath)
+      : await getAccountXpub();
+    const { publicKey } = HDKey.fromExtendedKey(accountXpub).derive(
+      `m/${configuredPath.change}/${configuredPath.addressIndex}`,
+    );
+    if (!publicKey) {
+      throw new SwapKitError("wallet_ledger_invalid_response", {
+        path: configuredPath.fullPath,
+        reason: "Could not derive a public key from the Ledger account xpub",
+      });
+    }
+    return publicKey;
+  }
+
   async function getWallet() {
     const [{ DefaultWallet }, template] = await Promise.all([
       import("@ledgerhq/device-signer-kit-bitcoin"),
@@ -452,6 +472,7 @@ export function BitcoinLedger({
       });
       return extendedPublicKey;
     },
+    getPublicKey,
     showAddressAndPubKey: async () => {
       if (legacyClient) {
         const address = await legacyClient.getAddress();
