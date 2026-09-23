@@ -608,7 +608,13 @@ async function getCosmosWalletMethods({
   const address = await getLedgerAddress({ chain, ledgerClient: signer });
   const toolbox = await getCosmosToolbox(Chain.Cosmos, { signer });
 
-  const transfer = async ({ assetValue, recipient, memo }: GenericTransferParams) => {
+  const transfer = async ({
+    assetValue,
+    feeOptionKey = FeeOption.Average,
+    feeRate,
+    memo,
+    recipient,
+  }: GenericTransferParams) => {
     if (!assetValue) throw new SwapKitError("wallet_ledger_invalid_asset");
 
     const sendCoinsMessage = {
@@ -619,13 +625,16 @@ async function getCosmosWalletMethods({
       toAddress: recipient,
     };
 
+    // Same fee as the toolbox's own transfer. The static default (0.0025 uatom/gas) is below the Hub's
+    // feemarket minimum of 0.005 uatom/gas, so every transfer paying it was rejected.
+    const fee = feeRate ?? (await toolbox.getFees())[feeOptionKey].getBaseValue("number");
     const rpcUrl = await getRPCUrl(chain);
-    const signingClient = await createSigningStargateClient(rpcUrl, signer, "0.007uatom");
+    const signingClient = await createSigningStargateClient(rpcUrl, signer);
 
     const { transactionHash } = await signingClient.signAndBroadcast(
       address,
       [{ typeUrl: "/cosmos.bank.v1beta1.MsgSend", value: sendCoinsMessage }],
-      getDefaultChainFee(Chain.Cosmos),
+      { amount: [{ amount: fee.toString(), denom: "uatom" }], gas: getDefaultChainFee(Chain.Cosmos).gas },
       memo,
     );
 
