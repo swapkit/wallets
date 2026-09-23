@@ -121,6 +121,11 @@ describe("ledger THORChain protocol", () => {
     ]);
   });
 
+  it("rejects hardened change and address index segments", () => {
+    expect(() => serializeThorPath({ path: [44, 931, 0, 0x80000000, 0] })).toThrow("wallet_ledger_invalid_params");
+    expect(() => serializeThorPath({ path: [44, 931, 0, 0, 0x80000001] })).toThrow("wallet_ledger_invalid_params");
+  });
+
   it("builds the address APDU with the selected HRP and device confirmation flag", () => {
     const apdu = getThorAddressCommand({ checkOnDevice: true, hrp: "sthor", path: [44, 931, 0, 0, 0] }).getApdu();
 
