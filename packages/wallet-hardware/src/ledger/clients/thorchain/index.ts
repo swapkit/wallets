@@ -1,5 +1,4 @@
 import type { AccountData, AminoSignResponse, StdSignDoc } from "@cosmjs/amino";
-import { Secp256k1Signature } from "@cosmjs/crypto";
 import type { Command, DmkError, UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
@@ -64,7 +63,9 @@ export function normalizeThorchainLedgerSignDoc(signDoc: StdSignDoc): StdSignDoc
   };
 }
 
-function getFixedSignature({ signature }: { signature: Uint8Array }) {
+// cosmjs is loaded lazily: Bun rejects its CJS `require("@scure/base")` next to the ESM-only `@swapkit/*` graph.
+async function getFixedSignature({ signature }: { signature: Uint8Array }) {
+  const { Secp256k1Signature } = await import("@cosmjs/crypto");
   try {
     return Secp256k1Signature.fromDer(signature).toFixedLength();
   } catch (error) {

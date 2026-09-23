@@ -105,6 +105,13 @@ export interface LedgerJsClientParams<Path extends DerivationPathArray | string 
   derivationPath?: Path;
 }
 
+// `Array.isArray` does not narrow the readonly `DerivationPathArray` tuples out of the union.
+function isLedgerJsClientParams<Path extends DerivationPathArray | string>(
+  value: LedgerJsClientParams<Path> | Path | undefined,
+): value is LedgerJsClientParams<Path> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function normalizeLedgerJsClientParams<Path extends DerivationPathArray | string>({
   paramsOrPath,
   transport,
@@ -112,7 +119,7 @@ export function normalizeLedgerJsClientParams<Path extends DerivationPathArray |
   paramsOrPath?: LedgerJsClientParams<Path> | Path;
   transport?: Transport;
 }): LedgerJsClientParams<Path> {
-  if (paramsOrPath && typeof paramsOrPath === "object" && !Array.isArray(paramsOrPath)) return paramsOrPath;
+  if (isLedgerJsClientParams(paramsOrPath)) return paramsOrPath;
   return { derivationPath: paramsOrPath as Path | undefined, transport };
 }
 

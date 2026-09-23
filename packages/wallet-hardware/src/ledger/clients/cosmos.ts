@@ -1,5 +1,4 @@
-import { encodeSecp256k1Signature, type StdSignDoc, serializeSignDoc } from "@cosmjs/amino";
-import { Secp256k1Signature } from "@cosmjs/crypto";
+import type { StdSignDoc } from "@cosmjs/amino";
 import type { SignerCosmos } from "@ledgerhq/device-signer-kit-cosmos";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
@@ -9,6 +8,7 @@ import {
   NetworkDerivationPath,
   SwapKitError,
 } from "@swapkit/helpers";
+import type { OfflineAminoSigner } from "@swapkit/toolboxes/cosmos";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { getLedgerDMKSession } from "../helpers/dmk";
@@ -41,7 +41,10 @@ function normalizeCosmosPath(path: DerivationPathArray | string) {
   return normalized;
 }
 
-function normalizeCosmosSignature(signature: Uint8Array) {
+// cosmjs is CJS and `require`s ESM-only `@scure/base`; loading it lazily keeps Bun from rejecting that
+// require when the module graph also contains the ESM-only `@swapkit/*` packages.
+async function normalizeCosmosSignature(signature: Uint8Array) {
+  const { Secp256k1Signature } = await import("@cosmjs/crypto");
   try {
     return signature.length === 64
       ? Secp256k1Signature.fromFixedLength(signature).toFixedLength()
@@ -164,14 +167,19 @@ export class CosmosLedger {
     return [{ pub_key: { type: "tendermint/PubKeySecp256k1", value: this.pubKey }, sequence, signature }];
   }
 
-  async signAmino(signerAddress: string, signDoc: StdSignDoc) {
+  // Typed against the toolbox signer contract so CosmosLedger satisfies `createSigningStargateClient`.
+  async signAmino(
+    signerAddress: string,
+    signDoc: Parameters<OfflineAminoSigner["signAmino"]>[1],
+  ): ReturnType<OfflineAminoSigner["signAmino"]> {
     const accounts = await this.getAccounts();
     const account = accounts.find(({ address }) => address === signerAddress);
     if (!account) {
       throw new SwapKitError("wallet_ledger_address_not_found", { address: signerAddress });
     }
 
-    const signature = await this.signBytes(serializeSignDoc(signDoc));
+    const { encodeSecp256k1Signature, serializeSignDoc } = await import("@cosmjs/amino");
+    const signature = await this.signBytes(serializeSignDoc(signDoc as StdSignDoc));
     return { signature: encodeSecp256k1Signature(account.pubkey, signature), signed: signDoc };
   }
 

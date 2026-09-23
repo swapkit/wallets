@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { type StdSignDoc, serializeSignDoc } from "@cosmjs/amino";
+import type { StdSignDoc } from "@cosmjs/amino";
 import {
   ApduResponse,
   CallTaskInAppDeviceAction,
@@ -19,6 +19,9 @@ import {
   getThorSignCommands,
   serializeThorPath,
 } from "../src/ledger/clients/thorchain/protocol";
+
+// cosmjs is CJS requiring ESM-only `@scure/base`; a static import next to `@swapkit/*` fails under Bun.
+const { serializeSignDoc } = await import("@cosmjs/amino");
 
 interface ThorDmkAction {
   input: {
