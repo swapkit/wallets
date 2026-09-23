@@ -59,6 +59,14 @@ export function serializeThorPath({ path }: { path: readonly (number | undefined
       throw new SwapKitError("wallet_ledger_invalid_params", { reason: `Invalid THORChain path segment ${index}` });
     }
 
+    // The app hardens purpose, coin type and account; a hardened change or index would silently derive
+    // a different key if its bit were cleared, so reject it instead.
+    if (index >= 3 && segment >= 0x80000000) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        reason: `THORChain path segment ${index} must not be hardened`,
+      });
+    }
+
     const normalized = segment & 0x7fffffff;
     const value = index < 3 ? (normalized | 0x80000000) >>> 0 : normalized;
     view.setUint32(index * 4, value, true);
