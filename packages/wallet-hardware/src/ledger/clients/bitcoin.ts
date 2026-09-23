@@ -13,7 +13,7 @@ import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
-import { getLedgerDMKSession } from "../helpers/dmk";
+import { createLedgerSessionSigner } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 import { createCachedRawTxResolver } from "../helpers/rawTx";
 import { BitcoinLedger as LegacyBitcoinLedger } from "./utxo";
@@ -195,7 +195,13 @@ export function BitcoinLedger({
 }: BitcoinLedgerParams = {}) {
   const configuredPath = parseBitcoinPath(derivationPath);
   const legacyClient = transport ? LegacyBitcoinLedger(derivationPath, transport) : undefined;
-  let signerPromise: Promise<SignerBtc> | undefined;
+  const getSessionSigner = createLedgerSessionSigner<SignerBtc>({
+    build: async (session) => {
+      const { SignerBtcBuilder } = await import("@ledgerhq/device-signer-kit-bitcoin");
+      return new SignerBtcBuilder(session).build();
+    },
+    dmkSession,
+  });
   let accountXpubPromise: Promise<string> | undefined;
   let fingerprintPromise: Promise<number> | undefined;
 
@@ -206,13 +212,7 @@ export function BitcoinLedger({
       });
     }
 
-    signerPromise ??= (async () => {
-      const session = dmkSession ?? (await getLedgerDMKSession());
-      const { SignerBtcBuilder } = await import("@ledgerhq/device-signer-kit-bitcoin");
-      return new SignerBtcBuilder(session).build();
-    })();
-
-    return signerPromise;
+    return getSessionSigner();
   }
 
   function getAccountXpub() {

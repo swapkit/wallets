@@ -100,6 +100,34 @@ export function getLedgerDMKSession({ dmk }: { dmk?: DeviceManagementKit } = {})
   return getValidDefaultSession({ sessionPromise: cachedSessionPromise });
 }
 
+/**
+ * Builds a signer kit instance for the session an operation runs on. A caller-owned session is used
+ * as given; the default session is re-validated on every call and the signer is rebuilt when it was
+ * replaced, so a device that was unplugged and reconnected keeps working without a new connect.
+ */
+export function createLedgerSessionSigner<Signer>({
+  build,
+  dmkSession,
+}: {
+  build: (session: LedgerDMKSession) => Signer | Promise<Signer>;
+  dmkSession?: LedgerDMKSession;
+}) {
+  let cached: { session: LedgerDMKSession; signer: Promise<Signer> } | undefined;
+
+  return async function getSessionSigner() {
+    const session = dmkSession ?? (await getLedgerDMKSession());
+    if (cached?.session.dmk !== session.dmk || cached.session.sessionId !== session.sessionId) {
+      const signer = Promise.resolve().then(() => build(session));
+      cached = { session, signer };
+      const pending = cached;
+      void signer.catch(() => {
+        if (cached === pending) cached = undefined;
+      });
+    }
+    return cached.signer;
+  };
+}
+
 export function preloadLedgerDMK() {
   return getDefaultDMK();
 }

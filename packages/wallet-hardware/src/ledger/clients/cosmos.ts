@@ -11,7 +11,7 @@ import {
 import type { OfflineAminoSigner } from "@swapkit/toolboxes/cosmos";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
-import { getLedgerDMKSession } from "../helpers/dmk";
+import { createLedgerSessionSigner } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 
 interface CosmosLedgerParams {
@@ -57,12 +57,11 @@ async function normalizeCosmosSignature(signature: Uint8Array) {
 export class CosmosLedger {
   readonly chain = "cosmos";
   readonly derivationPath: string;
-  private readonly dmkSession?: LedgerDMKSession;
   private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
   private readonly transport?: Transport;
   private legacyAppPromise?: Promise<import("@ledgerhq/hw-app-cosmos").default>;
   private pubKey: string | null = null;
-  private signerPromise?: Promise<SignerCosmos>;
+  private readonly getSessionSigner: () => Promise<SignerCosmos>;
 
   constructor({
     derivationPath = NetworkDerivationPath.GAIA,
@@ -71,7 +70,13 @@ export class CosmosLedger {
     transport,
   }: CosmosLedgerParams = {}) {
     this.derivationPath = normalizeCosmosPath(derivationPath);
-    this.dmkSession = dmkSession;
+    this.getSessionSigner = createLedgerSessionSigner({
+      build: async (session) => {
+        const { SignerCosmosBuilder } = await import("@ledgerhq/device-signer-kit-cosmos");
+        return new SignerCosmosBuilder(session).build();
+      },
+      dmkSession,
+    });
     this.onDeviceActionState = onDeviceActionState;
     this.transport = transport;
   }
@@ -83,12 +88,7 @@ export class CosmosLedger {
       });
     }
 
-    this.signerPromise ??= (async () => {
-      const session = this.dmkSession ?? (await getLedgerDMKSession());
-      const { SignerCosmosBuilder } = await import("@ledgerhq/device-signer-kit-cosmos");
-      return new SignerCosmosBuilder(session).build();
-    })();
-    return this.signerPromise;
+    return this.getSessionSigner();
   }
 
   private getLegacyApp() {

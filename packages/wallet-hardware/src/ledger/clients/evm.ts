@@ -15,11 +15,11 @@ import {
   type TypedDataField,
 } from "ethers";
 
-import type { LedgerDMKSession } from "../helpers/dmk";
+import { createLedgerSessionSigner, type LedgerDMKSession } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 
 interface EVMLedgerParams {
-  dmkSession: LedgerDMKSession;
+  dmkSession?: LedgerDMKSession;
   provider: Provider;
   derivationPath?: DerivationPathArray | string;
   chainId?: ChainId;
@@ -60,8 +60,8 @@ function selectTypedDataTypes({
 class EVMLedgerInterface extends AbstractSigner {
   chainId: ChainId = ChainId.Ethereum;
   derivationPath = "";
-  private readonly dmkSession: LedgerDMKSession;
-  private ledgerSignerPromise?: Promise<SignerEth>;
+  private readonly dmkSession?: LedgerDMKSession;
+  private readonly getLedgerSigner: () => Promise<SignerEth>;
   private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
   private readonly originToken?: string;
 
@@ -82,17 +82,16 @@ class EVMLedgerInterface extends AbstractSigner {
     this.dmkSession = dmkSession;
     this.onDeviceActionState = onDeviceActionState;
     this.originToken = originToken;
+    this.getLedgerSigner = createLedgerSessionSigner({
+      build: async (session) => {
+        const { SignerEthBuilder } = await import("@ledgerhq/device-signer-kit-ethereum");
+        return new SignerEthBuilder({ ...session, originToken }).build();
+      },
+      dmkSession,
+    });
 
     Object.defineProperty(this, "provider", { enumerable: true, value: provider || null, writable: false });
   }
-
-  private getLedgerSigner = () => {
-    this.ledgerSignerPromise ??= import("@ledgerhq/device-signer-kit-ethereum").then(({ SignerEthBuilder }) =>
-      new SignerEthBuilder({ ...this.dmkSession, originToken: this.originToken }).build(),
-    );
-
-    return this.ledgerSignerPromise;
-  };
 
   connect = (provider: Provider) =>
     new EVMLedgerInterface({
@@ -233,7 +232,7 @@ class EVMLedgerInterface extends AbstractSigner {
 }
 
 interface LedgerParams {
-  dmkSession: LedgerDMKSession;
+  dmkSession?: LedgerDMKSession;
   provider: Provider;
   derivationPath?: DerivationPathArray;
   onDeviceActionState?: LedgerDeviceActionStateHandler;

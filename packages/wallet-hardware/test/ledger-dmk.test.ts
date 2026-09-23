@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock 
 import * as ledgerDMKModule from "@ledgerhq/device-management-kit";
 import { of } from "rxjs";
 
-import { disconnectLedgerDMKSession, getLedgerDMKSession } from "../src/ledger/helpers/dmk";
+import { createLedgerSessionSigner, disconnectLedgerDMKSession, getLedgerDMKSession } from "../src/ledger/helpers/dmk";
 import { executeLedgerDeviceAction } from "../src/ledger/helpers/executeDeviceAction";
 
 type DeviceManagementKit = ledgerDMKModule.DeviceManagementKit;
@@ -241,6 +241,34 @@ describe("wallet-hardware/ledger DMK", () => {
       ]);
       expect(defaultDMK.disconnect).toHaveBeenCalledTimes(1);
       expect(defaultDMK.getConnectedDevice).toHaveBeenCalledTimes(2);
+    });
+
+    it("rebuilds a default-session signer after the device session is lost", async () => {
+      const build = mock((session: { sessionId: string }) => ({ sessionId: session.sessionId }));
+      const getSigner = createLedgerSessionSigner({ build });
+
+      const first = await getSigner();
+      expect(await getSigner()).toBe(first);
+
+      // The device was unplugged: DMK no longer knows the session.
+      connectedSessions.clear();
+      const second = await getSigner();
+
+      expect(first).toEqual({ sessionId: "default-ledger-session-1" });
+      expect(second).toEqual({ sessionId: "default-ledger-session-2" });
+      expect(build).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a caller-owned session and builds its signer once", async () => {
+      const dmkSession = { dmk: defaultDMK as unknown as DeviceManagementKit, sessionId: "caller-session" };
+      const build = mock(() => ({}));
+      const getSigner = createLedgerSessionSigner({ build, dmkSession });
+
+      await getSigner();
+      await getSigner();
+
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(lifecycleCalls).toEqual([]);
     });
   });
 });
