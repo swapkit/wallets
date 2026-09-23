@@ -125,7 +125,7 @@ export async function getBitcoinAccess(phantom: any): Promise<BitcoinAccess> {
   };
 }
 
-async function getWalletMethods(chain: PhantomSupportedChain | Chain.Bitcoin) {
+async function getWalletMethods(chain: PhantomSupportedChain) {
   const phantom: any = window?.phantom;
 
   switch (chain) {
