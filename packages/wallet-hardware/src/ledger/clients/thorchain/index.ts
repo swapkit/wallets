@@ -10,6 +10,7 @@ import {
   LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerDeviceActionStateHandler,
 } from "../../helpers/executeDeviceAction";
+import { toLowSSignature } from "../../helpers/lowS";
 import {
   getThorAddressCommand,
   getThorLegacyVersion,
@@ -67,7 +68,7 @@ export function normalizeThorchainLedgerSignDoc(signDoc: StdSignDoc): StdSignDoc
 async function getFixedSignature({ signature }: { signature: Uint8Array }) {
   const { Secp256k1Signature } = await import("@cosmjs/crypto");
   try {
-    return Secp256k1Signature.fromDer(signature).toFixedLength();
+    return toLowSSignature(Secp256k1Signature.fromDer(signature).toFixedLength());
   } catch (error) {
     throw new SwapKitError("wallet_ledger_invalid_signature", error);
   }
