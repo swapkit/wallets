@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import * as realContextModule from "@ledgerhq/context-module";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, WalletOption } from "@swapkit/helpers";
@@ -57,10 +58,48 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
   },
 }));
 
+type MockContextModuleConfig = {
+  blindSigningReporter?: { report: (params: unknown) => Promise<unknown> };
+  chain?: unknown;
+  originToken?: string;
+};
+const contextModuleConfigs: MockContextModuleConfig[] = [];
+const ethereumContextModules: unknown[] = [];
+
+// mock.module replaces the whole export namespace process-wide; snapshot the real module so
+// afterAll can restore it for test files that run later.
+const realContextModuleSnapshot = { ...realContextModule };
+
+mock.module("@ledgerhq/context-module", () => ({
+  ...realContextModuleSnapshot,
+  ContextModuleBuilder: class MockContextModuleBuilder {
+    private readonly config: MockContextModuleConfig;
+    constructor({ originToken }: { originToken?: string }) {
+      this.config = { originToken };
+    }
+    setChain(chain: unknown) {
+      this.config.chain = chain;
+      return this;
+    }
+    setBlindSigningReporter(reporter: MockContextModuleConfig["blindSigningReporter"]) {
+      this.config.blindSigningReporter = reporter;
+      return this;
+    }
+    build() {
+      contextModuleConfigs.push(this.config);
+      return this.config;
+    }
+  },
+}));
+
 mock.module("@ledgerhq/device-signer-kit-ethereum", () => ({
   SignerEthBuilder: class MockSignerEthBuilder {
     constructor(params: { dmk: unknown; originToken?: string; sessionId: string }) {
       ethereumBuilderInvocations.push(params);
+    }
+    withContextModule(contextModule: unknown) {
+      ethereumContextModules.push(contextModule);
+      return this;
     }
     build = () => ({
       getAddress: (path: string, options?: { chainId?: number; checkOnDevice?: boolean }) => {
@@ -110,6 +149,8 @@ describe("wallet-hardware/ledger", () => {
     bitcoinAppInvocations.length = 0;
     bitcoinAppXpubInvocations.length = 0;
     ethereumBuilderInvocations.length = 0;
+    contextModuleConfigs.length = 0;
+    ethereumContextModules.length = 0;
     ethereumGetAddressInvocations.length = 0;
     ethereumSignMessageInvocations.length = 0;
     ethereumSignTransactionInvocations.length = 0;
@@ -186,6 +227,16 @@ describe("wallet-hardware/ledger", () => {
     expect(ethereumBuilderInvocations).toEqual([
       { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
     ]);
+    // Blind-signing telemetry is replaced with a reporter that never reaches the network.
+    expect(contextModuleConfigs).toEqual([
+      {
+        blindSigningReporter: expect.any(Object),
+        chain: realContextModule.ContextModuleChainID.Ethereum,
+        originToken: "ledger-origin-token",
+      },
+    ]);
+    expect(ethereumContextModules).toEqual([contextModuleConfigs[0]]);
+    await expect(contextModuleConfigs[0]?.blindSigningReporter?.report({})).resolves.toBeUndefined();
     expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
     expect(ethereumSignTransactionInvocations).toHaveLength(1);
     expect(hexlify(ethereumSignTransactionInvocations[0]?.transaction ?? new Uint8Array())).toBe(
@@ -449,6 +500,20 @@ describe("wallet-hardware/ledger", () => {
     expect(ethereumBuilderInvocations).toEqual([
       { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
     ]);
+    // Blind-signing telemetry is replaced with a reporter that never reaches the network.
+    expect(contextModuleConfigs).toEqual([
+      {
+        blindSigningReporter: expect.any(Object),
+        chain: realContextModule.ContextModuleChainID.Ethereum,
+        originToken: "ledger-origin-token",
+      },
+    ]);
+    expect(ethereumContextModules).toEqual([contextModuleConfigs[0]]);
+    await expect(contextModuleConfigs[0]?.blindSigningReporter?.report({})).resolves.toBeUndefined();
     expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
   });
+});
+
+afterAll(() => {
+  mock.module("@ledgerhq/context-module", () => realContextModuleSnapshot);
 });
