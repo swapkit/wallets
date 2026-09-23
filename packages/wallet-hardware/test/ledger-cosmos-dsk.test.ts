@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { encodeSecp256k1Signature, type StdSignDoc, serializeSignDoc } from "@cosmjs/amino";
+import type { StdSignDoc } from "@cosmjs/amino";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
 import { of } from "rxjs";
 
@@ -36,6 +36,9 @@ mock.module("@ledgerhq/device-signer-kit-cosmos", () => ({
 }));
 
 import { CosmosLedger } from "../src/ledger/clients/cosmos";
+
+// cosmjs is CJS requiring ESM-only `@scure/base`; a static import next to `@swapkit/*` fails under Bun.
+const { encodeSecp256k1Signature, serializeSignDoc } = await import("@cosmjs/amino");
 
 const dmkSession = { dmk: { id: "cosmos-dmk" } as unknown as DeviceManagementKit, sessionId: "cosmos-session" };
 const signDoc: StdSignDoc = {

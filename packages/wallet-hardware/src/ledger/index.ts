@@ -602,7 +602,7 @@ async function getCosmosWalletMethods({
   transport,
 }: WalletMethodsParams<Chain.Cosmos>) {
   const { createSigningStargateClient, getDefaultChainFee, getMsgSendDenom, getCosmosToolbox } = await import(
-    "@swapkit/toolboxes/cosmos",
+    "@swapkit/toolboxes/cosmos"
   );
   const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
   const address = await getLedgerAddress({ chain, ledgerClient: signer });
