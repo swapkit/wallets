@@ -376,6 +376,51 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
     ).rejects.toThrow("wallet_ledger_invalid_params");
     expect(signCalls).toHaveLength(0);
   });
+
+  it("derives the configured address's public key from the cached account xpub", async () => {
+    const client = BitcoinLedger({ derivationPath: "m/49'/0'/0'/1/7", dmkSession });
+
+    expect(await client.getPublicKey()).toEqual(leafKey(1, 7).publicKey);
+    expect(await client.getPublicKey()).toEqual(leafKey(1, 7).publicKey);
+    expect(xpubCalls).toEqual([{ options: undefined, path: "49'/0'/0'" }]);
+  });
+
+  it.each([
+    49, 86,
+  ] as const)("signs a purpose %i transaction the toolbox built with the account public key", async (purpose) => {
+    const client = BitcoinLedger({ derivationPath: `m/${purpose}'/0'/0'/0/0`, dmkSession });
+    const publicKey = await client.getPublicKey();
+    const script = outputScript(purpose, publicKey);
+    const funding = previousTransaction([script]);
+    const tx = new Transaction({ allowLegacyWitnessUtxo: true, version: 1 });
+
+    const { inputs } = realUtxoToolboxSnapshot.addInputsAndOutputs({
+      chain: "BTC" as never,
+      compiledMemo: null,
+      inputs: [
+        {
+          hash: funding.txid,
+          index: 0,
+          publicKey,
+          txHex: funding.txHex,
+          value: 10_000,
+          witnessUtxo: { script, value: 10_000 },
+        },
+      ],
+      outputs: [{ address: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu", value: 9_000 }],
+      sender: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+      tx,
+    });
+    const built = tx.getInput(0);
+    if (purpose === 49) expect(built.redeemScript).toEqual(p2wpkh(publicKey).script);
+    if (purpose === 86) expect(built.tapInternalKey).toEqual(publicKey.slice(1));
+
+    const raw = await client.signTransactionHex({ inputUtxos: inputs, tx });
+    const extracted = Transaction.fromRaw(hex.decode(raw), { allowUnknownOutputs: true });
+
+    expect(extracted.inputsLength).toBe(1);
+    expect(extracted.getInput(0).finalScriptWitness?.length).toBe(purpose === 86 ? 1 : 2);
+  });
 });
 
 afterAll(() => {

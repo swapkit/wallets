@@ -9,9 +9,11 @@ import {
   filterSupportedChains,
   type GenericTransferParams,
   getRPCUrl,
+  getUTXOScriptTypeForPath,
   NetworkDerivationPath,
   SwapKitError,
   type UTXOChain,
+  UTXOScriptType,
   WalletOption,
 } from "@swapkit/helpers";
 import {
@@ -20,6 +22,7 @@ import {
   compileMemo,
   createHDWalletHelpers,
   getNetworkForChain,
+  getScriptTypeForAddress,
   getUTXOAccountIndexFromPath,
   getUTXOAccountPath,
   getUTXOAddressPath,
@@ -308,20 +311,31 @@ async function getUTXOWalletMethods({
   const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
 
   const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
+  // The account's path states its encoding (BIP44/49/84/86); a custom purpose falls back to the address form.
+  const scriptType = getUTXOScriptTypeForPath(derivationPath) ?? getScriptTypeForAddress(address, utxoChain);
 
-  const { signLedgerTransaction, toolboxSigner } = await match(chain)
-    .with(Chain.Bitcoin, () => {
+  const { publicKey, signLedgerTransaction, toolboxSigner } = await match(chain)
+    .with(Chain.Bitcoin, async () => {
       const bitcoinSigner = signer as BitcoinLedgerClient;
+      // Nested SegWit and taproot inputs need the key behind them (redeemScript, tapInternalKey).
+      const needsPublicKey = scriptType === UTXOScriptType.P2SH_P2WPKH || scriptType === UTXOScriptType.P2TR;
+      const publicKey = needsPublicKey ? await bitcoinSigner.getPublicKey() : undefined;
       return {
+        publicKey,
         signLedgerTransaction: ({ inputUtxos, transaction }: SignLedgerTransactionParams) =>
           bitcoinSigner.signTransactionHex({ inputUtxos, tx: transaction as Transaction }),
-        toolboxSigner: { getAddress: bitcoinSigner.getAddress, signTransaction: bitcoinSigner.signTransaction },
+        toolboxSigner: {
+          getAddress: bitcoinSigner.getAddress,
+          publicKey,
+          signTransaction: bitcoinSigner.signTransaction,
+        },
       };
     })
     .with(Chain.BitcoinCash, Chain.Dogecoin, Chain.Dash, Chain.Litecoin, async () => {
       const { createLegacyPsbtSigner, signLegacyPsbtTransaction } = await import("./clients/utxo-legacy-adapter");
       const legacySigner = signer as LegacyUTXOLedgerClient;
       return {
+        publicKey: undefined,
         signLedgerTransaction: ({ inputUtxos, transaction }: SignLedgerTransactionParams) =>
           signLegacyPsbtTransaction({
             chain: utxoChain,
@@ -335,6 +349,7 @@ async function getUTXOWalletMethods({
     .with(Chain.Zcash, () => {
       const zcashSigner = signer as ZcashLedgerClient;
       return {
+        publicKey: undefined,
         signLedgerTransaction: async ({ inputUtxos, transaction }: SignLedgerTransactionParams) => {
           if (!("consensusBranchId" in transaction)) {
             throw new SwapKitError("wallet_ledger_method_not_supported", {
@@ -352,8 +367,8 @@ async function getUTXOWalletMethods({
     .exhaustive();
 
   const toolbox = toolboxSigner
-    ? await getUtxoToolbox(utxoChain, { signer: toolboxSigner })
-    : getUtxoToolbox(utxoChain);
+    ? await getUtxoToolbox(utxoChain, { scriptType, signer: toolboxSigner })
+    : getUtxoToolbox(utxoChain, { scriptType });
   const signAndBroadcastTransaction = async (transaction: Transaction | ZcashTransaction) =>
     toolbox.broadcastTx(await signLedgerTransaction({ transaction }));
 
@@ -369,6 +384,7 @@ async function getUTXOWalletMethods({
       feeRate,
       fetchTxHex: true,
       memo,
+      publicKey: params.publicKey ?? publicKey,
       sender: address,
     });
 
