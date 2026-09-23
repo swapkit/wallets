@@ -4,7 +4,7 @@ import type Transport from "@ledgerhq/hw-transport";
 import { base64, hex } from "@scure/base";
 import { type DerivationPathArray, NetworkDerivationPath, SKConfig, SwapKitError } from "@swapkit/helpers";
 
-import type { LedgerDMKSession } from "../../helpers/dmk";
+import { getLedgerDMKSession, type LedgerDMKSession } from "../../helpers/dmk";
 import {
   executeLedgerDeviceAction,
   LEDGER_USER_INTERACTION_REQUIRED,
@@ -92,8 +92,6 @@ export class THORChainLedger {
       });
     }
 
-    if (!(dmkSession || transport)) throw new SwapKitError("wallet_ledger_connection_error");
-
     this.derivationPath = derivationPath;
     this.dmkSession = dmkSession;
     this.onDeviceActionState = onDeviceActionState;
@@ -125,8 +123,7 @@ export class THORChainLedger {
       return response;
     }
 
-    const dmkSession = this.dmkSession;
-    if (!dmkSession) throw new SwapKitError("wallet_ledger_connection_error");
+    const dmkSession = this.dmkSession ?? (await getLedgerDMKSession());
 
     const {
       Apdu,

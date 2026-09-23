@@ -11,7 +11,7 @@ import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { ZcashTransaction } from "@swapkit/utxo-signer";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
-import { getLedgerDMKSession } from "../helpers/dmk";
+import { createLedgerSessionSigner, getLedgerDMKSession } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
 import { runLedgerJsOperation } from "../helpers/ledgerJsDmkBridge";
 import { ZcashLedger as LegacyZcashLedger } from "./utxo";
@@ -294,7 +294,13 @@ export function ZcashLedger({
 }: ZcashLedgerParams = {}) {
   const configuredPath = parseZcashPath(derivationPath);
   const legacyClient = transport ? LegacyZcashLedger(derivationPath, transport) : undefined;
-  let signerPromise: Promise<SignerZcash> | undefined;
+  const getSessionSigner = createLedgerSessionSigner<SignerZcash>({
+    build: async (session) => {
+      const { SignerZcashBuilder } = await import("@ledgerhq/device-signer-kit-zcash");
+      return new SignerZcashBuilder(session).build();
+    },
+    dmkSession,
+  });
 
   function getSigner() {
     if (legacyClient) {
@@ -303,12 +309,7 @@ export function ZcashLedger({
       });
     }
 
-    signerPromise ??= (async () => {
-      const session = dmkSession ?? (await getLedgerDMKSession());
-      const { SignerZcashBuilder } = await import("@ledgerhq/device-signer-kit-zcash");
-      return new SignerZcashBuilder(session).build();
-    })();
-    return signerPromise;
+    return getSessionSigner();
   }
 
   async function getDskAddress({ checkOnDevice = false, path = configuredPath.fullPath } = {}) {

@@ -32,7 +32,7 @@ import { TronLedger } from "../clients/tron";
 import { BitcoinCashLedger, DashLedger, DogecoinLedger, LitecoinLedger } from "../clients/utxo";
 import { XRPLedger } from "../clients/xrp";
 import { ZcashLedger } from "../clients/zcash";
-import { getLedgerDMKSession, type LedgerDMKSession } from "./dmk";
+import type { LedgerDMKSession } from "./dmk";
 import type { LedgerDeviceActionStateHandler } from "./executeDeviceAction";
 
 type LedgerSignerMap = {
@@ -94,10 +94,10 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
     });
   }
 
-  const resolvedDMKSession = transport ? undefined : (dmkSession ?? (await getLedgerDMKSession()));
+  // The default session is resolved per operation by each client, so a reconnected device is picked up.
   const clientParams = {
     derivationPath: derivationPath ?? NetworkDerivationPath[chain],
-    dmkSession: resolvedDMKSession,
+    dmkSession,
     onDeviceActionState,
     transport,
   };
@@ -134,13 +134,9 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
       async () => {
         const { getProvider } = await import("@swapkit/toolboxes/evm");
 
-        if (!resolvedDMKSession) {
-          throw new SwapKitError("wallet_ledger_connection_error");
-        }
-
         const params = {
           derivationPath,
-          dmkSession: resolvedDMKSession,
+          dmkSession,
           onDeviceActionState,
           originToken,
           provider: await getProvider(chain as EVMChain),

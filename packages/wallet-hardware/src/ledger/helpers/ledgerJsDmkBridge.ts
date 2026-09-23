@@ -9,7 +9,7 @@ import type {
 import Transport, { TransportError } from "@ledgerhq/hw-transport";
 import { type DerivationPathArray, SwapKitError } from "@swapkit/helpers";
 
-import type { LedgerDMKSession } from "./dmk";
+import { getLedgerDMKSession, type LedgerDMKSession } from "./dmk";
 import {
   executeLedgerDeviceAction,
   LEDGER_USER_INTERACTION_REQUIRED,
@@ -148,11 +148,7 @@ export async function runLedgerJsOperation<App, Output>({
 
   if (transport) return operation(createApp(transport));
 
-  if (!dmkSession) {
-    throw new SwapKitError("wallet_ledger_connection_error", {
-      message: "A Ledger DMK session or an injected LedgerJS transport is required",
-    });
-  }
+  const session = dmkSession ?? (await getLedgerDMKSession());
 
   const { CallTaskInAppDeviceAction, DmkResultFactory, UnknownDeviceExchangeError } = await import(
     "@ledgerhq/device-management-kit"
@@ -181,7 +177,7 @@ export async function runLedgerJsOperation<App, Output>({
   });
 
   const result = await executeLedgerDeviceAction({
-    action: dmkSession.dmk.executeDeviceAction({ deviceAction, sessionId: dmkSession.sessionId }),
+    action: session.dmk.executeDeviceAction({ deviceAction, sessionId: session.sessionId }),
     onDeviceActionState,
   });
 
