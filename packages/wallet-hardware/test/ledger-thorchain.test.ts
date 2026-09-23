@@ -40,7 +40,13 @@ interface ThorDmkExchange {
   p2: number;
 }
 
-function createThorDmkHarness({ version }: { version: string }) {
+function createThorDmkHarness({
+  signStatus = [0x90, 0x00],
+  version,
+}: {
+  signStatus?: [number, number];
+  version: string;
+}) {
   const actions: Array<{ deviceAction: ThorDmkAction; sessionId: string }> = [];
   const exchanges: ThorDmkExchange[] = [];
   const publicSendCommand = mock(() => Promise.reject(new Error("Public DMK sendCommand must not be called")));
@@ -58,9 +64,10 @@ function createThorDmkHarness({ version }: { version: string }) {
               ? Uint8Array.of(0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02)
               : new Uint8Array();
 
-          return Promise.resolve(
-            command.parseResponse(new ApduResponse({ data, statusCode: Uint8Array.of(0x90, 0x00) }), undefined),
-          );
+          const statusCode =
+            apdu.ins === 0x02 && apdu.p1 === 0x02 ? Uint8Array.from(signStatus) : Uint8Array.of(0x90, 0x00);
+
+          return Promise.resolve(command.parseResponse(new ApduResponse({ data, statusCode }), undefined));
         }) as InternalApi["sendCommand"];
         const internalApi = {
           getDeviceSessionState: () => ({ currentApp: { name: "THORChain", version } }),
@@ -98,6 +105,16 @@ function createThorDmkHarness({ version }: { version: string }) {
 }
 
 describe("ledger THORChain protocol", () => {
+  it("reports a signature rejected on the device as a user rejection", async () => {
+    const harness = createThorDmkHarness({ signStatus: [0x69, 0x85], version: "2.2.3" });
+    const ledger = new THORChainLedger({ derivationPath: [44, 931, 0, 0, 0], dmkSession: harness.dmkSession });
+
+    await expect(ledger.sign("x")).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6985" },
+    });
+  });
+
   it("serializes the app v2 derivation path as five little-endian integers", () => {
     expect(Array.from(serializeThorPath({ path: [44, 931, 0, 0, 7] }))).toEqual([
       44, 0, 0, 128, 163, 3, 0, 128, 0, 0, 0, 128, 0, 0, 0, 0, 7, 0, 0, 0,
@@ -294,8 +311,11 @@ describe("ledger THORChain protocol", () => {
     });
 
     await expect(v1Ledger.sign("x")).rejects.toMatchObject({
-      _tag: "InvalidResponseFormatError",
-      originalError: { message: "THORChain Ledger app major 2 is required, received 1.9.0" },
+      errorKey: "wallet_ledger_transport_error",
+      info: {
+        errorTag: "InvalidResponseFormatError",
+        message: "THORChain Ledger app major 2 is required, received 1.9.0",
+      },
     });
     expect(v1Harness.executeDeviceAction).toHaveBeenCalledTimes(1);
     expect(v1Harness.actions[0]?.deviceAction).toBeInstanceOf(CallTaskInAppDeviceAction);

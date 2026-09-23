@@ -118,11 +118,28 @@ describe("wallet-hardware/ledger DMK", () => {
     expect(states).toEqual(["pending", "completed"]);
   });
 
-  it("rejects the error emitted by a device action", async () => {
-    const ledgerError = new Error("Ledger rejected the action");
-    const action = { cancel: mock(() => {}), observable: of({ error: ledgerError, status: DeviceActionStatus.Error }) };
+  it("maps device action errors to typed SwapKit errors", async () => {
+    const cases = [
+      {
+        error: { _tag: "EthAppCommandError", errorCode: "6985", message: "Denied" },
+        errorKey: "wallet_connection_rejected_by_user",
+      },
+      { error: { _tag: "RefusedByUserDAError" }, errorKey: "wallet_connection_rejected_by_user" },
+      {
+        // hw-app status errors reach us nested by the LedgerJS bridge.
+        error: { _tag: "UnknownDeviceExchangeError", originalError: { statusCode: 0x6985 } },
+        errorKey: "wallet_connection_rejected_by_user",
+      },
+      { error: { _tag: "DeviceLockedError" }, errorKey: "wallet_ledger_device_locked" },
+      { error: { _tag: "InvalidStatusWordError", errorCode: "6E00" }, errorKey: "wallet_ledger_app_not_open" },
+      { error: { _tag: "DeviceSessionNotFound" }, errorKey: "wallet_ledger_connection_error" },
+      { error: new Error("Ledger rejected the action"), errorKey: "wallet_ledger_transport_error" },
+    ];
 
-    await expect(executeLedgerDeviceAction({ action })).rejects.toBe(ledgerError);
+    for (const { error, errorKey } of cases) {
+      const action = { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
+      await expect(executeLedgerDeviceAction({ action })).rejects.toMatchObject({ errorKey });
+    }
   });
 
   it("maps stopped device actions to a SwapKit error", async () => {
