@@ -8,7 +8,7 @@ import {
   SwapKitError,
 } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
-import type { Transaction, ZcashTransaction } from "@swapkit/utxo-signer";
+import type { ZcashTransaction } from "@swapkit/utxo-signer";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { getLedgerDMKSession } from "../helpers/dmk";
@@ -350,17 +350,12 @@ export function ZcashLedger({
       tx,
     });
 
+    // hw-app-btc picks a pre-Ironwood branch id without a block height and misparses v5 previous
+    // transactions, so the legacy transport cannot produce a transaction the network accepts.
     if (legacyClient) {
-      const legacyTx = { unsignedTx: tx.toBytes() } as Transaction;
-      const signed =
-        derivationPaths === undefined
-          ? await legacyClient.signTransaction(legacyTx, inputUtxos)
-          : await legacyClient.signTransactionWithMultiplePaths(
-              legacyTx,
-              inputUtxos,
-              paths.map((path) => `m/${path}`),
-            );
-      return assertRawV5(signed);
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        reason: "Zcash signing requires a Ledger DMK session instead of a legacy transport",
+      });
     }
 
     const blockHeight = await activationHeight(tx.consensusBranchId);

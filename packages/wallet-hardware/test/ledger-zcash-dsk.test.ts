@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
+import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import { ZcashConsensusBranchId, ZcashTransaction, ZcashVersionGroupId } from "@swapkit/utxo-signer";
@@ -167,6 +168,17 @@ describe("Ledger Zcash Device Signer Kit client", () => {
     await expect(
       client.signTransaction({ inputUtxos: [{ hash: "ab".repeat(32), index: 0, value: 5_000 }], tx }),
     ).rejects.toThrow("wallet_ledger_invalid_params");
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it("refuses to sign over a legacy transport", async () => {
+    const send = mock(() => Promise.reject(new Error("no APDU expected")));
+    const client = ZcashLedger({ transport: { send } as unknown as Transport });
+
+    await expect(client.signTransaction({ inputUtxos: [inputUtxo()], tx: targetTransaction() })).rejects.toThrow(
+      "wallet_ledger_invalid_params",
+    );
+    expect(send).not.toHaveBeenCalled();
     expect(signCalls).toHaveLength(0);
   });
 
