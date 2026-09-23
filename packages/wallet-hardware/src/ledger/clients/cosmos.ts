@@ -13,6 +13,7 @@ import type { OfflineAminoSigner } from "@swapkit/toolboxes/cosmos";
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { createLedgerSessionSigner } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
+import { toLowSSignature } from "../helpers/lowS";
 
 interface CosmosLedgerParams {
   derivationPath?: DerivationPathArray | string;
@@ -46,9 +47,11 @@ function normalizeCosmosPath(path: DerivationPathArray | string) {
 async function normalizeCosmosSignature(signature: Uint8Array) {
   const { Secp256k1Signature } = await import("@cosmjs/crypto");
   try {
-    return signature.length === 64
-      ? Secp256k1Signature.fromFixedLength(signature).toFixedLength()
-      : Secp256k1Signature.fromDer(signature).toFixedLength();
+    return toLowSSignature(
+      signature.length === 64
+        ? Secp256k1Signature.fromFixedLength(signature).toFixedLength()
+        : Secp256k1Signature.fromDer(signature).toFixedLength(),
+    );
   } catch (error) {
     throw new SwapKitError("wallet_ledger_invalid_response", error);
   }
