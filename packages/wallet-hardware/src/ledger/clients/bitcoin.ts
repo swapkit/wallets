@@ -11,11 +11,11 @@ import {
 } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
-import { match, P } from "ts-pattern";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { getLedgerDMKSession } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
+import { createCachedRawTxResolver } from "../helpers/rawTx";
 import { BitcoinLedger as LegacyBitcoinLedger } from "./utxo";
 import { extractInputsFromPsbt, signLegacyPsbtTransaction } from "./utxo-legacy-adapter";
 
@@ -140,74 +140,51 @@ function descriptorTemplate(purpose: ParsedBitcoinPath["purpose"]) {
   });
 }
 
-function stripHexPrefix(value: string) {
-  return value.replace(/^0x/i, "");
+// Mirrors the signer kit's `PartialSignature`, which its package entry point does not export.
+interface PartialSignature {
+  inputIndex: number;
+  pubkey: Uint8Array;
+  signature: Uint8Array;
+  tapleafHash?: Uint8Array;
 }
 
-function signedInputParts({
-  rawInput,
-  purpose,
-}: {
-  rawInput: ReturnType<Transaction["getInput"]>;
-  purpose: ParsedBitcoinPath["purpose"];
-}) {
-  return match(purpose)
-    .with(86, () => {
-      const [tapKeySig] = rawInput.finalScriptWitness ?? [];
-      if (!tapKeySig) throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing taproot signature" });
-      return { tapKeySig };
-    })
-    .with(P.union(49, 84), (segwitPurpose) => {
-      const [signature, publicKey] = rawInput.finalScriptWitness ?? [];
-      if (!signature || !publicKey) {
-        throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing SegWit signature or public key" });
-      }
-
-      return match(segwitPurpose)
-        .with(49, async () => {
-          const { Script } = await import("@swapkit/utxo-signer");
-          const [redeemScript] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
-          if (!(redeemScript instanceof Uint8Array)) {
-            throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing nested SegWit redeem script" });
-          }
-          return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]], redeemScript };
-        })
-        .with(84, () => ({ partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] }))
-        .exhaustive();
-    })
-    .with(44, async () => {
-      const { Script } = await import("@swapkit/utxo-signer");
-      const [signature, publicKey] = Script.decode(rawInput.finalScriptSig ?? new Uint8Array());
-      if (!(signature instanceof Uint8Array) || !(publicKey instanceof Uint8Array)) {
-        throw new SwapKitError("wallet_ledger_invalid_response", { reason: "Missing legacy signature or public key" });
-      }
-      return { partialSig: [[publicKey, signature]] as [[Uint8Array, Uint8Array]] };
-    })
-    .exhaustive();
+function isPartialSignature(signature: object): signature is PartialSignature {
+  return "signature" in signature && "pubkey" in signature;
 }
 
-async function restoreSignedPsbt({
-  rawTransaction,
-  tx,
-  purpose,
+function signatureError({ inputIndex, reason }: { inputIndex?: number; reason: string }) {
+  return new SwapKitError("wallet_ledger_invalid_response", { inputIndex, reason });
+}
+
+type PreviousTransaction = NonNullable<ReturnType<Transaction["getInput"]>["nonWitnessUtxo"]>;
+
+// Returns the output an input spends, after checking the previous transaction hashes to the input's
+// txid: amounts shown on the device come from it, so it must not be substitutable.
+async function verifiedSpentOutput({
+  input,
+  inputIndex,
+  previousTransaction,
 }: {
-  rawTransaction: string;
-  tx: Transaction;
-  purpose: ParsedBitcoinPath["purpose"];
+  input: ReturnType<Transaction["getInput"]>;
+  inputIndex: number;
+  previousTransaction?: PreviousTransaction;
 }) {
-  const { Transaction } = await import("@swapkit/utxo-signer");
-  const parsedRaw = Transaction.fromRaw(hex.decode(rawTransaction));
-  if (parsedRaw.inputsLength !== tx.inputsLength || parsedRaw.outputsLength !== tx.outputsLength) {
-    throw new SwapKitError("wallet_ledger_invalid_response", {
-      reason: "Signed Bitcoin transaction shape does not match the requested transaction",
+  if (!(previousTransaction && input.txid && input.index !== undefined)) {
+    throw signatureError({ inputIndex, reason: "PSBT input is missing its previous output" });
+  }
+
+  const { RawTx, utils } = await import("@swapkit/utxo-signer");
+  const previousTxid = utils.sha256x2(RawTx.encode(previousTransaction)).reverse();
+  if (hex.encode(previousTxid) !== hex.encode(input.txid)) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      inputIndex,
+      reason: "Previous transaction does not match the input txid",
     });
   }
 
-  const signedPsbt = tx.clone();
-  for (let inputIndex = 0; inputIndex < parsedRaw.inputsLength; inputIndex += 1) {
-    signedPsbt.updateInput(inputIndex, await signedInputParts({ purpose, rawInput: parsedRaw.getInput(inputIndex) }));
-  }
-  return signedPsbt;
+  const spentOutput = previousTransaction.outputs[input.index];
+  if (!spentOutput) throw signatureError({ inputIndex, reason: "Previous transaction has no spent output" });
+  return spentOutput;
 }
 
 export function BitcoinLedger({
@@ -280,15 +257,61 @@ export function BitcoinLedger({
     return new DefaultWallet(configuredPath.accountPath, template);
   }
 
-  async function addInputDerivations({ paths, tx }: { paths: ParsedBitcoinPath[]; tx: Transaction }) {
-    const [accountXpub, fingerprint] = await Promise.all([getAccountXpub(), getMasterFingerprint()]);
+  async function resolvePreviousTransactions({ inputUtxos, tx }: { inputUtxos?: UTXOType[]; tx: Transaction }) {
+    const { RawTx } = await import("@swapkit/utxo-signer");
+    const needsLookup = Array.from({ length: tx.inputsLength }, (_, index) => index).some(
+      (index) => !(tx.getInput(index).nonWitnessUtxo || inputUtxos?.[index]?.txHex),
+    );
+    const getRawTx = needsLookup
+      ? await import("@swapkit/toolboxes/utxo").then(({ getUtxoApi }) => {
+          const utxoApi = getUtxoApi(Chain.Bitcoin);
+          return createCachedRawTxResolver((txid) => utxoApi.getRawTx(txid));
+        })
+      : undefined;
+
+    return Promise.all(
+      Array.from({ length: tx.inputsLength }, async (_, inputIndex) => {
+        const input = tx.getInput(inputIndex);
+        if (input.nonWitnessUtxo) return input.nonWitnessUtxo;
+        if (!input.txid) throw signatureError({ inputIndex, reason: "PSBT input is missing its previous txid" });
+
+        const txHex = inputUtxos?.[inputIndex]?.txHex ?? (await getRawTx?.(hex.encode(input.txid)));
+        if (!txHex) {
+          throw new SwapKitError("wallet_ledger_invalid_params", {
+            inputIndex,
+            reason: "Unable to resolve the previous transaction for Ledger signing",
+          });
+        }
+        return RawTx.decode(hex.decode(txHex));
+      }),
+    );
+  }
+
+  /**
+   * Attach what the Bitcoin app needs to verify and sign each input: key origins, the full previous
+   * transaction (input amounts are only verifiable from it) and, for SegWit v0, the spent output.
+   * The previous transaction is checked against the input's txid so it cannot misstate the amount.
+   */
+  async function addInputDerivations({
+    inputUtxos,
+    paths,
+    tx,
+  }: {
+    inputUtxos?: UTXOType[];
+    paths: ParsedBitcoinPath[];
+    tx: Transaction;
+  }) {
+    const [accountXpub, fingerprint, previousTransactions] = await Promise.all([
+      getAccountXpub(),
+      getMasterFingerprint(),
+      resolvePreviousTransactions({ inputUtxos, tx }),
+    ]);
     const { p2wpkh } = await import("@swapkit/utxo-signer");
     const accountKey = HDKey.fromExtendedKey(accountXpub);
     const psbt = tx.clone();
+    const publicKeys: Uint8Array[] = [];
 
-    for (let inputIndex = 0; inputIndex < paths.length; inputIndex += 1) {
-      const path = paths[inputIndex];
-      if (!path) continue;
+    for (const [inputIndex, path] of paths.entries()) {
       const publicKey = accountKey.derive(`m/${path.change}/${path.addressIndex}`).publicKey;
       if (!publicKey) {
         throw new SwapKitError("wallet_ledger_invalid_response", {
@@ -297,32 +320,91 @@ export function BitcoinLedger({
         });
       }
 
+      publicKeys[inputIndex] = publicKey;
+
+      const input = psbt.getInput(inputIndex);
+      const previousTransaction = previousTransactions[inputIndex];
+      const spentOutput = await verifiedSpentOutput({ input, inputIndex, previousTransaction });
+
       const derivation = { fingerprint, path: pathToNumberArray(path.fullPath) };
       if (path.purpose === 86) {
         const xOnlyPublicKey = publicKey.slice(1);
         psbt.updateInput(inputIndex, {
           tapBip32Derivation: [[xOnlyPublicKey, { der: derivation, hashes: [] }]],
           tapInternalKey: xOnlyPublicKey,
+          ...(input.witnessUtxo ? {} : { witnessUtxo: spentOutput }),
         });
       } else {
-        const input = psbt.getInput(inputIndex);
         psbt.updateInput(inputIndex, {
           bip32Derivation: [[publicKey, derivation]],
+          nonWitnessUtxo: previousTransaction,
+          ...(path.purpose === 44 || input.witnessUtxo ? {} : { witnessUtxo: spentOutput }),
           ...(path.purpose === 49 && !input.redeemScript ? { redeemScript: p2wpkh(publicKey).script } : {}),
         });
       }
     }
 
+    return { psbt, publicKeys };
+  }
+
+  /**
+   * Ask the device for signatures only and apply them to our own PSBT. The signer kit's own
+   * transaction extraction writes the PSBT format version as the transaction version and drops
+   * the witness of nested SegWit inputs, which invalidates the signatures.
+   */
+  async function signWithPaths({
+    inputUtxos,
+    paths,
+    tx,
+  }: {
+    inputUtxos?: UTXOType[];
+    paths: ParsedBitcoinPath[];
+    tx: Transaction;
+  }) {
+    const [signer, wallet, { psbt, publicKeys }] = await Promise.all([
+      getSigner(),
+      getWallet(),
+      addInputDerivations({ inputUtxos, paths, tx }),
+    ]);
+    const signatures = await executeLedgerDeviceAction({
+      action: signer.signPsbt(wallet, psbt.toPSBT(0)),
+      onDeviceActionState,
+    });
+
+    const signedInputs = new Set<number>();
+    for (const signature of signatures) {
+      if (!isPartialSignature(signature)) throw signatureError({ reason: "Unexpected MuSig2 signature" });
+
+      const { inputIndex, pubkey } = signature;
+      const path = paths[inputIndex];
+      const publicKey = publicKeys[inputIndex];
+      if (!(path && publicKey) || signedInputs.has(inputIndex)) {
+        throw signatureError({ inputIndex, reason: "Unexpected or duplicate input signature" });
+      }
+      signedInputs.add(inputIndex);
+
+      if (path.purpose === 86) {
+        if (signature.tapleafHash) throw signatureError({ inputIndex, reason: "Unexpected taproot script signature" });
+        psbt.updateInput(inputIndex, { tapKeySig: signature.signature });
+        continue;
+      }
+
+      if (hex.encode(pubkey) !== hex.encode(publicKey)) {
+        throw signatureError({ inputIndex, reason: "Signature public key does not match the input derivation" });
+      }
+      psbt.updateInput(inputIndex, { partialSig: [[publicKey, signature.signature]] });
+    }
+
+    if (signedInputs.size !== psbt.inputsLength) {
+      throw signatureError({ reason: `Ledger signed ${signedInputs.size} of ${psbt.inputsLength} inputs` });
+    }
+
     return psbt;
   }
 
-  async function signWithPaths({ paths, tx }: { paths: ParsedBitcoinPath[]; tx: Transaction }) {
-    const [signer, wallet, psbt] = await Promise.all([getSigner(), getWallet(), addInputDerivations({ paths, tx })]);
-    const signedTransaction = await executeLedgerDeviceAction({
-      action: signer.signTransaction(wallet, psbt.toPSBT(0)),
-      onDeviceActionState,
-    });
-    return stripHexPrefix(signedTransaction);
+  function finalizeToHex(psbt: Transaction) {
+    psbt.finalize();
+    return psbt.hex;
   }
 
   function signTransactionHex({ tx, inputUtxos }: SignBitcoinTransactionParams) {
@@ -335,7 +417,7 @@ export function BitcoinLedger({
     }
 
     const paths = Array.from({ length: tx.inputsLength }, () => configuredPath);
-    return signWithPaths({ paths, tx });
+    return signWithPaths({ inputUtxos, paths, tx }).then(finalizeToHex);
   }
 
   return {
@@ -386,8 +468,14 @@ export function BitcoinLedger({
       });
     },
     signTransaction: async (tx: Transaction) => {
-      const signedTransaction = await signTransactionHex({ tx });
-      return restoreSignedPsbt({ purpose: configuredPath.purpose, rawTransaction: signedTransaction, tx });
+      if (legacyClient) {
+        // The legacy app returns a finalised transaction, as the other legacy UTXO chains do.
+        const signedTxHex = await signLegacyPsbtTransaction({ chain: Chain.Bitcoin, legacyClient, tx });
+        const { Transaction: TransactionClass } = await import("@swapkit/utxo-signer");
+        return TransactionClass.fromRaw(hex.decode(signedTxHex), { allowUnknownOutputs: true });
+      }
+      const paths = Array.from({ length: tx.inputsLength }, () => configuredPath);
+      return await signWithPaths({ paths, tx });
     },
     signTransactionHex,
     signTransactionWithMultiplePaths: async ({
@@ -407,7 +495,7 @@ export function BitcoinLedger({
         );
       }
 
-      return signWithPaths({ paths, tx });
+      return signWithPaths({ inputUtxos, paths, tx }).then(finalizeToHex);
     },
   };
 }
