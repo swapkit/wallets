@@ -517,7 +517,7 @@ async function getUTXOWalletMethods({
     }
 
     const { Transaction } = await import("@swapkit/utxo-signer");
-    const tx = new Transaction({ allowLegacyWitnessUtxo: true, version: 1 });
+    const tx = new Transaction({ allowLegacyWitnessUtxo: true, allowUnknownOutputs: !!memoScript, version: 1 });
     const senderAddress = changeAddress || utxos[0]?.address || recipient;
 
     addInputsAndOutputs({
