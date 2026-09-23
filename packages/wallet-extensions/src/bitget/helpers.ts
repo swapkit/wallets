@@ -3,6 +3,7 @@ import { Chain, type EVMChain, GAIAConfig, prepareNetworkSwitch, SwapKitError } 
 import type { TronTransaction } from "@swapkit/toolboxes/tron";
 import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
@@ -57,7 +58,10 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
       const signer = { getAddress: () => Promise.resolve(address), signTransaction };
 
-      const toolbox = getUtxoToolbox(Chain.Bitcoin, { signer });
+      const toolbox = getUtxoToolbox(Chain.Bitcoin, {
+        ...(await getUtxoScriptTypeParams({ address, chain: Chain.Bitcoin })),
+        signer,
+      });
 
       return { ...toolbox, address };
     })
