@@ -1,5 +1,6 @@
 import { Chain, ChainToChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import { getCtrlAddress, getCtrlProvider, signCtrlThorchainTransaction, walletTransfer } from "./walletHelpers";
@@ -253,7 +254,10 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
         },
       };
 
-      const toolbox = await getUtxoToolbox(Chain.Bitcoin, { signer });
+      const toolbox = await getUtxoToolbox(Chain.Bitcoin, {
+        ...(await getUtxoScriptTypeParams({ address, chain: Chain.Bitcoin })),
+        signer,
+      });
 
       return {
         ...toolbox,
@@ -278,8 +282,8 @@ async function getWalletMethods(chain: (typeof CTRL_SUPPORTED_CHAINS)[number]) {
     case Chain.Dogecoin:
     case Chain.Litecoin: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
-      const toolbox = await getUtxoToolbox(chain);
       const address = await getCtrlAddress(chain);
+      const toolbox = await getUtxoToolbox(chain, await getUtxoScriptTypeParams({ address, chain }));
 
       return {
         ...toolbox,
