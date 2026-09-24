@@ -8,6 +8,7 @@ import {
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { getWallets as getStandardWallets } from "@wallet-standard/app";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import type { ExtensionWallet } from "../walletTypes";
 
 export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
@@ -144,7 +145,7 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
       }
 
       const signer = { getAddress: () => Promise.resolve(address), signTransaction };
-      const toolbox = getUtxoToolbox(chain, { signer });
+      const toolbox = getUtxoToolbox(chain, { ...(await getUtxoScriptTypeParams({ address, chain })), signer });
 
       return { ...toolbox, address };
     }
