@@ -11,6 +11,7 @@ import {
   NetworkDerivationPath,
   SwapKitError,
   type UTXOChain,
+  UTXOScriptType,
   WalletOption,
 } from "@swapkit/helpers";
 import {
@@ -19,6 +20,7 @@ import {
   compileMemo,
   createHDWalletHelpers,
   getNetworkForChain,
+  getScriptTypeForAddress,
   getUTXOAccountIndexFromPath,
   getUTXOAccountPath,
   getUTXOAddressPath,
@@ -172,6 +174,8 @@ async function getWalletMethods({
       const signer = await getLedgerClient({ chain, derivationPath, transport });
 
       const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
+      // Ledger signs by the path's wallet format, so the address it returns states the account's script type.
+      const scriptType = getScriptTypeForAddress(address, utxoChain);
 
       // V3 toolbox signer:
       //  - BTC uses the modern `ledger-bitcoin` AppClient with native PSBT signing.
@@ -181,13 +185,20 @@ async function getWalletMethods({
       //    policy APDUs and returns CLA_NOT_SUPPORTED.
       //  - ZEC stays on the bespoke `signPCZT` flow for now.
       let toolboxSigner:
-        | { getAddress: () => Promise<string>; signTransaction: (tx: Transaction) => Promise<Transaction> }
+        | {
+            getAddress: () => Promise<string>;
+            publicKey?: Uint8Array;
+            signTransaction: (tx: Transaction) => Promise<Transaction>;
+          }
         | undefined;
+      let publicKey: Uint8Array | undefined;
       let signAndBroadcastLegacyPsbtTransaction: ((tx: Transaction) => Promise<string>) | undefined;
       if (chain === Chain.Bitcoin) {
         const { BitcoinPsbtLedger } = await import("./clients/utxo-psbt");
         const psbtClient = BitcoinPsbtLedger(derivationPath, transport);
-        toolboxSigner = { getAddress: psbtClient.getAddress, signTransaction: psbtClient.signTransaction };
+        // Nested SegWit inputs need the key behind them so the toolbox can attach their redeemScript.
+        publicKey = scriptType === UTXOScriptType.P2SH_P2WPKH ? await psbtClient.getPublicKey() : undefined;
+        toolboxSigner = { getAddress: psbtClient.getAddress, publicKey, signTransaction: psbtClient.signTransaction };
       } else if (
         chain === Chain.BitcoinCash ||
         chain === Chain.Dogecoin ||
@@ -203,8 +214,8 @@ async function getWalletMethods({
       }
 
       const toolbox = toolboxSigner
-        ? await getUtxoToolbox(utxoChain, { signer: toolboxSigner })
-        : getUtxoToolbox(utxoChain);
+        ? await getUtxoToolbox(utxoChain, { scriptType, signer: toolboxSigner })
+        : getUtxoToolbox(utxoChain, { scriptType });
       const signAndBroadcastTransaction = signAndBroadcastLegacyPsbtTransaction ?? toolbox.signAndBroadcastTransaction;
 
       const transfer = async (params: UTXOBuildTxParams) => {
@@ -216,6 +227,7 @@ async function getWalletMethods({
           feeRate,
           fetchTxHex: true,
           memo,
+          publicKey: params.publicKey ?? publicKey,
           sender: address,
         });
 
