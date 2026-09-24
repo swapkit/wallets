@@ -168,6 +168,7 @@ export const keystoreWallet = createWallet({
     Chain.Aleo,
     Chain.Aptos,
     Chain.Cardano,
+    Chain.Hype,
     Chain.Ripple,
     Chain.Solana,
     Chain.Stellar,
@@ -175,7 +176,6 @@ export const keystoreWallet = createWallet({
     Chain.Ton,
     Chain.Tron,
     Chain.Near,
-    Chain.Hype,
   ],
   walletType: WalletOption.KEYSTORE,
 });
