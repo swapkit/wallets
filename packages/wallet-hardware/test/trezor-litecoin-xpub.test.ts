@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { HDKey } from "@scure/bip32";
-import { Chain } from "@swapkit/helpers";
+import { Chain, UTXOScriptType } from "@swapkit/helpers";
 import { deriveAddressesFromXpub } from "@swapkit/toolboxes/utxo";
 import {
   createPCZT,
@@ -107,7 +107,13 @@ describe("Trezor wallet handling", () => {
     const bitcoinVersionAccountXpub = HDKey.fromMasterSeed(seed).derive("m/84'/2'/0'").publicExtendedKey;
 
     expect(() =>
-      deriveAddressesFromXpub({ accountIndex: 0, chain: Chain.Litecoin, count: 1, xpub: bitcoinVersionAccountXpub }),
+      deriveAddressesFromXpub({
+        accountIndex: 0,
+        chain: Chain.Litecoin,
+        count: 1,
+        scriptType: UTXOScriptType.P2WPKH,
+        xpub: bitcoinVersionAccountXpub,
+      }),
     ).toThrow("Version mismatch");
 
     const litecoinVersionAccountXpub = normalizeTrezorExtendedPublicKey(bitcoinVersionAccountXpub, Chain.Litecoin);
@@ -115,6 +121,7 @@ describe("Trezor wallet handling", () => {
       accountIndex: 0,
       chain: Chain.Litecoin,
       count: 1,
+      scriptType: UTXOScriptType.P2WPKH,
       xpub: litecoinVersionAccountXpub,
     });
 

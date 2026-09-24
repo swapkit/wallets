@@ -1,30 +1,73 @@
 import {
+  ACCOUNT_INDEXED_CHAINS,
   type AssetValue,
   Chain,
   CosmosChains,
   type DerivationPathArray,
   EVMChains,
   filterSupportedChains,
+  getUTXOScriptTypeForPath,
   NetworkDerivationPath,
+  SwapKitError,
   type UTXOChain,
   UTXOChains,
+  type UTXOScriptType,
   updateDerivationPath,
   WalletOption,
 } from "@swapkit/helpers";
-import type { DerivedAddress, FullWallet } from "@swapkit/toolboxes";
+import type { DerivedAddress, ExtendedPublicKeyResult, FullWallet, HDWalletAccountParams } from "@swapkit/toolboxes";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 
 export {
   decryptFromKeystore,
   encryptToKeyStore,
+  generateKeystore,
   generatePhrase,
   type Keystore,
+  type PhraseWordCount,
   validatePhrase,
 } from "./keystore-helpers";
 
+export type KeystoreUTXOChainDerivation = { derivationPath: DerivationPathArray; scriptType: UTXOScriptType };
+export type KeystoreChainDerivation =
+  | DerivationPathArray
+  | { derivationPath: DerivationPathArray }
+  | KeystoreUTXOChainDerivation;
+
+export type KeystoreDerivationPathMap = {
+  [C in Chain]?: C extends UTXOChain
+    ? KeystoreUTXOChainDerivation
+    : DerivationPathArray | { derivationPath: DerivationPathArray };
+};
+export type KeystoreDerivationPathMapOrIndex = KeystoreDerivationPathMap | number;
+
+function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | undefined) {
+  if (!entry) return { derivationPath: undefined, scriptType: undefined };
+
+  const isUTXO = UTXOChains.includes(chain as UTXOChain);
+  const derivationPath = "derivationPath" in entry ? entry.derivationPath : entry;
+  const scriptType = "scriptType" in entry ? entry.scriptType : undefined;
+
+  if (isUTXO && !scriptType) {
+    throw new SwapKitError("toolbox_utxo_invalid_params", {
+      chain,
+      error:
+        `${chain}: a UTXO derivation entry must state its scriptType: { derivationPath, scriptType }. ` +
+        "getUTXOScriptTypeForPath(derivationPath) gives the encoding the path implies.",
+    });
+  }
+
+  return { derivationPath, scriptType: isUTXO ? scriptType : undefined };
+}
+
+const deterministicErrorKeys = new Set(["toolbox_utxo_unsupported_script_type", "toolbox_utxo_invalid_params"]);
+
 type UTXOToolboxWithHD = {
-  deriveAddressAtIndex: (params: { index: number; change?: boolean }) => DerivedAddress | undefined;
+  deriveAddressAtIndex: (
+    params: HDWalletAccountParams & { index: number; change?: boolean },
+  ) => DerivedAddress | undefined;
   getExtendedPublicKey: () => string | undefined;
+  getExtendedPublicKeyInfo?: (params?: HDWalletAccountParams) => ExtendedPublicKeyResult | undefined;
   getBalance: (address: string) => Promise<AssetValue[]>;
   resolveDerivationIndex?: (params: {
     address: string;
@@ -63,14 +106,14 @@ function isUTXOToolboxWithHD(toolbox: unknown): toolbox is UTXOToolboxWithHD {
 async function createHDWalletMethods(chain: UTXOChain, toolbox: UTXOToolboxWithHD) {
   const { createHDWalletHelpers, getUtxoApi } = await import("@swapkit/toolboxes/utxo");
 
-  function deriveAddresses(params: { count: number; startIndex?: number; change?: boolean }) {
-    const { count, startIndex = 0, change = false } = params;
+  function deriveAddresses(params: HDWalletAccountParams & { count: number; startIndex?: number; change?: boolean }) {
+    const { accountIndex, count, startIndex = 0, change = false } = params;
     if (count < 1 || count > 1000) throw new RangeError(`count must be between 1 and 1000, got ${count}`);
     if (startIndex < 0) throw new RangeError(`startIndex must be non-negative, got ${startIndex}`);
 
     const addresses: DerivedAddress[] = [];
     for (let i = 0; i < count; i++) {
-      const derived = toolbox.deriveAddressAtIndex({ change, index: startIndex + i });
+      const derived = toolbox.deriveAddressAtIndex({ accountIndex, change, index: startIndex + i });
       if (derived) addresses.push(derived);
     }
     return addresses;
@@ -91,7 +134,7 @@ export const keystoreWallet = createWallet({
     async function connectKeystore(
       chains: Chain[],
       phrase: string,
-      derivationPathMapOrIndex?: { [chain in Chain]?: DerivationPathArray } | number,
+      derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
 
@@ -101,7 +144,6 @@ export const keystoreWallet = createWallet({
 
       return true;
     },
-  // Keystore holds the private key — direct signing works for every supported chain.
   directSigningSupport: {
     ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
     ...Object.fromEntries(UTXOChains.map((chain) => [chain, true])),
@@ -126,7 +168,6 @@ export const keystoreWallet = createWallet({
     Chain.Aleo,
     Chain.Aptos,
     Chain.Cardano,
-    Chain.Hype,
     Chain.Ripple,
     Chain.Solana,
     Chain.Stellar,
@@ -134,6 +175,7 @@ export const keystoreWallet = createWallet({
     Chain.Ton,
     Chain.Tron,
     Chain.Near,
+    Chain.Hype,
   ],
   walletType: WalletOption.KEYSTORE,
 });
@@ -147,36 +189,50 @@ export async function createKeystoreWallet<T extends Chain[]>({
 }: {
   chains: T;
   phrase: string;
-  derivationPathMapOrIndex?: { [chain in Chain]?: DerivationPathArray } | number;
+  derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex;
 }) {
-  const filteredChains = filterSupportedChains({
+  const supportedChains = filterSupportedChains({
     chains,
     supportedChains: KEYSTORE_SUPPORTED_CHAINS,
     walletType: WalletOption.KEYSTORE,
   });
 
-  // One broken chain derivation must not fail the whole connect — collect per-chain
-  // results and only reject when every requested chain failed.
-  const settled = await Promise.allSettled(
-    filteredChains.map(async (chain) => {
+  const walletIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
+  const walletResults = await Promise.allSettled(
+    supportedChains.map(async (chain) => {
       const { getToolbox } = await import("@swapkit/toolboxes");
 
-      const derivationPathIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
-      const derivationPathFromMap =
+      const { derivationPath: derivationPathFromMap, scriptType } = readChainDerivation(
+        chain,
         derivationPathMapOrIndex && typeof derivationPathMapOrIndex === "object"
-          ? derivationPathMapOrIndex[chain]
-          : undefined;
+          ? (derivationPathMapOrIndex[chain] as KeystoreChainDerivation | undefined)
+          : undefined,
+      );
 
-      // Solana and Aleo use 4-element hardened paths; everything else uses 5.
-      const derivationArrayToUpdate = NetworkDerivationPath[chain].slice(
+      // `.slice` widens the frozen tuple to a plain array, so the shape has to be re-asserted.
+      const slicedPath: readonly (number | undefined)[] = NetworkDerivationPath[chain].slice(
         0,
         chain === Chain.Solana || chain === Chain.Aleo ? 4 : 5,
-      ) as unknown as DerivationPathArray;
+      );
+      const derivationArrayToUpdate = slicedPath as DerivationPathArray;
+
+      const derivationSlots = ACCOUNT_INDEXED_CHAINS.includes(chain)
+        ? { account: walletIndex }
+        : { index: walletIndex };
 
       const derivationPath: DerivationPathArray =
-        derivationPathFromMap || updateDerivationPath(derivationArrayToUpdate, { index: derivationPathIndex });
+        derivationPathFromMap || updateDerivationPath(derivationArrayToUpdate, derivationSlots);
 
-      const toolbox = await getToolbox(chain, { derivationPath, phrase });
+      const resolvedScriptType = UTXOChains.includes(chain as UTXOChain)
+        ? (scriptType ?? getUTXOScriptTypeForPath(derivationPath))
+        : undefined;
+
+      // Pass the resolved path only — toolboxes must never receive path and index together.
+      const toolbox = await getToolbox(chain, {
+        derivationPath,
+        phrase,
+        ...(resolvedScriptType ? { scriptType: resolvedScriptType } : {}),
+      });
       const address = (await toolbox.getAddress()) || "";
 
       const hdWalletMethods =
@@ -190,17 +246,20 @@ export async function createKeystoreWallet<T extends Chain[]>({
     }),
   );
 
-  const wallets = settled.filter((result) => result.status === "fulfilled").map((result) => result.value);
-  const failures = settled.filter((result) => result.status === "rejected");
+  const wallets = walletResults.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+  const firstResult = walletResults[0];
 
-  if (wallets.length === 0 && failures.length > 0) {
-    throw failures[0]?.reason;
-  }
+  if (wallets.length === 0 && firstResult?.status === "rejected") throw firstResult.reason;
 
-  for (const [index, result] of settled.entries()) {
-    if (result.status === "rejected") {
-      console.error(`connectKeystore: skipping ${filteredChains[index]} — derivation failed`, result.reason);
+  for (const [index, result] of walletResults.entries()) {
+    if (result.status !== "rejected") continue;
+
+    const errorKey = (result.reason as { errorKey?: string } | undefined)?.errorKey;
+    if (errorKey && deterministicErrorKeys.has(errorKey)) {
+      throw result.reason;
     }
+
+    console.error(`connectKeystore: skipping ${supportedChains[index]} — failed to connect`, result.reason);
   }
 
   return wallets.reduce(
@@ -208,6 +267,6 @@ export async function createKeystoreWallet<T extends Chain[]>({
       acc[wallet.chain as T[number]] = wallet as FullWallet[T[number]];
       return acc;
     },
-    {} as { [key in T[number]]: FullWallet[key] },
+    {} as Partial<{ [key in T[number]]: FullWallet[key] }>,
   );
 }
