@@ -48,7 +48,6 @@ export async function utxoWalletMethods({
   const scriptType = [Chain.Bitcoin, Chain.Litecoin].includes(chain as typeof Chain.Bitcoin)
     ? ("p2wpkh" as const)
     : ("p2pkh" as const);
-  // KeepKey encodes the address by chain, whatever the path's purpose; the toolbox must use the same type.
   // This might not work for BCH
   const toolbox = await getUtxoToolbox(chain, {
     scriptType: scriptType === "p2wpkh" ? UTXOScriptType.P2WPKH : UTXOScriptType.P2PKH,

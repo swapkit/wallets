@@ -209,7 +209,6 @@ export async function createKeystoreWallet<T extends Chain[]>({
           : undefined,
       );
 
-      // `.slice` widens the frozen tuple to a plain array, so the shape has to be re-asserted.
       const slicedPath: readonly (number | undefined)[] = NetworkDerivationPath[chain].slice(
         0,
         chain === Chain.Solana || chain === Chain.Aleo ? 4 : 5,
@@ -227,7 +226,6 @@ export async function createKeystoreWallet<T extends Chain[]>({
         ? (scriptType ?? getUTXOScriptTypeForPath(derivationPath))
         : undefined;
 
-      // Pass the resolved path only — toolboxes must never receive path and index together.
       const toolbox = await getToolbox(chain, {
         derivationPath,
         phrase,

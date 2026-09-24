@@ -18,7 +18,6 @@ describe("keystore UTXO script types", () => {
   test("the default path derives native segwit on Bitcoin and legacy on Dogecoin", async () => {
     const wallets = await createKeystoreWallet({ chains: [Chain.Bitcoin, Chain.Dogecoin], phrase: TEST_PHRASE });
 
-    // BIP84 test vector for m/84'/0'/0'/0/0.
     expect(wallets[Chain.Bitcoin]?.address).toBe("bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu");
     expect(wallets[Chain.Bitcoin]?.scriptType).toBe(UTXOScriptType.P2WPKH);
     expect(wallets[Chain.Dogecoin]?.scriptType).toBe(UTXOScriptType.P2PKH);
@@ -44,7 +43,6 @@ describe("keystore UTXO script types", () => {
       phrase: TEST_PHRASE,
     });
 
-    // BIP86 test vector for m/86'/0'/0'/0/0.
     expect(wallets[Chain.Bitcoin]?.address).toBe("bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr");
     expect(wallets[Chain.Bitcoin]?.scriptType).toBe(UTXOScriptType.P2TR);
   });

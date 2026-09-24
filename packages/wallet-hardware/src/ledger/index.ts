@@ -174,7 +174,6 @@ async function getWalletMethods({
       const signer = await getLedgerClient({ chain, derivationPath, transport });
 
       const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
-      // Ledger signs by the path's wallet format, so the address it returns states the account's script type.
       const scriptType = getScriptTypeForAddress(address, utxoChain);
 
       // V3 toolbox signer:
@@ -196,7 +195,6 @@ async function getWalletMethods({
       if (chain === Chain.Bitcoin) {
         const { BitcoinPsbtLedger } = await import("./clients/utxo-psbt");
         const psbtClient = BitcoinPsbtLedger(derivationPath, transport);
-        // Nested SegWit inputs need the key behind them so the toolbox can attach their redeemScript.
         publicKey = scriptType === UTXOScriptType.P2SH_P2WPKH ? await psbtClient.getPublicKey() : undefined;
         toolboxSigner = { getAddress: psbtClient.getAddress, publicKey, signTransaction: psbtClient.signTransaction };
       } else if (

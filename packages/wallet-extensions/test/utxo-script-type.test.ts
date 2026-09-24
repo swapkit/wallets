@@ -4,7 +4,6 @@ import { getUtxoToolbox } from "@swapkit/toolboxes/utxo";
 
 import { getUtxoScriptTypeParams } from "../src/helpers/utxoScriptType";
 
-// BIP84 / BIP86 / BIP49 / BIP44 vectors for the "abandon … about" phrase.
 const NATIVE_SEGWIT = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu";
 const TAPROOT = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr";
 const NESTED_SEGWIT = "37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf";
