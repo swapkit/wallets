@@ -1,6 +1,6 @@
 ---
-"@swapkit/wallets": minor
-"@swapkit/sdk": minor
+"@swapkit/wallets": major
+"@swapkit/sdk": major
 ---
 
 **The keystore wallet is aligned with `@swapkit/wallet-keystore@6.0.0`.**
