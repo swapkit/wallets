@@ -155,6 +155,15 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
           }
         }
 
+        if (format === "legacy") {
+          for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
+            const input = tx.getInput(inputIndex);
+            if (input.nonWitnessUtxo && input.witnessUtxo) {
+              tx.updateInput(inputIndex, { witnessUtxo: undefined });
+            }
+          }
+        }
+
         const psbtB64 = base64.encode(tx.toPSBT(0));
         const sigs = await app.signPsbt(psbtB64, policy, null);
 
