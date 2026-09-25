@@ -11,6 +11,10 @@ Worked examples in this repo:
   wallet with custom error codes (added via fork PR #111 + #144)
 - `packages/wallets/src/tonconnect/` — connector living directly in
   `@swapkit/wallets`, registry registration only
+- `packages/wallets/src/ledger-wallet-provider/` — connector wrapping a
+  third-party EIP-1193 SDK: it initializes the vendor SDK lazily, picks the
+  provider up over EIP-6963, and fans EIP-1193 requests out between the wallet
+  and the chain's SwapKit RPC
 
 ## Where things live
 
@@ -61,13 +65,13 @@ declare module "@swapkit/helpers" {
     MY_WALLET: "MY_WALLET";
   }
   interface SwapKitErrorRegistry {
-    wallet_my_wallet_not_found: 80201;
+    wallet_my_wallet_not_found: 80301;
   }
 }
 
 registerWalletOption("MY_WALLET", "MY_WALLET");
 registerErrorCodes({
-  wallet_my_wallet_not_found: 80201,
+  wallet_my_wallet_not_found: 80301,
 });
 ```
 
@@ -79,7 +83,8 @@ Rules:
 - Error codes must use the **80000–89999 extension range**. It is reserved by
   convention, not enforced at runtime; first-party codes live outside it and
   collisions throw only when two keys claim the same number. Grep this repo's
-  registers for the next free block (noir-wallet holds 80101–80103).
+  registers for the next free block (noir-wallet holds 80101–80103,
+  ledger-wallet-provider 80201–80203).
 - Registration is idempotent for identical values and throws
   `helpers_invalid_params` on conflicting re-registration, so the module may
   safely load through multiple import paths.
