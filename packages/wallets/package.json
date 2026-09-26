@@ -16,10 +16,10 @@
     "@scure/base": "~2.2.0",
     "@scure/bip39": "~2.2.0",
     "@solana/web3.js": "~1.98.4",
-    "@swapkit/helpers": "^5.4.1",
-    "@swapkit/toolboxes": "^5.4.1",
+    "@swapkit/helpers": "^6.0.0",
+    "@swapkit/toolboxes": "^6.0.0",
     "@swapkit/utxo-signer": "^3.1.0",
-    "@swapkit/wallet-core": "^5.0.8",
+    "@swapkit/wallet-core": "^5.0.10",
     "@swapkit/wallet-extensions": "workspace:*",
     "@swapkit/wallet-hardware": "workspace:*",
     "@ton/core": "~0.63.1",
@@ -239,5 +239,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "4.13.1"
+  "version": "5.0.0"
 }

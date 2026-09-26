@@ -8,6 +8,7 @@ import {
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { getWallets as getStandardWallets } from "@wallet-standard/app";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import type { ExtensionWallet } from "../walletTypes";
 
 export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
@@ -31,9 +32,10 @@ export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
         throw new SwapKitError("wallet_connection_rejected_by_user", error);
       }
     },
-  directSigningSupport: { [Chain.Bitcoin]: true, [Chain.Ethereum]: true, [Chain.Monad]: true, [Chain.Solana]: true },
+  // Bitcoin disabled until Phantom's Wallet Standard integration is reviewed
+  directSigningSupport: { [Chain.Ethereum]: true, [Chain.Monad]: true, [Chain.Solana]: true },
   name: "connectPhantom",
-  supportedChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Monad, Chain.Solana],
+  supportedChains: [Chain.Ethereum, Chain.Monad, Chain.Solana],
   walletType: WalletOption.PHANTOM,
 });
 
@@ -143,7 +145,7 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
       }
 
       const signer = { getAddress: () => Promise.resolve(address), signTransaction };
-      const toolbox = getUtxoToolbox(chain, { signer });
+      const toolbox = getUtxoToolbox(chain, { ...(await getUtxoScriptTypeParams({ address, chain })), signer });
 
       return { ...toolbox, address };
     }

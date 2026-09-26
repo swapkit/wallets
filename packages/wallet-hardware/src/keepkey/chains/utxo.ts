@@ -8,6 +8,7 @@ import {
   type GenericTransferParams,
   SwapKitError,
   type UTXOChain,
+  UTXOScriptType,
 } from "@swapkit/helpers";
 import {
   assertDerivationIndex,
@@ -44,11 +45,13 @@ export async function utxoWalletMethods({
   derivationPath?: DerivationPathArray;
 }): Promise<KeepKeyUTXOWalletMethods> {
   const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
-  // This might not work for BCH
-  const toolbox = await getUtxoToolbox(chain);
   const scriptType = [Chain.Bitcoin, Chain.Litecoin].includes(chain as typeof Chain.Bitcoin)
     ? ("p2wpkh" as const)
     : ("p2pkh" as const);
+  // This might not work for BCH
+  const toolbox = await getUtxoToolbox(chain, {
+    scriptType: scriptType === "p2wpkh" ? UTXOScriptType.P2WPKH : UTXOScriptType.P2PKH,
+  });
 
   const derivationPathString = derivationPath ? derivationPathToString(derivationPath) : `${DerivationPath[chain]}/0`;
 

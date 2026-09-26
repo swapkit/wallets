@@ -10,6 +10,7 @@ import {
   SKConfig,
   SwapKitError,
   type UTXOChain,
+  UTXOScriptType,
   WalletOption,
 } from "@swapkit/helpers";
 import {
@@ -208,11 +209,11 @@ function decodeOpReturnData(script: Uint8Array): string | null {
 function getScriptType(derivationPath: DerivationPathArray) {
   switch (derivationPath[0]) {
     case 84:
-      return { input: "SPENDWITNESS", output: "PAYTOWITNESS" } as const;
+      return { input: "SPENDWITNESS", output: "PAYTOWITNESS", utxo: UTXOScriptType.P2WPKH } as const;
     case 49:
-      return { input: "SPENDP2SHWITNESS", output: "PAYTOP2SHWITNESS" } as const;
+      return { input: "SPENDP2SHWITNESS", output: "PAYTOP2SHWITNESS", utxo: UTXOScriptType.P2SH_P2WPKH } as const;
     case 44:
-      return { input: "SPENDADDRESS", output: "PAYTOADDRESS" } as const;
+      return { input: "SPENDADDRESS", output: "PAYTOADDRESS", utxo: UTXOScriptType.P2PKH } as const;
     default:
       return null;
   }
@@ -690,6 +691,7 @@ async function getTrezorWallet<T extends Chain>({
       }
 
       const resolvedScriptType = scriptType;
+      const toolboxParams = { scriptType: scriptType.utxo };
       const coin = chain.toLowerCase();
 
       const getAddress = async (path: DerivationPathArray = derivationPath) => {
@@ -717,7 +719,7 @@ async function getTrezorWallet<T extends Chain>({
       };
 
       const address = providedAddress ?? (await getAddress());
-      const baseToolbox = getUtxoToolbox(chain);
+      const baseToolbox = getUtxoToolbox(chain, toolboxParams);
 
       const signTransaction = async (tx: Transaction, inputs: UTXOType[], memo = "") => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
@@ -998,7 +1000,7 @@ async function getTrezorWallet<T extends Chain>({
         feeRate?: number;
         feeOptionKey?: (typeof FeeOption)[keyof typeof FeeOption];
       }) => {
-        const toolbox = getUtxoToolbox(chain);
+        const toolbox = getUtxoToolbox(chain, toolboxParams);
         const txFeeRate = feeRate || (await toolbox.getFeeRates())[feeOptionKey || FeeOption.Fast];
 
         const { tx, inputs: selectedInputs } = await toolbox.createTransaction({
@@ -1038,7 +1040,7 @@ async function getTrezorWallet<T extends Chain>({
           });
         }
 
-        const toolbox = getUtxoToolbox(chain);
+        const toolbox = getUtxoToolbox(chain, toolboxParams);
 
         const feeRate = paramFeeRate || (await toolbox.getFeeRates())[feeOptionKey || FeeOption.Fast];
 
@@ -1061,6 +1063,7 @@ async function getTrezorWallet<T extends Chain>({
 
       const toolbox = shouldUseTrezorPsbtSigner(chain)
         ? await getUtxoToolbox(utxoChain, {
+            ...toolboxParams,
             signer: { getAddress: async () => address, signTransaction: signPsbtTransaction },
           })
         : baseToolbox;

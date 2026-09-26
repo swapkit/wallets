@@ -135,6 +135,7 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
         const app = await getAppClient();
         return app.getExtendedPubkey(`m/${normalizeLedgerPath(path)}`);
       },
+      getPublicKey: getLeafPubkey,
       signTransaction: async (tx: Transaction): Promise<Transaction> => {
         const { app, policy, fpr } = await buildPolicy();
         const fingerprintBE = Number.parseInt(fpr, 16) >>> 0;
