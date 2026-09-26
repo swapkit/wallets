@@ -41,7 +41,6 @@ declare global {
     coinbaseWalletExtension: EthereumWindowProvider;
     ethereum: EthereumWindowProvider;
     keplr: Keplr;
-    leap: Keplr;
     trustwallet: EthereumWindowProvider & { ton?: import("./trustwallet").TrustWalletTonProvider };
     phantom: { solana: SolanaProvider };
 
