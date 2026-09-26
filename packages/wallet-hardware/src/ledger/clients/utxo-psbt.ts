@@ -1,12 +1,22 @@
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
 import { HDKey } from "@scure/bip32";
-import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
+import {
+  Chain,
+  type DerivationPathArray,
+  derivationPathToString,
+  getWalletFormatFor,
+  SwapKitError,
+  type UTXOChain,
+} from "@swapkit/helpers";
 import type { Transaction } from "@swapkit/utxo-signer";
 
+import { applyMissingSpendingMetadata } from "../../helpers/psbt";
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
 type SupportedCoin = "bitcoin" | "litecoin";
+
+const UTXO_CHAIN_FOR_COIN: Record<SupportedCoin, UTXOChain> = { bitcoin: Chain.Bitcoin, litecoin: Chain.Litecoin };
 
 type DefaultDescriptorTemplate = "wpkh(@0/**)" | "tr(@0/**)" | "sh(wpkh(@0/**))" | "pkh(@0/**)";
 
@@ -153,6 +163,14 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
               bip32Derivation: [[leafPubkey, { fingerprint: fingerprintBE, path: pathNumbers }]],
             });
           }
+        }
+
+        if (format === "p2sh") {
+          await applyMissingSpendingMetadata({
+            chain: UTXO_CHAIN_FOR_COIN[chain],
+            publicKey: await getLeafPubkey(),
+            tx,
+          });
         }
 
         const psbtB64 = base64.encode(tx.toPSBT(0));
