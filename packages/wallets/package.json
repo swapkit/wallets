@@ -86,12 +86,6 @@
       "require": "./dist/src/cosmostation.cjs",
       "types": "./dist/types/cosmostation.d.ts"
     },
-    "./ctrl": {
-      "bun": "./src/ctrl.ts",
-      "default": "./dist/src/ctrl.js",
-      "require": "./dist/src/ctrl.cjs",
-      "types": "./dist/types/ctrl.d.ts"
-    },
     "./evm-extensions": {
       "bun": "./src/evm-extensions.ts",
       "default": "./dist/src/evm-extensions.js",
@@ -231,21 +225,12 @@
       "types": "./dist/types/xaman/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallets",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/wallets",
-    "type": "git",
-    "url": "git+https://github.com/swapkit/wallets.git"
-  },
+  "publishConfig": { "access": "public" },
+  "repository": { "directory": "packages/wallets", "type": "git", "url": "git+https://github.com/swapkit/wallets.git" },
   "scripts": {
     "build": "bun run ./build.ts",
     "build:clean": "rm -rf dist && bun run ./build.ts",

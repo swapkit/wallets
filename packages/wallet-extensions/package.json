@@ -58,12 +58,6 @@
       "require": "./dist/src/cosmostation/index.cjs",
       "types": "./dist/types/cosmostation/index.d.ts"
     },
-    "./ctrl": {
-      "bun": "./src/ctrl/index.ts",
-      "default": "./dist/src/ctrl/index.js",
-      "require": "./dist/src/ctrl/index.cjs",
-      "types": "./dist/types/ctrl/index.d.ts"
-    },
     "./evm-extensions": {
       "bun": "./src/evm-extensions/index.ts",
       "default": "./dist/src/evm-extensions/index.js",
@@ -149,16 +143,11 @@
       "types": "./dist/types/vultisig/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
     "directory": "packages/wallet-extensions",
     "type": "git",

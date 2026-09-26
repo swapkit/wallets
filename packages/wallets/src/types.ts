@@ -1,7 +1,6 @@
 import { WalletOption } from "@swapkit/helpers";
 import type { bitgetWallet } from "@swapkit/wallet-extensions/bitget";
 import type { cosmostationWallet } from "@swapkit/wallet-extensions/cosmostation";
-import type { ctrlWallet } from "@swapkit/wallet-extensions/ctrl";
 import type { evmWallet } from "@swapkit/wallet-extensions/evm-extensions";
 import type { keepkeyBexWallet } from "@swapkit/wallet-extensions/keepkey-bex";
 import type { keplrWallet } from "@swapkit/wallet-extensions/keplr";
@@ -34,7 +33,6 @@ export type SKWallets = {
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet;
   [WalletOption.COINBASE_WEB]: typeof evmWallet;
   [WalletOption.COSMOSTATION]: typeof cosmostationWallet;
-  [WalletOption.CTRL]: typeof ctrlWallet;
   [WalletOption.EIP6963]: typeof evmWallet;
   [WalletOption.EXODUS]: typeof passkeysWallet;
   [WalletOption.KEEPKEY]: typeof keepkeyWallet;
@@ -112,7 +110,6 @@ export type SKWalletsSupportedChains = {
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet.connectCoinbaseWallet.supportedChains;
   [WalletOption.COINBASE_WEB]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.COSMOSTATION]: typeof cosmostationWallet.connectCosmostation.supportedChains;
-  [WalletOption.CTRL]: typeof ctrlWallet.connectCtrl.supportedChains;
   [WalletOption.EIP6963]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.EXODUS]: typeof passkeysWallet.connectPasskeys.supportedChains;
   [WalletOption.KEEPKEY]: typeof keepkeyWallet.connectKeepkey.supportedChains;

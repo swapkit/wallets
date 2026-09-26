@@ -42,7 +42,7 @@ Create `packages/wallet-extensions/src/<wallet>/index.ts` built around
   translating the decoded transaction back into a send — see
   `extractUtxoTransferIntent` in
   `packages/wallet-extensions/src/helpers/utxoTransferIntent.ts` (Vultisig,
-  Ctrl, KeepKey BEX).
+  KeepKey BEX).
 - If the wallet cannot serve a method the toolbox spread exposes, override it
   with a clear `SwapKitError` throw instead of letting the toolbox default
   fail deep inside signing (see `unsupportedUtxoSignTransaction`).
