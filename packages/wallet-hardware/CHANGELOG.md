@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-hardware
 
+## 5.0.1
+
+### Patch Changes
+
+- [#162](https://github.com/swapkit/wallets/pull/162) [`e29b91f`](https://github.com/swapkit/wallets/commit/e29b91fc24c87391bece3edc6bc485c8c04779d1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Sign Bitcoin and Litecoin swaps from a nested segwit (P2SH-P2WPKH) address on Ledger and Trezor. The API omits `redeemScript` on P2SH-wrapped segwit inputs, which the devices tolerate — they sign such an input without it — but client-side finalization does not, so assembly failed with `inputType: sh without redeemScript` after the user had already confirmed on the device. Both PSBT signers now restore the field, and only on inputs whose scriptPubKey provably matches the redeem script derived from the signing pubkey; anything else is left untouched.
+
 ## 5.0.0
 
 ### Major Changes
