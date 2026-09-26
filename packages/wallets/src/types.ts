@@ -39,7 +39,6 @@ export type SKWallets = {
   [WalletOption.KEEPKEY_BEX]: typeof keepkeyBexWallet;
   [WalletOption.KEPLR]: typeof keplrWallet;
   [WalletOption.KEYSTORE]: typeof keystoreWallet;
-  [WalletOption.LEAP]: typeof keplrWallet;
   [WalletOption.LEDGER]: typeof ledgerWallet;
   [WalletOption.METAMASK]: typeof metamaskWallet;
   [WalletOption.NOIR_WALLET]: typeof noirWallet;
@@ -116,7 +115,6 @@ export type SKWalletsSupportedChains = {
   [WalletOption.KEEPKEY_BEX]: typeof keepkeyBexWallet.connectKeepkeyBex.supportedChains;
   [WalletOption.KEPLR]: typeof keplrWallet.connectKeplr.supportedChains;
   [WalletOption.KEYSTORE]: typeof keystoreWallet.connectKeystore.supportedChains;
-  [WalletOption.LEAP]: typeof keplrWallet.connectKeplr.supportedChains;
   [WalletOption.LEDGER]: typeof ledgerWallet.connectLedger.supportedChains;
   [WalletOption.METAMASK]: typeof metamaskWallet.connectMetamask.supportedChains;
   [WalletOption.NOIR_WALLET]: typeof noirWallet.connectNoirWallet.supportedChains;

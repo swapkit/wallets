@@ -20,11 +20,7 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
       async () => (await import("@swapkit/wallet-extensions/keepkey-bex")).keepkeyBexWallet,
     )
     .with(WalletOption.WALLETCONNECT, async () => (await import("./walletconnect")).walletconnectWallet)
-    .with(
-      WalletOption.KEPLR,
-      WalletOption.LEAP,
-      async () => (await import("@swapkit/wallet-extensions/keplr")).keplrWallet,
-    )
+    .with(WalletOption.KEPLR, async () => (await import("@swapkit/wallet-extensions/keplr")).keplrWallet)
     .with(
       WalletOption.COSMOSTATION,
       async () => (await import("@swapkit/wallet-extensions/cosmostation")).cosmostationWallet,
