@@ -1,5 +1,14 @@
 # @swapkit/sdk
 
+## 5.0.1
+
+### Patch Changes
+
+- [#155](https://github.com/swapkit/wallets/pull/155) [`c515075`](https://github.com/swapkit/wallets/commit/c51507521cb025ada9a859066f94cff907b7a4a8) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Remove the discontinued CTRL (formerly XDEFI) wallet connector, injected-provider types, lazy loader and default SDK registration. The `@swapkit/wallet-extensions/ctrl` and `@swapkit/wallets/ctrl` subpaths, `ctrlWallet`, `connectCtrl` and `CTRL_SUPPORTED_CHAINS` are no longer available. Remove these imports and select a supported wallet instead.
+- [#164](https://github.com/swapkit/wallets/pull/164) [`d43fffe`](https://github.com/swapkit/wallets/commit/d43fffe7942bfa8d1de5d596449ab6cb38cc57dd) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Remove Leap support from the wallet registry, lazy loader and injected provider types. The Keplr connector now accepts only its chain list and connects to Keplr. Integrations must remove Leap from wallet configuration and use a supported wallet instead.
+- [#161](https://github.com/swapkit/wallets/pull/161) [`b1ea87d`](https://github.com/swapkit/wallets/commit/b1ea87d9d9d5cd87443692f7770a9552b09f2c46) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Sign Bitcoin swaps from a legacy address on Ledger. The API attaches both `witnessUtxo` and `nonWitnessUtxo` to every input, and the device reads `witnessUtxo` as a claim that the input is segwit, so a P2PKH input under a `pkh(@0/**)` policy contradicted itself and signing failed with `0x6a80`. The field is now dropped for legacy accounts only; nested segwit still gets both. (via @swapkit/wallets@5.0.1)
+- [#162](https://github.com/swapkit/wallets/pull/162) [`e29b91f`](https://github.com/swapkit/wallets/commit/e29b91fc24c87391bece3edc6bc485c8c04779d1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Sign Bitcoin and Litecoin swaps from a nested segwit (P2SH-P2WPKH) address on Ledger and Trezor. The API omits `redeemScript` on P2SH-wrapped segwit inputs, which the devices tolerate — they sign such an input without it — but client-side finalization does not, so assembly failed with `inputType: sh without redeemScript` after the user had already confirmed on the device. Both PSBT signers now restore the field, and only on inputs whose scriptPubKey provably matches the redeem script derived from the signing pubkey; anything else is left untouched. (via @swapkit/wallets@5.0.1)
+
 ## 5.0.0
 
 ### Major Changes
