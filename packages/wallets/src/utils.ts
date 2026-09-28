@@ -7,10 +7,9 @@ import type { SKWallets } from "./types";
 export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Promise<SKWallets[W]> {
   const { match } = await import("ts-pattern");
 
-  const wallet = await match(walletOption as WalletOption)
+  const wallet = await match(walletOption as keyof SKWallets)
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
     .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
-    .with(WalletOption.CTRL, async () => (await import("@swapkit/wallet-extensions/ctrl")).ctrlWallet)
     .with(WalletOption.VULTISIG, async () => (await import("@swapkit/wallet-extensions/vultisig")).vultisigWallet)
     .with(WalletOption.OKX, async () => (await import("@swapkit/wallet-extensions/okx")).okxWallet)
     .with(WalletOption.ONEKEY, async () => (await import("@swapkit/wallet-extensions/onekey")).onekeyWallet)
@@ -21,11 +20,7 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
       async () => (await import("@swapkit/wallet-extensions/keepkey-bex")).keepkeyBexWallet,
     )
     .with(WalletOption.WALLETCONNECT, async () => (await import("./walletconnect")).walletconnectWallet)
-    .with(
-      WalletOption.KEPLR,
-      WalletOption.LEAP,
-      async () => (await import("@swapkit/wallet-extensions/keplr")).keplrWallet,
-    )
+    .with(WalletOption.KEPLR, async () => (await import("@swapkit/wallet-extensions/keplr")).keplrWallet)
     .with(
       WalletOption.COSMOSTATION,
       async () => (await import("@swapkit/wallet-extensions/cosmostation")).cosmostationWallet,

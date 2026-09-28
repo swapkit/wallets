@@ -27,6 +27,8 @@ import type { BTCNetwork, PCZT, Transaction, ZcashPSBT, ZcashTransaction } from 
 import { BCHSigHash, NETWORKS, ZcashVersionGroupId } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
 
+import { applyMissingSpendingMetadata } from "../helpers/psbt";
+
 type TrezorBip32Derivation = [Uint8Array, { fingerprint: number; path: number[] }];
 type TrezorCoreMode = "auto" | "iframe" | "popup" | "suite-desktop" | "suite-web";
 type TrezorTransport = "BridgeTransport" | "WebUsbTransport" | "NodeUsbTransport";
@@ -811,6 +813,8 @@ async function getTrezorWallet<T extends Chain>({
           if (!existingDerivation) {
             tx.updateInput(inputIndex, { bip32Derivation: [derivation] });
           }
+
+          await applyMissingSpendingMetadata({ chain: utxoChain, indexes: [inputIndex], publicKey: derivation[0], tx });
 
           trezorInputs.push({
             address_n: derivation[1].path,

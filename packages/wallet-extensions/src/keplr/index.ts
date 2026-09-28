@@ -5,19 +5,11 @@ import { chainRegistry } from "./chainRegistry";
 
 const keplrSupportedChainIds = [ChainId.Cosmos, ChainId.Kujira, ChainId.Noble, ChainId.THORChain] as const;
 
-export const keplrWallet: ExtensionWallet<
-  "connectKeplr",
-  Chain[],
-  [chains: Chain[], walletType?: typeof WalletOption.KEPLR | typeof WalletOption.LEAP]
-> = createWallet({
-  connect: ({ addChain, supportedChains }) =>
-    async function connectKeplr(
-      chains: Chain[],
-      walletType: typeof WalletOption.KEPLR | typeof WalletOption.LEAP = WalletOption.KEPLR,
-    ) {
-      const extensionKey = walletType === WalletOption.LEAP ? "leap" : "keplr";
+export const keplrWallet: ExtensionWallet<"connectKeplr"> = createWallet({
+  connect: ({ addChain, supportedChains, walletType }) =>
+    async function connectKeplr(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
-      const keplrClient = window[extensionKey];
+      const keplrClient = window.keplr;
 
       await Promise.all(
         filteredChains.map(async (chain) => {
@@ -51,6 +43,7 @@ export const keplrWallet: ExtensionWallet<
   directSigningSupport: { [Chain.Cosmos]: true, [Chain.Kujira]: true, [Chain.Noble]: true, [Chain.THORChain]: true },
   name: "connectKeplr",
   supportedChains: [Chain.Cosmos, Chain.Kujira, Chain.Noble, Chain.THORChain],
+  walletType: WalletOption.KEPLR,
 });
 
 export const KEPLR_SUPPORTED_CHAINS = getWalletSupportedChains(keplrWallet);
