@@ -53,6 +53,16 @@ function pathToNumberArray(path: string): number[] {
     });
 }
 
+function dropWitnessUtxoFromLegacyInputs(tx: Transaction) {
+  for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
+    const input = tx.getInput(inputIndex);
+
+    if (input.nonWitnessUtxo && input.witnessUtxo) {
+      tx.updateInput(inputIndex, { witnessUtxo: undefined });
+    }
+  }
+}
+
 function hasBip32Derivation(tx: Transaction, inputIndex: number) {
   const input = tx.getInput(inputIndex) as { bip32Derivation?: Array<unknown> };
 
@@ -163,6 +173,10 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
               bip32Derivation: [[leafPubkey, { fingerprint: fingerprintBE, path: pathNumbers }]],
             });
           }
+        }
+
+        if (format === "legacy") {
+          dropWitnessUtxoFromLegacyInputs(tx);
         }
 
         if (format === "p2sh") {
