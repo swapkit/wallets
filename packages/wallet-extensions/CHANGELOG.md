@@ -1,5 +1,13 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.6.4
+
+### Patch Changes
+
+- [#155](https://github.com/swapkit/wallets/pull/155) [`c515075`](https://github.com/swapkit/wallets/commit/c51507521cb025ada9a859066f94cff907b7a4a8) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Remove the discontinued CTRL (formerly XDEFI) wallet connector, injected-provider types, lazy loader and default SDK registration. The `@swapkit/wallet-extensions/ctrl` and `@swapkit/wallets/ctrl` subpaths, `ctrlWallet`, `connectCtrl` and `CTRL_SUPPORTED_CHAINS` are no longer available. Remove these imports and select a supported wallet instead.
+
+- [#164](https://github.com/swapkit/wallets/pull/164) [`d43fffe`](https://github.com/swapkit/wallets/commit/d43fffe7942bfa8d1de5d596449ab6cb38cc57dd) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Remove Leap support from the wallet registry, lazy loader and injected provider types. The Keplr connector now accepts only its chain list and connects to Keplr. Integrations must remove Leap from wallet configuration and use a supported wallet instead.
+
 ## 4.6.3
 
 ### Patch Changes
