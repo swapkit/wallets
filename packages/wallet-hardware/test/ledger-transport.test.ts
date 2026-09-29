@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import * as realContextModule from "@ledgerhq/context-module";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
-import { Chain, WalletOption } from "@swapkit/helpers";
+import { Chain, UTXOScriptType, WalletOption } from "@swapkit/helpers";
 import { hexlify, Signature, Transaction } from "ethers";
 import { of } from "rxjs";
 
@@ -483,6 +483,23 @@ describe("wallet-hardware/ledger", () => {
       { path: "m/84'/2'/0'", xpubVersion: 27108450 },
       { path: "44'/133'/0'", xpubVersion: 76067358 },
     ]);
+  });
+
+  it.each([
+    [Chain.Bitcoin, [44, 0, 0, 0, 0], UTXOScriptType.P2PKH],
+    [Chain.Bitcoin, [84, 0, 0, 0, 0], UTXOScriptType.P2WPKH],
+    [Chain.Litecoin, [84, 2, 0, 0, 0], UTXOScriptType.P2WPKH],
+    [Chain.BitcoinCash, [44, 145, 0, 0, 0], UTXOScriptType.P2PKH],
+  ] as const)("connectLedger: reports the script type of a %s %p account", async (chain, derivationPath, scriptType) => {
+    const addChain = mock((_wallet: { scriptType?: UTXOScriptType }) => {});
+    const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain: addChain as never });
+
+    await connectLedger([chain], [...derivationPath] as never, {
+      address: "provided-ledger-address",
+      transport: { id: chain } as unknown as Transport,
+    });
+
+    expect(addChain.mock.calls[0]?.[0]?.scriptType).toBe(scriptType);
   });
 
   it("connectLedger: routes EVM chains through the EVM wallet methods", async () => {
