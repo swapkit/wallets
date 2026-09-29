@@ -2,11 +2,11 @@
  * NEAR Browser Wallet Provider Interface Definitions
  *
  * This file contains the standard TypeScript interface definitions for NEAR browser wallet providers
- * that inject themselves into the window object (e.g., OKX, XDEFI/CTRL, etc.)
+ * that inject themselves into the window object (e.g., OKX)
  *
  * Based on:
  * - NEAR Protocol wallet-selector library
- * - Common patterns from OKX, XDEFI/CTRL, and other NEAR wallet implementations
+ * - Common patterns from OKX and other NEAR wallet implementations
  * - NEAR API JS types
  */
 
@@ -228,8 +228,6 @@ export interface NearBrowserWalletProvider {
    * Check if this is a specific wallet (used for wallet detection)
    */
   isOKX?: boolean;
-  isXDEFI?: boolean;
-  isCTRL?: boolean;
 
   // Event Handling (not all wallets support events)
   on?(event: "accountsChanged" | "networkChanged" | "disconnect", handler: (...args: any[]) => void): void;
@@ -248,8 +246,6 @@ declare global {
     // Specific wallet providers
     okxwallet?: { near: NearBrowserWalletProvider };
 
-    ctrl?: { near: NearBrowserWalletProvider };
-
     // Add other wallet-specific providers as needed
   }
 }
@@ -257,7 +253,7 @@ declare global {
 /**
  * Helper type for wallet detection
  */
-export type NearWalletType = "okx" | "xdefi" | "ctrl" | "generic";
+export type NearWalletType = "okx" | "generic";
 
 /**
  * Configuration for NEAR network

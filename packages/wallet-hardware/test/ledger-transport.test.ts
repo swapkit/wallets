@@ -20,7 +20,7 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
     constructor(opts: { currency: string; transport: unknown }) {
       bitcoinAppInvocations.push(opts);
     }
-    getWalletPublicKey = async () => ({ bitcoinAddress: "ltc1qtestaddress" });
+    getWalletPublicKey = async () => ({ bitcoinAddress: "ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh" });
     getWalletXpub = ({ path, xpubVersion }: { path: string; xpubVersion?: number }) => {
       bitcoinAppXpubInvocations.push({ path, xpubVersion });
       return "Ltub2SSUS19CirucV6jZg6pTzmtZtxhX1JZJYK7Uq16czQkfFb5m1zf6KV24enP679G9gYHDBYSjbgHn6CJK7VTqDEEnRSsUgJGQWhhmLQV5foV";

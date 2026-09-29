@@ -1,12 +1,22 @@
 import type Transport from "@ledgerhq/hw-transport";
 import { base64 } from "@scure/base";
 import { HDKey } from "@scure/bip32";
-import { type DerivationPathArray, derivationPathToString, getWalletFormatFor, SwapKitError } from "@swapkit/helpers";
+import {
+  Chain,
+  type DerivationPathArray,
+  derivationPathToString,
+  getWalletFormatFor,
+  SwapKitError,
+  type UTXOChain,
+} from "@swapkit/helpers";
 import type { Transaction } from "@swapkit/utxo-signer";
 
+import { applyMissingSpendingMetadata } from "../../helpers/psbt";
 import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
 type SupportedCoin = "bitcoin" | "litecoin";
+
+const UTXO_CHAIN_FOR_COIN: Record<SupportedCoin, UTXOChain> = { bitcoin: Chain.Bitcoin, litecoin: Chain.Litecoin };
 
 type DefaultDescriptorTemplate = "wpkh(@0/**)" | "tr(@0/**)" | "sh(wpkh(@0/**))" | "pkh(@0/**)";
 
@@ -41,6 +51,16 @@ function pathToNumberArray(path: string): number[] {
       const num = Number.parseInt(hardened ? p.slice(0, -1) : p, 10);
       return hardened ? (num | 0x80000000) >>> 0 : num;
     });
+}
+
+function dropWitnessUtxoFromLegacyInputs(tx: Transaction) {
+  for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
+    const input = tx.getInput(inputIndex);
+
+    if (input.nonWitnessUtxo && input.witnessUtxo) {
+      tx.updateInput(inputIndex, { witnessUtxo: undefined });
+    }
+  }
 }
 
 function hasBip32Derivation(tx: Transaction, inputIndex: number) {
@@ -135,6 +155,7 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
         const app = await getAppClient();
         return app.getExtendedPubkey(`m/${normalizeLedgerPath(path)}`);
       },
+      getPublicKey: getLeafPubkey,
       signTransaction: async (tx: Transaction): Promise<Transaction> => {
         const { app, policy, fpr } = await buildPolicy();
         const fingerprintBE = Number.parseInt(fpr, 16) >>> 0;
@@ -152,6 +173,18 @@ const BaseLedgerPsbtUTXO = ({ chain }: { chain: SupportedCoin }) => {
               bip32Derivation: [[leafPubkey, { fingerprint: fingerprintBE, path: pathNumbers }]],
             });
           }
+        }
+
+        if (format === "legacy") {
+          dropWitnessUtxoFromLegacyInputs(tx);
+        }
+
+        if (format === "p2sh") {
+          await applyMissingSpendingMetadata({
+            chain: UTXO_CHAIN_FOR_COIN[chain],
+            publicKey: await getLeafPubkey(),
+            tx,
+          });
         }
 
         const psbtB64 = base64.encode(tx.toPSBT(0));

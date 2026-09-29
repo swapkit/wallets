@@ -3,6 +3,7 @@ import { Chain, filterSupportedChains, prepareNetworkSwitch, SwapKitError, Walle
 import { Transaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { BitcoinProvider, GetAddressOptions, GetAddressResponse, SignTransactionOptions } from "sats-connect";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import type { ExtensionWallet } from "../walletTypes";
 
 async function getWalletMethodsForExtension(chain: Chain) {
@@ -73,7 +74,7 @@ async function getWalletMethodsForExtension(chain: Chain) {
 
       const signer = { getAddress: () => Promise.resolve(address), signTransaction };
 
-      const toolbox = await getUtxoToolbox(chain, { signer });
+      const toolbox = await getUtxoToolbox(chain, { ...(await getUtxoScriptTypeParams({ address, chain })), signer });
 
       return { ...toolbox, address };
     }

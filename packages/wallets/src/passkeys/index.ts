@@ -36,7 +36,7 @@ async function getPasskeyWallet() {
 function getWalletMethods({ wallet, chain: paramChain }: { wallet: Wallet; chain: Chain }) {
   return match(paramChain)
     .with(Chain.Bitcoin, async (chain) => {
-      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
+      const { getScriptTypeForAddress, getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       const provider = await wallet.getProvider("bitcoin");
 
       if (!provider) {
@@ -95,7 +95,7 @@ function getWalletMethods({ wallet, chain: paramChain }: { wallet: Wallet; chain
       }
 
       const signer = { getAddress: () => Promise.resolve(address), signTransaction };
-      const toolbox = await getUtxoToolbox(chain, { signer });
+      const toolbox = await getUtxoToolbox(chain, { scriptType: getScriptTypeForAddress(address, chain), signer });
 
       return { ...toolbox, address };
     })

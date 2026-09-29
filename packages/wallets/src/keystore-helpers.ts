@@ -1,6 +1,9 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { generateMnemonic, validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { SwapKitError } from "@swapkit/helpers";
+
+export type PhraseWordCount = 12 | 15 | 18 | 21 | 24;
 
 export type Keystore = {
   version: number;
@@ -52,8 +55,25 @@ export async function encryptToKeyStore(phrase: string, password: string) {
   };
 }
 
-export function generatePhrase(size: 12 | 24 = 12) {
-  return generateMnemonic(wordlist, size === 12 ? 128 : 256);
+export function generatePhrase(wordCount: PhraseWordCount = 24) {
+  if (![12, 15, 18, 21, 24].includes(wordCount)) {
+    throw new SwapKitError("wallet_keystore_invalid_word_count", { wordCount });
+  }
+
+  return generateMnemonic(wordlist, (wordCount / 3) * 32);
+}
+
+export async function generateKeystore({
+  password,
+  wordCount = 24,
+}: {
+  password: string;
+  wordCount?: PhraseWordCount;
+}) {
+  const phrase = generatePhrase(wordCount);
+  const keystore = await encryptToKeyStore(phrase, password);
+
+  return { keystore, phrase };
 }
 
 export function validatePhrase(phrase: string) {
@@ -61,8 +81,6 @@ export function validatePhrase(phrase: string) {
 }
 
 export async function decryptFromKeystore(keystore: Keystore, password: string) {
-  const { SwapKitError } = await import("@swapkit/helpers");
-
   switch (keystore.version) {
     case 1: {
       const kdfParams = keystore.crypto.kdfparams;

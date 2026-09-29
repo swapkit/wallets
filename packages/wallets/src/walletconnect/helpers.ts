@@ -1,4 +1,4 @@
-import { Chain, type CosmosChain, type EVMChain, SKConfig } from "@swapkit/helpers";
+import { Chain, type CosmosChain, type EVMChain } from "@swapkit/helpers";
 
 import {
   ARBITRUM_ONE_MAINNET_ID,
@@ -13,7 +13,6 @@ import {
   MAYACHAIN_MAINNET_ID,
   MONAD_MAINNET_ID,
   NEAR_MAINNET_ID,
-  NEAR_TESTNET_ID,
   OPTIMISM_MAINNET_ID,
   POLYGON_MAINNET_ID,
   THORCHAIN_MAINNET_ID,
@@ -61,11 +60,8 @@ export const chainToChainId = (chain: Chain) => {
       return COSMOS_HUB_MAINNET_ID;
     case Chain.Kujira:
       return KUJIRA_MAINNET_ID;
-    case Chain.Near: {
-      // Use testnet if stagenet is enabled
-      const { isStagenet } = SKConfig.get("envs");
-      return isStagenet ? NEAR_TESTNET_ID : NEAR_MAINNET_ID;
-    }
+    case Chain.Near:
+      return NEAR_MAINNET_ID;
     case Chain.Tron:
       return TRON_MAINNET_ID;
     case Chain.XLayer:

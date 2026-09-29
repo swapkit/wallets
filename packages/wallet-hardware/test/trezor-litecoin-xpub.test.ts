@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { HDKey } from "@scure/bip32";
-import { Chain } from "@swapkit/helpers";
+import { Chain, UTXOScriptType } from "@swapkit/helpers";
 import { deriveAddressesFromXpub } from "@swapkit/toolboxes/utxo";
 import {
   createPCZT,
@@ -107,7 +107,13 @@ describe("Trezor wallet handling", () => {
     const bitcoinVersionAccountXpub = HDKey.fromMasterSeed(seed).derive("m/84'/2'/0'").publicExtendedKey;
 
     expect(() =>
-      deriveAddressesFromXpub({ accountIndex: 0, chain: Chain.Litecoin, count: 1, xpub: bitcoinVersionAccountXpub }),
+      deriveAddressesFromXpub({
+        accountIndex: 0,
+        chain: Chain.Litecoin,
+        count: 1,
+        scriptType: UTXOScriptType.P2WPKH,
+        xpub: bitcoinVersionAccountXpub,
+      }),
     ).toThrow("Version mismatch");
 
     const litecoinVersionAccountXpub = normalizeTrezorExtendedPublicKey(bitcoinVersionAccountXpub, Chain.Litecoin);
@@ -115,10 +121,13 @@ describe("Trezor wallet handling", () => {
       accountIndex: 0,
       chain: Chain.Litecoin,
       count: 1,
+      purpose: 84,
+      scriptType: UTXOScriptType.P2WPKH,
       xpub: litecoinVersionAccountXpub,
     });
 
-    expect(address?.address).toStartWith("ltc1");
+    expect(address?.address).toStartWith("ltc1q");
+    expect(address?.path).toBe("m/84'/2'/0'/0/0");
   });
 
   it("uses the BCH sighash byte when Trezor returns a bare DER signature", () => {
@@ -137,6 +146,19 @@ describe("Trezor wallet handling", () => {
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dash]).toBe(true);
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dogecoin]).toBe(true);
     expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Zcash]).toBe(true);
+  });
+
+  it.each([
+    [[44, 0, 0, 0, 0], UTXOScriptType.P2PKH],
+    [[49, 0, 0, 0, 0], UTXOScriptType.P2SH_P2WPKH],
+    [[84, 0, 0, 0, 0], UTXOScriptType.P2WPKH],
+  ] as const)("builds the Bitcoin toolbox for %p with the account's script type", async (derivationPath, scriptType) => {
+    const addChain = mock((_wallet: { scriptType?: UTXOScriptType }) => undefined);
+    const connect = trezorWallet.connectTrezor.connectWallet({ addChain: addChain as never });
+
+    await connect([Chain.Bitcoin], [...derivationPath], { address: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu" });
+
+    expect(addChain.mock.calls[0]?.[0]?.scriptType).toBe(scriptType);
   });
 
   it("defaults Trezor Connect coreMode to auto", async () => {

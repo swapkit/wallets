@@ -1,6 +1,7 @@
 import { AssetValue, Chain, ChainId, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
+import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
@@ -112,8 +113,8 @@ async function getWalletMethods(chain: (typeof KEEPKEY_BEX_SUPPORTED_CHAINS)[num
     case Chain.Dogecoin:
     case Chain.Litecoin: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
-      const toolbox = await getUtxoToolbox(chain);
       const address = await getKEEPKEYAddress(chain);
+      const toolbox = await getUtxoToolbox(chain, await getUtxoScriptTypeParams({ address, chain }));
 
       const getBalance = async () => {
         const providerChain = getProviderNameFromChain(chain);
