@@ -187,6 +187,21 @@ async function verifiedSpentOutput({
   return spentOutput;
 }
 
+// The app reads witnessUtxo as a SegWit claim, so a legacy input sent with one (the API attaches it to every
+// input) contradicts the pkh policy and fails with 0x6a80.
+function witnessUtxoUpdate({
+  hasWitnessUtxo,
+  purpose,
+  spentOutput,
+}: {
+  hasWitnessUtxo: boolean;
+  purpose: ParsedBitcoinPath["purpose"];
+  spentOutput: Awaited<ReturnType<typeof verifiedSpentOutput>>;
+}) {
+  if (purpose === 44) return { witnessUtxo: undefined };
+  return hasWitnessUtxo ? {} : { witnessUtxo: spentOutput };
+}
+
 export function BitcoinLedger({
   derivationPath = NetworkDerivationPath.BTC,
   dmkSession,
@@ -358,7 +373,7 @@ export function BitcoinLedger({
         psbt.updateInput(inputIndex, {
           bip32Derivation: [[publicKey, derivation]],
           nonWitnessUtxo: previousTransaction,
-          ...(path.purpose === 44 || input.witnessUtxo ? {} : { witnessUtxo: spentOutput }),
+          ...witnessUtxoUpdate({ hasWitnessUtxo: !!input.witnessUtxo, purpose: path.purpose, spentOutput }),
           ...(path.purpose === 49 && !input.redeemScript ? { redeemScript: p2wpkh(publicKey).script } : {}),
         });
       }

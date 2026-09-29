@@ -421,6 +421,34 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
     expect(extracted.inputsLength).toBe(1);
     expect(extracted.getInput(0).finalScriptWitness?.length).toBe(purpose === 86 ? 1 : 2);
   });
+
+  // The API attaches both witnessUtxo and nonWitnessUtxo to every input.
+  it.each([
+    [44, false],
+    [49, true],
+    [84, true],
+  ] as const)("sends a purpose %i input the API built to the device with witnessUtxo: %p", async (purpose, keepsWitnessUtxo) => {
+    const script = outputScript(purpose, leafKey(0, 0).publicKey);
+    const funding = previousTransaction([script]);
+    const tx = new Transaction({ allowLegacyWitnessUtxo: true, version: 1 });
+    tx.addInput({
+      index: 0,
+      nonWitnessUtxo: hex.decode(funding.txHex),
+      txid: hex.decode(funding.txid),
+      witnessUtxo: { amount: 10_000n, script },
+    });
+    tx.addOutput({ amount: 9_000n, script });
+    const client = BitcoinLedger({ derivationPath: `${purpose}'/0'/0'/0/0`, dmkSession });
+
+    const signed = await client.signTransaction(tx);
+    const deviceInput = Transaction.fromPSBT(signCalls[0]?.psbt ?? new Uint8Array(), {
+      allowLegacyWitnessUtxo: true,
+    }).getInput(0);
+
+    expect(deviceInput.nonWitnessUtxo).toBeDefined();
+    expect(deviceInput.witnessUtxo !== undefined).toBe(keepsWitnessUtxo);
+    expect(() => signed.finalize()).not.toThrow();
+  });
 });
 
 afterAll(() => {
