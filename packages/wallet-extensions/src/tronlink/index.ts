@@ -1,7 +1,7 @@
-import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
+import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { ExtensionWallet } from "../walletTypes";
-import { getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
+import { getEvmWalletForChain, getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
 
 export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
@@ -9,8 +9,19 @@ export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
 
       if (filteredChains.length === 0) {
-        throw new Error("TronLink wallet only supports Tron chain");
+        throw new SwapKitError("wallet_chain_not_supported", { chain: chains.join(", "), wallet: walletType });
       }
+
+      const evmChains = filteredChains.filter(
+        (chain): chain is Chain.Ethereum | Chain.BinanceSmartChain => chain !== Chain.Tron,
+      );
+
+      for (const chain of evmChains) {
+        const walletMethods = await getEvmWalletForChain(chain);
+        addChain({ ...walletMethods, chain, walletType });
+      }
+
+      if (!filteredChains.includes(Chain.Tron)) return true;
 
       const expectedNetwork = getExpectedTronNetwork(false);
 
@@ -39,9 +50,9 @@ export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
 
       return true;
     },
-  directSigningSupport: { [Chain.Tron]: true },
+  directSigningSupport: { [Chain.BinanceSmartChain]: true, [Chain.Ethereum]: true, [Chain.Tron]: true },
   name: "connectTronLink",
-  supportedChains: [Chain.Tron],
+  supportedChains: [Chain.Tron, Chain.Ethereum, Chain.BinanceSmartChain],
   walletType: WalletOption.TRONLINK,
 });
 

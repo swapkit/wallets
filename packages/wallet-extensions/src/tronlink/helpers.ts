@@ -1,9 +1,18 @@
-import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
+import {
+  Chain,
+  type EVMChain,
+  getEIP6963Wallets,
+  prepareNetworkSwitch,
+  SwapKitError,
+  WalletOption,
+} from "@swapkit/helpers";
 import { getTronToolbox, type TronTransaction } from "@swapkit/toolboxes/tron";
 import type { TronLinkWindow } from "./types.js";
 import { TronLinkResponseCode } from "./types.js";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
+
+const TRONLINK_EIP6963_RDNS = "org.tronlink.www";
 
 export function waitForTronLink(timeout = 3000): Promise<TronLinkWindow> {
   return new Promise((resolve, reject) => {
@@ -97,6 +106,39 @@ export async function getWalletForChain(chain: Chain, expectedNetwork?: string):
   const toolbox = getTronToolbox({ signer });
 
   return { ...toolbox, address };
+}
+
+function getTronLinkEvmProvider() {
+  const { providers, removeEIP6963EventListener } = getEIP6963Wallets();
+  removeEIP6963EventListener();
+
+  const tronLinkProvider = providers.find(
+    ({ info }) => ((info as { rdns?: string }).rdns ?? info.walletId) === TRONLINK_EIP6963_RDNS,
+  );
+
+  if (!tronLinkProvider) {
+    throw new SwapKitError("wallet_provider_not_found", { wallet: WalletOption.TRONLINK });
+  }
+
+  return tronLinkProvider.provider;
+}
+
+export async function getEvmWalletForChain(chain: EVMChain) {
+  const { BrowserProvider } = await import("ethers");
+  const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
+
+  const provider = new BrowserProvider(getTronLinkEvmProvider(), "any");
+  await provider.send("eth_requestAccounts", []);
+
+  const signer = await provider.getSigner();
+  const address = await signer.getAddress();
+  const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
+
+  return prepareNetworkSwitch({
+    chain,
+    provider,
+    toolbox: { ...toolbox, address, getBalance: () => toolbox.getBalance(address) },
+  });
 }
 
 export function setupEventListeners(
