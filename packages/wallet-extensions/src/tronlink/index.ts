@@ -1,7 +1,8 @@
 import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { getWeb3WalletMethods } from "../evm-extensions";
 import type { ExtensionWallet } from "../walletTypes";
-import { getEvmWalletForChain, getExpectedTronNetwork, getWalletForChain, setupEventListeners } from "./helpers.js";
+import { getExpectedTronNetwork, getTronLinkEvmProvider, getWalletForChain, setupEventListeners } from "./helpers.js";
 
 export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
@@ -16,9 +17,18 @@ export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
         (chain): chain is Chain.Ethereum | Chain.BinanceSmartChain => chain !== Chain.Tron,
       );
 
-      for (const chain of evmChains) {
-        const walletMethods = await getEvmWalletForChain(chain);
-        addChain({ ...walletMethods, chain, walletType });
+      if (evmChains.length > 0) {
+        const { BrowserProvider } = await import("ethers");
+        const walletProvider = getTronLinkEvmProvider();
+        const provider = new BrowserProvider(walletProvider, "any");
+
+        await provider.send("eth_requestAccounts", []);
+        const address = await (await provider.getSigner()).getAddress();
+
+        for (const chain of evmChains) {
+          const walletMethods = await getWeb3WalletMethods({ address, chain, provider, walletProvider });
+          addChain({ ...walletMethods, address, chain, walletType });
+        }
       }
 
       if (!filteredChains.includes(Chain.Tron)) return true;
