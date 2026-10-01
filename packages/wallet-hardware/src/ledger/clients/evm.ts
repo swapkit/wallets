@@ -135,7 +135,7 @@ class EVMLedgerInterface extends AbstractSigner {
     const ledgerSigner = await this.getLedgerSigner();
 
     return executeLedgerDeviceAction({
-      action: ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId) }),
+      action: () => ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId) }),
       onDeviceActionState: this.onDeviceActionState,
     });
   };
@@ -144,19 +144,18 @@ class EVMLedgerInterface extends AbstractSigner {
     const ledgerSigner = await this.getLedgerSigner();
 
     return executeLedgerDeviceAction({
-      action: ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId), checkOnDevice: true }),
+      action: () =>
+        ledgerSigner.getAddress(this.derivationPath, { chainId: Number(this.chainId), checkOnDevice: true }),
       onDeviceActionState: this.onDeviceActionState,
     });
   };
 
   signMessage = async (message: string | Uint8Array) => {
     const { Signature, toUtf8Bytes } = await import("ethers");
+    const messageBytes = typeof message === "string" ? toUtf8Bytes(message) : message;
     const ledgerSigner = await this.getLedgerSigner();
     const signature = await executeLedgerDeviceAction({
-      action: ledgerSigner.signMessage(
-        this.derivationPath,
-        typeof message === "string" ? toUtf8Bytes(message) : message,
-      ),
+      action: () => ledgerSigner.signMessage(this.derivationPath, messageBytes),
       onDeviceActionState: this.onDeviceActionState,
     });
 
@@ -193,16 +192,18 @@ class EVMLedgerInterface extends AbstractSigner {
       ...(populated.domain.version != null && { version: populated.domain.version }),
     } satisfies LedgerTypedDataDomain;
 
+    const typedData = {
+      domain: ledgerDomain,
+      message: populated.value,
+      primaryType,
+      // Only the primary type and its dependencies: the signer kit's legacy fallback hashes with ethers,
+      // which rejects unused types.
+      types: { EIP712Domain: buildEIP712DomainType(populated.domain), ...resolutionTypes },
+    };
+
     const ledgerSigner = await this.getLedgerSigner();
     const signature = await executeLedgerDeviceAction({
-      action: ledgerSigner.signTypedData(this.derivationPath, {
-        domain: ledgerDomain,
-        message: populated.value,
-        primaryType,
-        // Only the primary type and its dependencies: the signer kit's legacy fallback hashes with ethers,
-        // which rejects unused types.
-        types: { EIP712Domain: buildEIP712DomainType(populated.domain), ...resolutionTypes },
-      }),
+      action: () => ledgerSigner.signTypedData(this.derivationPath, typedData),
       onDeviceActionState: this.onDeviceActionState,
     });
 
@@ -261,7 +262,7 @@ class EVMLedgerInterface extends AbstractSigner {
     const unsignedTransaction = getBytes(baseTx.unsignedSerialized);
     const ledgerSigner = await this.getLedgerSigner();
     const signature = await executeLedgerDeviceAction({
-      action: ledgerSigner.signTransaction(this.derivationPath, unsignedTransaction),
+      action: () => ledgerSigner.signTransaction(this.derivationPath, unsignedTransaction),
       onDeviceActionState: this.onDeviceActionState,
     });
 

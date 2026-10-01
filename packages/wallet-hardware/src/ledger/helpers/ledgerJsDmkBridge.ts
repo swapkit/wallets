@@ -93,7 +93,7 @@ export async function runLedgerJsOperation<App, Output>({
   });
 
   const result = await executeLedgerDeviceAction({
-    action: session.dmk.executeDeviceAction({ deviceAction, sessionId: session.sessionId }),
+    action: () => session.dmk.executeDeviceAction({ deviceAction, sessionId: session.sessionId }),
     onDeviceActionState,
   });
 

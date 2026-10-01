@@ -194,7 +194,7 @@ export class THORChainLedger {
     });
 
     const result = await executeLedgerDeviceAction({
-      action: dmkSession.dmk.executeDeviceAction({ deviceAction, sessionId: dmkSession.sessionId }),
+      action: () => dmkSession.dmk.executeDeviceAction({ deviceAction, sessionId: dmkSession.sessionId }),
       onDeviceActionState: this.onDeviceActionState,
       userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });

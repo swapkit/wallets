@@ -1,8 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest, mock } from "bun:test";
 import * as ledgerDMKModule from "@ledgerhq/device-management-kit";
+import * as signerKitEthereumModule from "@ledgerhq/device-signer-kit-ethereum";
 import { SwapKitError } from "@swapkit/helpers";
+import type { Provider } from "ethers";
 import { concat, Observable, of } from "rxjs";
 
+import { EthereumLedger } from "../src/ledger/clients/evm";
 import { createLedgerSessionSigner, disconnectLedgerDMKSession, getLedgerDMKSession } from "../src/ledger/helpers/dmk";
 import { executeLedgerDeviceAction, ZONDAX_USER_REFUSED_STATUS_WORDS } from "../src/ledger/helpers/executeDeviceAction";
 
@@ -14,6 +17,7 @@ const {
   DeviceDisconnectedWhileSendingError,
   GlobalCommandErrorHandler,
   LEDGER_VENDOR_ID,
+  noopLoggerFactory,
   UnknownDeviceExchangeError,
 } = ledgerDMKModule;
 const actualLedgerDMKModule = { ...ledgerDMKModule };
@@ -127,7 +131,7 @@ describe("wallet-hardware/ledger DMK", () => {
     };
 
     const output = await executeLedgerDeviceAction({
-      action,
+      action: () => action,
       onDeviceActionState: ({ status }) => states.push(status),
     });
 
@@ -182,7 +186,9 @@ describe("wallet-hardware/ledger DMK", () => {
 
     for (const { error, errorKey, userRefusedStatusWords } of cases) {
       const action = { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
-      await expect(executeLedgerDeviceAction({ action, userRefusedStatusWords })).rejects.toMatchObject({ errorKey });
+      await expect(executeLedgerDeviceAction({ action: () => action, userRefusedStatusWords })).rejects.toMatchObject({
+        errorKey,
+      });
     }
   });
 
@@ -190,7 +196,7 @@ describe("wallet-hardware/ledger DMK", () => {
     const error = new UnknownDeviceExchangeError({ _tag: "InvalidStatusWordError", errorCode: "5515" });
     const action = { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
 
-    await expect(executeLedgerDeviceAction({ action })).rejects.toMatchObject({
+    await expect(executeLedgerDeviceAction({ action: () => action })).rejects.toMatchObject({
       errorKey: "wallet_ledger_device_locked",
       info: { errorTag: "UnknownDeviceExchangeError", statusWord: "5515" },
     });
@@ -203,7 +209,7 @@ describe("wallet-hardware/ledger DMK", () => {
     const error = new UnknownDeviceExchangeError(statusError);
     const action = { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
 
-    await expect(executeLedgerDeviceAction({ action })).rejects.toMatchObject({
+    await expect(executeLedgerDeviceAction({ action: () => action })).rejects.toMatchObject({
       errorKey: "wallet_ledger_transport_error",
       info: {
         errorTag: "UnknownDeviceExchangeError",
@@ -218,14 +224,26 @@ describe("wallet-hardware/ledger DMK", () => {
     const error = new UnknownDeviceExchangeError(validationError);
     const action = { cancel: mock(() => {}), observable: of({ error, status: DeviceActionStatus.Error }) };
 
-    await expect(executeLedgerDeviceAction({ action })).rejects.toBe(validationError);
+    await expect(executeLedgerDeviceAction({ action: () => action })).rejects.toBe(validationError);
   });
 
   it("maps stopped device actions to a SwapKit error", async () => {
     const action = { cancel: mock(() => {}), observable: of({ status: DeviceActionStatus.Stopped }) };
 
+    await expect(executeLedgerDeviceAction({ action: () => action })).rejects.toMatchObject({
+      errorKey: "wallet_ledger_connection_error",
+    });
+  });
+
+  it("maps a device action that fails to start to a typed SwapKit error", async () => {
+    // DMK throws, rather than returning an action, for a session it no longer knows.
+    const action = () => {
+      throw { _tag: "DeviceSessionNotFound" };
+    };
+
     await expect(executeLedgerDeviceAction({ action })).rejects.toMatchObject({
       errorKey: "wallet_ledger_connection_error",
+      info: { errorTag: "DeviceSessionNotFound" },
     });
   });
 
@@ -236,7 +254,7 @@ describe("wallet-hardware/ledger DMK", () => {
     };
 
     const output = await executeLedgerDeviceAction({
-      action,
+      action: () => action,
       onDeviceActionState: () => {
         throw new Error("UI callback failed");
       },
@@ -427,6 +445,43 @@ describe("wallet-hardware/ledger DMK", () => {
 
       expect(build).toHaveBeenCalledTimes(1);
       expect(lifecycleCalls).toEqual([]);
+    });
+  });
+
+  describe("dropped caller-owned DMK session", () => {
+    // mock.module replaces the export namespace process-wide; put back what this file found.
+    const signerKitEthereum = { ...signerKitEthereumModule };
+
+    afterAll(() => {
+      mock.module("@ledgerhq/device-signer-kit-ethereum", () => signerKitEthereum);
+    });
+
+    it("rejects a signer-kit request with a typed SwapKit error", async () => {
+      const executeDeviceAction = mock((_params: { sessionId: string }) => {
+        throw { _tag: "DeviceSessionNotFound" };
+      });
+      const dmk = { executeDeviceAction, getLoggerFactory: () => noopLoggerFactory } as unknown as DeviceManagementKit;
+      mock.module("@ledgerhq/device-signer-kit-ethereum", () => ({
+        ...signerKitEthereum,
+        SignerEthBuilder: class {
+          readonly sessionId: string;
+          constructor({ sessionId }: { sessionId: string }) {
+            this.sessionId = sessionId;
+          }
+          withContextModule() {
+            return this;
+          }
+          // Like the signer kit's app binder, which asks DMK for the action as soon as it is called.
+          build = () => ({ getAddress: () => executeDeviceAction({ sessionId: this.sessionId }) });
+        },
+      }));
+      const ledger = EthereumLedger({ dmkSession: { dmk, sessionId: "unplugged" }, provider: {} as Provider });
+
+      await expect(ledger.getAddress()).rejects.toMatchObject({
+        errorKey: "wallet_ledger_connection_error",
+        info: { errorTag: "DeviceSessionNotFound" },
+      });
+      expect(executeDeviceAction).toHaveBeenCalledWith({ sessionId: "unplugged" });
     });
   });
 });

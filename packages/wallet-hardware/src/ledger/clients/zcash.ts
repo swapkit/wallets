@@ -341,7 +341,7 @@ export function ZcashLedger({
 
   async function getDskAddress({ checkOnDevice = false, path = configuredPath.fullPath } = {}) {
     const signer = await getSigner();
-    return executeLedgerDeviceAction({ action: signer.getAddress(path, { checkOnDevice }), onDeviceActionState });
+    return executeLedgerDeviceAction({ action: () => signer.getAddress(path, { checkOnDevice }), onDeviceActionState });
   }
 
   async function getExtendedPublicKey({
@@ -408,7 +408,7 @@ export function ZcashLedger({
       outputScriptHex: hex.encode(await serializeOutputs(tx)),
     };
     const signer = await getSigner();
-    const signed = await executeLedgerDeviceAction({ action: signer.signTransaction(args), onDeviceActionState });
+    const signed = await executeLedgerDeviceAction({ action: () => signer.signTransaction(args), onDeviceActionState });
     return assertRawV5(signed);
   }
 

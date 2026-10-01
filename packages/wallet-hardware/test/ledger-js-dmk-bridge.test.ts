@@ -229,6 +229,26 @@ describe("operation-scoped LedgerJS DMK bridge", () => {
     ).rejects.toBe(validationError);
   });
 
+  it("maps a dropped caller-owned DMK session to a typed SwapKit error", async () => {
+    const executeDeviceAction = mock(() => {
+      throw { _tag: "DeviceSessionNotFound" };
+    });
+    const dmk = { executeDeviceAction } as unknown as DeviceManagementKit;
+
+    await expect(
+      runLedgerJsOperation({
+        appName: "Litecoin",
+        connection: { dmkSession: { dmk, sessionId: "unplugged" } },
+        createApp: () => ({}),
+        operation: () => "unreachable",
+      }),
+    ).rejects.toMatchObject({
+      errorKey: "wallet_ledger_connection_error",
+      info: { errorTag: "DeviceSessionNotFound" },
+    });
+    expect(executeDeviceAction).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects ambiguous DMK plus LedgerJS transport ownership", async () => {
     const { internalApi } = createInternalApi();
     const harness = createDmkHarness(internalApi);

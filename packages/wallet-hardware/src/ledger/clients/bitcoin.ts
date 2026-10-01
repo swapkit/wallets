@@ -261,7 +261,7 @@ export function BitcoinLedger({
     if (!accountXpubPromise) {
       accountXpubPromise = getSigner().then(async (signer) => {
         const { extendedPublicKey } = await executeLedgerDeviceAction({
-          action: signer.getExtendedPublicKey(configuredPath.accountPath),
+          action: () => signer.getExtendedPublicKey(configuredPath.accountPath),
           onDeviceActionState,
         });
         return extendedPublicKey;
@@ -278,7 +278,7 @@ export function BitcoinLedger({
     if (!fingerprintPromise) {
       fingerprintPromise = getSigner().then(async (signer) => {
         const { masterFingerprint } = await executeLedgerDeviceAction({
-          action: signer.getMasterFingerprint(),
+          action: () => signer.getMasterFingerprint(),
           onDeviceActionState,
         });
         return fingerprintToNumber(masterFingerprint);
@@ -436,8 +436,9 @@ export function BitcoinLedger({
       getWallet(),
       addInputDerivations({ inputUtxos, paths, tx }),
     ]);
+    const psbtV0 = psbt.toPSBT(0);
     const signatures = await executeLedgerDeviceAction({
-      action: signer.signPsbt(wallet, psbt.toPSBT(0)),
+      action: () => signer.signPsbt(wallet, psbtV0),
       onDeviceActionState,
     });
 
@@ -501,7 +502,8 @@ export function BitcoinLedger({
       const signer = await getSigner();
       const wallet = await getWallet();
       const { address } = await executeLedgerDeviceAction({
-        action: signer.getWalletAddress(wallet, configuredPath.addressIndex, { change: configuredPath.change === 1 }),
+        action: () =>
+          signer.getWalletAddress(wallet, configuredPath.addressIndex, { change: configuredPath.change === 1 }),
         onDeviceActionState,
       });
       if (!address) {
@@ -517,7 +519,7 @@ export function BitcoinLedger({
       const signer = await getSigner();
       const normalizedPath = normalizePath(path);
       const { extendedPublicKey } = await executeLedgerDeviceAction({
-        action: signer.getExtendedPublicKey(normalizedPath, { checkOnDevice }),
+        action: () => signer.getExtendedPublicKey(normalizedPath, { checkOnDevice }),
         onDeviceActionState,
       });
       return extendedPublicKey;
@@ -531,10 +533,11 @@ export function BitcoinLedger({
       const signer = await getSigner();
       const wallet = await getWallet();
       return executeLedgerDeviceAction({
-        action: signer.getWalletAddress(wallet, configuredPath.addressIndex, {
-          change: configuredPath.change === 1,
-          checkOnDevice: true,
-        }),
+        action: () =>
+          signer.getWalletAddress(wallet, configuredPath.addressIndex, {
+            change: configuredPath.change === 1,
+            checkOnDevice: true,
+          }),
         onDeviceActionState,
       });
     },

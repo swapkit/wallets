@@ -122,6 +122,12 @@ export function toLedgerDeviceError(error: unknown, { userRefusedStatusWords = [
   return new SwapKitError({ errorKey, info: { errorTag: errorTags[0], message, statusWord } }, error);
 }
 
+/**
+ * `action` is a thunk because DMK throws, instead of returning an action, when it cannot start one (e.g.
+ * DeviceSessionNotFound for a session it has dropped), and the signer kits call DMK synchronously. Calling it here
+ * maps that throw like any other device error. Put only the device call inside it, or a plain error from building
+ * the request is reported as a transport error.
+ */
 export function executeLedgerDeviceAction<
   Output,
   ActionError,
@@ -131,10 +137,18 @@ export function executeLedgerDeviceAction<
   onDeviceActionState,
   userRefusedStatusWords,
 }: {
-  action: ExecuteDeviceActionReturnType<Output, ActionError, IntermediateValue>;
+  action: () => ExecuteDeviceActionReturnType<Output, ActionError, IntermediateValue>;
   onDeviceActionState?: LedgerDeviceActionStateHandler;
 } & LedgerDeviceErrorOptions) {
   return new Promise<Output>((resolve, reject) => {
+    let observable: ExecuteDeviceActionReturnType<Output, ActionError, IntermediateValue>["observable"];
+    try {
+      observable = action().observable;
+    } catch (error) {
+      reject(toLedgerDeviceError(error, { userRefusedStatusWords }));
+      return;
+    }
+
     let settled = false;
     let subscription: { unsubscribe: () => void } | undefined;
 
@@ -145,7 +159,7 @@ export function executeLedgerDeviceAction<
       callback();
     }
 
-    subscription = action.observable.subscribe({
+    subscription = observable.subscribe({
       complete: () => {
         settle(() => reject(new SwapKitError("wallet_ledger_invalid_response")));
       },

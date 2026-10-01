@@ -121,7 +121,7 @@ export class CosmosLedger {
 
     const signer = await this.getSigner();
     const signature = await executeLedgerDeviceAction({
-      action: signer.signTransaction(this.derivationPath, this.chain, message),
+      action: () => signer.signTransaction(this.derivationPath, this.chain, message),
       onDeviceActionState: this.onDeviceActionState,
       userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
@@ -146,7 +146,7 @@ export class CosmosLedger {
 
     const signer = await this.getSigner();
     const { address, publicKey } = await executeLedgerDeviceAction({
-      action: signer.getAddress(this.derivationPath, this.chain),
+      action: () => signer.getAddress(this.derivationPath, this.chain),
       onDeviceActionState: this.onDeviceActionState,
       userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
@@ -160,7 +160,7 @@ export class CosmosLedger {
 
     const signer = await this.getSigner();
     const { address, publicKey } = await executeLedgerDeviceAction({
-      action: signer.getAddress(this.derivationPath, this.chain, { checkOnDevice: true }),
+      action: () => signer.getAddress(this.derivationPath, this.chain, { checkOnDevice: true }),
       onDeviceActionState: this.onDeviceActionState,
       userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
