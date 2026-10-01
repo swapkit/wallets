@@ -240,6 +240,23 @@ describe("Ledger UTXO transfer", () => {
     expect(createTransactionCalls[0]?.memo).toBe(memo);
     expect(signedMemos(deviceOutputs(chain))).toEqual([memo]);
   });
+
+  it.each([
+    ["the toolbox default", {}, FEE_RATES[FeeOption.Fast]],
+    ["an average fee option", { feeOptionKey: FeeOption.Average }, FEE_RATES[FeeOption.Average]],
+    ["a fastest fee option", { feeOptionKey: FeeOption.Fastest }, FEE_RATES[FeeOption.Fastest]],
+    ["an explicit fee rate", { feeOptionKey: FeeOption.Fastest, feeRate: 7 }, 7],
+  ] as const)("pays the fee rate of %s", async (_case, fee, expected) => {
+    const wallet = await connect(Chain.BitcoinCash);
+
+    await wallet.transfer({
+      ...fee,
+      assetValue: AssetValue.from({ chain: Chain.BitcoinCash, value: "0.00009" }),
+      recipient: senders[Chain.BitcoinCash].address,
+    });
+
+    expect(createTransactionCalls[0]?.feeRate).toBe(expected);
+  });
 });
 
 afterAll(() => {

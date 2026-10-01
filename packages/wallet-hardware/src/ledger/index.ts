@@ -27,6 +27,7 @@ import {
   getUtxoApi,
   type UTXOBuildTxParams,
   type UTXOForMultiAddressTransfer,
+  type UTXOTransferParams,
   type UTXOType,
 } from "@swapkit/toolboxes/utxo";
 import type { Transaction, ZcashTransaction } from "@swapkit/utxo-signer";
@@ -361,8 +362,9 @@ async function getUTXOWalletMethods({
   const signAndBroadcastTransaction = async (transaction: Transaction | ZcashTransaction) =>
     toolbox.broadcastTx(await signLedgerTransaction({ transaction }));
 
-  const transfer = async (params: UTXOBuildTxParams) => {
-    const feeRate = params.feeRate || (await toolbox.getFeeRates())[FeeOption.Average];
+  // The toolbox's transfer parameters plus a public key override; the sender is always the Ledger account.
+  const transfer = async (params: UTXOTransferParams & Pick<UTXOBuildTxParams, "enableRBF" | "publicKey">) => {
+    const feeRate = params.feeRate || (await toolbox.getFeeRates())[params.feeOptionKey || FeeOption.Fast];
 
     const { tx, inputs } = await toolbox.createTransaction({
       ...params,
