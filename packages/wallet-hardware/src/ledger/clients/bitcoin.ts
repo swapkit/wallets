@@ -1,7 +1,7 @@
 import type { SignerBtc } from "@ledgerhq/device-signer-kit-bitcoin";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
-import { HDKey } from "@scure/bip32";
+import { HARDENED_OFFSET, HDKey } from "@scure/bip32";
 import {
   Chain,
   type DerivationPathArray,
@@ -11,7 +11,9 @@ import {
 } from "@swapkit/helpers";
 import type { UTXOType } from "@swapkit/toolboxes/utxo";
 import type { Transaction } from "@swapkit/utxo-signer";
+import { match } from "ts-pattern";
 
+import { applyMissingSpendingMetadata } from "../../helpers/psbt";
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { createLedgerSessionSigner } from "../helpers/dmk";
 import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
@@ -58,29 +60,27 @@ function invalidPath({ path, reason }: { path: string; reason: string }) {
 
 function parseBitcoinPath(path: DerivationPathArray | string): ParsedBitcoinPath {
   const normalized = normalizePath(path);
-  const match = /^(44|49|84|86)'\/0'\/(\d+)'(?:\/(0|1)\/(\d+))?$/.exec(normalized);
+  const segments = /^(44|49|84|86)'\/0'\/(\d+)'(?:\/(0|1)\/(\d+))?$/.exec(normalized);
 
-  if (!match) {
+  if (!segments) {
     throw invalidPath({
       path: normalized,
       reason: "Expected a Bitcoin path with purpose 44, 49, 84, or 86 and coin type 0",
     });
   }
 
-  const purpose = Number(match[1]) as ParsedBitcoinPath["purpose"];
-  const accountPath = `${purpose}'/0'/${match[2]}'`;
-  const change = Number(match[3] ?? 0);
-  const addressIndex = Number(match[4] ?? 0);
+  const purpose = Number(segments[1]) as ParsedBitcoinPath["purpose"];
+  const account = Number(segments[2]);
+  const change = Number(segments[3] ?? 0);
+  const addressIndex = Number(segments[4] ?? 0);
 
+  // A larger index would collide with the hardened range and name another key.
+  if (account >= HARDENED_OFFSET || addressIndex >= HARDENED_OFFSET) {
+    throw invalidPath({ path: normalized, reason: "Account and address index must be below 2^31" });
+  }
+
+  const accountPath = `${purpose}'/0'/${account}'`;
   return { accountPath, addressIndex, change, fullPath: `${accountPath}/${change}/${addressIndex}`, purpose };
-}
-
-function pathToNumberArray(path: string) {
-  return path.split("/").map((segment) => {
-    const hardened = segment.endsWith("'");
-    const value = Number.parseInt(hardened ? segment.slice(0, -1) : segment, 10);
-    return hardened ? (value | 0x80000000) >>> 0 : value;
-  });
 }
 
 function fingerprintToNumber(fingerprint: Uint8Array) {
@@ -126,18 +126,14 @@ function validateAccountPaths({
 }
 
 function descriptorTemplate(purpose: ParsedBitcoinPath["purpose"]) {
-  return import("@ledgerhq/device-signer-kit-bitcoin").then(({ DefaultDescriptorTemplate }) => {
-    switch (purpose) {
-      case 44:
-        return DefaultDescriptorTemplate.LEGACY;
-      case 49:
-        return DefaultDescriptorTemplate.NESTED_SEGWIT;
-      case 84:
-        return DefaultDescriptorTemplate.NATIVE_SEGWIT;
-      case 86:
-        return DefaultDescriptorTemplate.TAPROOT;
-    }
-  });
+  return import("@ledgerhq/device-signer-kit-bitcoin").then(({ DefaultDescriptorTemplate }) =>
+    match(purpose)
+      .with(44, () => DefaultDescriptorTemplate.LEGACY)
+      .with(49, () => DefaultDescriptorTemplate.NESTED_SEGWIT)
+      .with(84, () => DefaultDescriptorTemplate.NATIVE_SEGWIT)
+      .with(86, () => DefaultDescriptorTemplate.TAPROOT)
+      .exhaustive(),
+  );
 }
 
 // Mirrors the signer kit's `PartialSignature`, which its package entry point does not export.
@@ -157,9 +153,11 @@ function signatureError({ inputIndex, reason }: { inputIndex?: number; reason: s
 }
 
 type PreviousTransaction = NonNullable<ReturnType<Transaction["getInput"]>["nonWitnessUtxo"]>;
+type SpentOutput = PreviousTransaction["outputs"][number];
 
 // Returns the output an input spends, after checking the previous transaction hashes to the input's
-// txid: amounts shown on the device come from it, so it must not be substitutable.
+// txid and that a witnessUtxo the input carries agrees with it: amounts shown on the device come from
+// them, so neither may be substitutable.
 async function verifiedSpentOutput({
   input,
   inputIndex,
@@ -186,22 +184,49 @@ async function verifiedSpentOutput({
 
   const spentOutput = previousTransaction.outputs[input.index];
   if (!spentOutput) throw signatureError({ inputIndex, reason: "Previous transaction has no spent output" });
+
+  const { witnessUtxo } = input;
+  if (
+    witnessUtxo &&
+    (witnessUtxo.amount !== spentOutput.amount || hex.encode(witnessUtxo.script) !== hex.encode(spentOutput.script))
+  ) {
+    throw new SwapKitError("wallet_ledger_invalid_params", {
+      inputIndex,
+      reason: "Input witnessUtxo does not match the previous transaction output",
+    });
+  }
+
   return spentOutput;
 }
 
-// The app reads witnessUtxo as a SegWit claim, so a legacy input sent with one (the API attaches it to every
-// input) contradicts the pkh policy and fails with 0x6a80.
-function witnessUtxoUpdate({
-  hasWitnessUtxo,
-  purpose,
+// Fails closed unless the input spends the script its key path derives, so the key origin the device signs
+// with and the spending metadata derived from that key describe the output actually being spent.
+async function assertSpendsPathScript({
+  inputIndex,
+  path,
+  publicKey,
   spentOutput,
 }: {
-  hasWitnessUtxo: boolean;
-  purpose: ParsedBitcoinPath["purpose"];
-  spentOutput: Awaited<ReturnType<typeof verifiedSpentOutput>>;
+  inputIndex: number;
+  path: ParsedBitcoinPath;
+  publicKey: Uint8Array;
+  spentOutput: SpentOutput;
 }) {
-  if (purpose === 44) return { witnessUtxo: undefined };
-  return hasWitnessUtxo ? {} : { witnessUtxo: spentOutput };
+  const { p2pkh, p2sh, p2tr, p2wpkh } = await import("@swapkit/utxo-signer");
+  const pathScript = match(path.purpose)
+    .with(44, () => p2pkh(publicKey).script)
+    .with(49, () => p2sh(p2wpkh(publicKey)).script)
+    .with(84, () => p2wpkh(publicKey).script)
+    .with(86, () => p2tr(publicKey.slice(1)).script)
+    .exhaustive();
+
+  if (hex.encode(pathScript) === hex.encode(spentOutput.script)) return;
+
+  throw new SwapKitError("wallet_ledger_invalid_params", {
+    inputIndex,
+    path: path.fullPath,
+    reason: "Input does not spend the script derived from its derivation path",
+  });
 }
 
 export function BitcoinLedger({
@@ -325,9 +350,10 @@ export function BitcoinLedger({
   }
 
   /**
-   * Attach what the Bitcoin app needs to verify and sign each input: key origins, the full previous
-   * transaction (input amounts are only verifiable from it) and, for SegWit v0, the spent output.
-   * The previous transaction is checked against the input's txid so it cannot misstate the amount.
+   * Attach what the Bitcoin app needs to verify and sign each input: key origins, for pre-taproot inputs the
+   * full previous transaction (their amounts are only verifiable from it), for SegWit the spent output and, for
+   * nested SegWit and taproot, the redeemScript or internal key. The previous transaction is checked against the
+   * input's txid so it cannot misstate the amount, and the spent script against the input's key path.
    */
   async function addInputDerivations({
     inputUtxos,
@@ -343,7 +369,7 @@ export function BitcoinLedger({
       getMasterFingerprint(),
       resolvePreviousTransactions({ inputUtxos, tx }),
     ]);
-    const { p2wpkh } = await import("@swapkit/utxo-signer");
+    const { bip32Path } = await import("@swapkit/utxo-signer");
     const accountKey = HDKey.fromExtendedKey(accountXpub);
     const psbt = tx.clone();
     const publicKeys: Uint8Array[] = [];
@@ -362,23 +388,30 @@ export function BitcoinLedger({
       const input = psbt.getInput(inputIndex);
       const previousTransaction = previousTransactions[inputIndex];
       const spentOutput = await verifiedSpentOutput({ input, inputIndex, previousTransaction });
+      await assertSpendsPathScript({ inputIndex, path, publicKey, spentOutput });
 
-      const derivation = { fingerprint, path: pathToNumberArray(path.fullPath) };
+      const derivation = { fingerprint, path: bip32Path(`m/${path.fullPath}`) };
       if (path.purpose === 86) {
         const xOnlyPublicKey = publicKey.slice(1);
+        // Set rather than filled in: the metadata helper keeps an existing internal key, which nothing checks
+        // against the spent script, while the key path has just been checked to derive that script.
         psbt.updateInput(inputIndex, {
           tapBip32Derivation: [[xOnlyPublicKey, { der: derivation, hashes: [] }]],
           tapInternalKey: xOnlyPublicKey,
-          ...(input.witnessUtxo ? {} : { witnessUtxo: spentOutput }),
+          witnessUtxo: spentOutput,
         });
       } else {
         psbt.updateInput(inputIndex, {
           bip32Derivation: [[publicKey, derivation]],
           nonWitnessUtxo: previousTransaction,
-          ...witnessUtxoUpdate({ hasWitnessUtxo: !!input.witnessUtxo, purpose: path.purpose, spentOutput }),
-          ...(path.purpose === 49 && !input.redeemScript ? { redeemScript: p2wpkh(publicKey).script } : {}),
+          // The app reads witnessUtxo as a SegWit claim, so a legacy input sent with one (the API attaches it
+          // to every input) contradicts the pkh policy and fails with 0x6a80.
+          witnessUtxo: path.purpose === 44 ? undefined : spentOutput,
         });
       }
+
+      // Adds a nested SegWit input's redeemScript; an existing one already hashes to the checked script.
+      await applyMissingSpendingMetadata({ chain: Chain.Bitcoin, indexes: [inputIndex], publicKey, tx: psbt });
     }
 
     return { psbt, publicKeys };

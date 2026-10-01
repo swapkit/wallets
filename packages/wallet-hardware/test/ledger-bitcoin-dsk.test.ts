@@ -354,6 +354,15 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
 
       expect(version(signed.hex)).toBe(1);
       expect(signed.fee).toBe(1_000n);
+      const deviceInput = Transaction.fromPSBT(signCalls.at(-1)?.psbt ?? new Uint8Array(), {
+        allowLegacyWitnessUtxo: true,
+      }).getInput(0);
+      expect(deviceInput.redeemScript).toEqual(purpose === 49 ? p2wpkh(leafKey(0, 0).publicKey).script : undefined);
+      expect(deviceInput.tapInternalKey).toEqual(purpose === 86 ? leafKey(0, 0).publicKey.slice(1) : undefined);
+      // The fixture carries neither, so the device PSBT's values come from the client, which leaves the caller's
+      // PSBT untouched.
+      expect(tx.getInput(0).redeemScript).toBeUndefined();
+      expect(tx.getInput(0).tapInternalKey).toBeUndefined();
       if (purpose === 49) {
         // Nested SegWit needs both the redeem script push and the witness.
         expect(extracted.getInput(0).finalScriptSig).toEqual(Script.encode([p2wpkh(leafKey(0, 0).publicKey).script]));
@@ -393,8 +402,112 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
         inputUtxos: [{ hash: other.txid, index: 0, txHex: other.txHex, value: 99_999 }],
         tx,
       }),
-    ).rejects.toThrow("wallet_ledger_invalid_params");
+    ).rejects.toMatchObject({
+      cause: { inputIndex: 0, reason: "Previous transaction does not match the input txid" },
+      errorKey: "wallet_ledger_invalid_params",
+    });
     expect(signCalls).toHaveLength(0);
+  });
+
+  it("rejects a legacy input whose previous transaction does not match its txid", async () => {
+    // Without a witnessUtxo or nonWitnessUtxo on the input, only the txid binds the supplied previous transaction.
+    const script = outputScript(44, leafKey(0, 0).publicKey);
+    const funding = previousTransaction([script]);
+    const other = previousTransaction([script], 12_000n);
+    const tx = new Transaction({ version: 1 });
+    tx.addInput({ index: 0, txid: hex.decode(funding.txid) });
+    tx.addOutput({ amount: 9_000n, script });
+    const client = BitcoinLedger({ derivationPath: "44'/0'/0'/0/0", dmkSession });
+
+    await expect(
+      client.signTransactionHex({
+        inputUtxos: [{ hash: other.txid, index: 0, txHex: other.txHex, value: 12_000 }],
+        tx,
+      }),
+    ).rejects.toMatchObject({
+      cause: { inputIndex: 0, reason: "Previous transaction does not match the input txid" },
+      errorKey: "wallet_ledger_invalid_params",
+    });
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it.each([
+    84, 86,
+  ] as const)("rejects a purpose %i witnessUtxo that disagrees with the previous transaction", async (purpose) => {
+    const script = outputScript(purpose, leafKey(0, 0).publicKey);
+    const funding = previousTransaction([script]);
+    rawTxs.set(funding.txid, funding.txHex);
+    const tx = new Transaction({ version: 1 });
+    tx.addInput({ index: 0, txid: hex.decode(funding.txid), witnessUtxo: { amount: 1_000_000n, script } });
+    tx.addOutput({ amount: 9_000n, script });
+    const client = BitcoinLedger({ derivationPath: `${purpose}'/0'/0'/0/0`, dmkSession });
+
+    await expect(client.signTransaction(tx)).rejects.toMatchObject({
+      cause: { inputIndex: 0, reason: "Input witnessUtxo does not match the previous transaction output" },
+      errorKey: "wallet_ledger_invalid_params",
+    });
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it("rejects a witnessUtxo whose script disagrees with the previous transaction", async () => {
+    const script = outputScript(84, leafKey(0, 0).publicKey);
+    const funding = previousTransaction([script]);
+    rawTxs.set(funding.txid, funding.txHex);
+    const tx = new Transaction({ version: 1 });
+    const otherScript = outputScript(84, leafKey(0, 1).publicKey);
+    tx.addInput({ index: 0, txid: hex.decode(funding.txid), witnessUtxo: { amount: 10_000n, script: otherScript } });
+    tx.addOutput({ amount: 9_000n, script });
+    const client = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", dmkSession });
+
+    await expect(client.signTransaction(tx)).rejects.toMatchObject({
+      cause: { inputIndex: 0, reason: "Input witnessUtxo does not match the previous transaction output" },
+      errorKey: "wallet_ledger_invalid_params",
+    });
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it("replaces a stale taproot internal key with the configured key's", async () => {
+    const script = outputScript(86, leafKey(0, 0).publicKey);
+    const funding = previousTransaction([script]);
+    rawTxs.set(funding.txid, funding.txHex);
+    const tx = new Transaction({ version: 1 });
+    tx.addInput({
+      index: 0,
+      tapInternalKey: leafKey(0, 5).publicKey.slice(1),
+      txid: hex.decode(funding.txid),
+      witnessUtxo: { amount: 10_000n, script },
+    });
+    tx.addOutput({ amount: 9_000n, script });
+    const client = BitcoinLedger({ derivationPath: "86'/0'/0'/0/0", dmkSession });
+
+    const signed = await client.signTransaction(tx);
+
+    const deviceInput = Transaction.fromPSBT(signCalls[0]?.psbt ?? new Uint8Array()).getInput(0);
+    expect(deviceInput.tapInternalKey).toEqual(leafKey(0, 0).publicKey.slice(1));
+    expect(() => signed.finalize()).not.toThrow();
+  });
+
+  it.each([
+    44, 49, 84, 86,
+  ] as const)("rejects a purpose %i input that does not spend the configured key's script", async (purpose) => {
+    const { tx } = makeTransaction({ keys: [{ change: 0, index: 1 }], purpose });
+    const client = BitcoinLedger({ derivationPath: `${purpose}'/0'/0'/0/0`, dmkSession });
+
+    await expect(client.signTransaction(tx)).rejects.toMatchObject({
+      cause: {
+        inputIndex: 0,
+        path: `${purpose}'/0'/0'/0/0`,
+        reason: "Input does not spend the script derived from its derivation path",
+      },
+      errorKey: "wallet_ledger_invalid_params",
+    });
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it("rejects account and address indexes in the hardened range", () => {
+    for (const derivationPath of ["84'/0'/2147483648'/0/0", "84'/0'/0'/0/2147483648"]) {
+      expect(() => BitcoinLedger({ derivationPath, dmkSession })).toThrow("wallet_ledger_invalid_params");
+    }
   });
 
   it("derives the configured address's public key from the cached account xpub", async () => {
