@@ -62,6 +62,7 @@ type MockContextModuleConfig = {
   blindSigningReporter?: { report: (params: unknown) => Promise<unknown> };
   chain?: unknown;
   originToken?: string;
+  signReport?: (params: unknown) => Promise<void>;
 };
 const contextModuleConfigs: MockContextModuleConfig[] = [];
 const ethereumContextModules: unknown[] = [];
@@ -227,16 +228,18 @@ describe("wallet-hardware/ledger", () => {
     expect(ethereumBuilderInvocations).toEqual([
       { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
     ]);
-    // Blind-signing telemetry is replaced with a reporter that never reaches the network.
+    // Blind-signing and sign-report telemetry are replaced with reporters that never reach the network.
     expect(contextModuleConfigs).toEqual([
       {
         blindSigningReporter: expect.any(Object),
         chain: realContextModule.ContextModuleChainID.Ethereum,
         originToken: "ledger-origin-token",
+        signReport: expect.any(Function),
       },
     ]);
     expect(ethereumContextModules).toEqual([contextModuleConfigs[0]]);
     await expect(contextModuleConfigs[0]?.blindSigningReporter?.report({})).resolves.toBeUndefined();
+    await expect(contextModuleConfigs[0]?.signReport?.({})).resolves.toBeUndefined();
     expect(ethereumGetAddressInvocations).toEqual([{ options: { chainId: 42161 }, path: "44'/60'/0'/0/0" }]);
     expect(ethereumSignTransactionInvocations).toHaveLength(1);
     expect(hexlify(ethereumSignTransactionInvocations[0]?.transaction ?? new Uint8Array())).toBe(
@@ -517,12 +520,13 @@ describe("wallet-hardware/ledger", () => {
     expect(ethereumBuilderInvocations).toEqual([
       { dmk: dmkSession.dmk, originToken: "ledger-origin-token", sessionId: "test-session" },
     ]);
-    // Blind-signing telemetry is replaced with a reporter that never reaches the network.
+    // Blind-signing and sign-report telemetry are replaced with reporters that never reach the network.
     expect(contextModuleConfigs).toEqual([
       {
         blindSigningReporter: expect.any(Object),
         chain: realContextModule.ContextModuleChainID.Ethereum,
         originToken: "ledger-origin-token",
+        signReport: expect.any(Function),
       },
     ]);
     expect(ethereumContextModules).toEqual([contextModuleConfigs[0]]);

@@ -103,6 +103,9 @@ class EVMLedgerInterface extends AbstractSigner {
           .setChain(ContextModuleChainID.Ethereum)
           .setBlindSigningReporter(disabledBlindSigningReporter)
           .build();
+        // The signer kit also calls the optional sign reporter after every signature. 2.6.0 leaves it unset
+        // and offers no builder setter, so keep it inert in case a later 2.x release wires it up.
+        contextModule.signReport = () => Promise.resolve();
 
         return new SignerEthBuilder({ ...session, originToken }).withContextModule(contextModule).build();
       },
