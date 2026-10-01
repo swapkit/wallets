@@ -33,9 +33,9 @@ export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
       }
     },
   // Bitcoin disabled until Phantom's Wallet Standard integration is reviewed
-  directSigningSupport: { [Chain.Ethereum]: true, [Chain.Monad]: true, [Chain.Solana]: true },
+  directSigningSupport: { [Chain.Ethereum]: true, [Chain.Solana]: true },
   name: "connectPhantom",
-  supportedChains: [Chain.Ethereum, Chain.Monad, Chain.Solana],
+  supportedChains: [Chain.Ethereum, Chain.Solana],
   walletType: WalletOption.PHANTOM,
 });
 
@@ -150,8 +150,7 @@ async function getWalletMethods(chain: PhantomSupportedChain) {
       return { ...toolbox, address };
     }
 
-    case Chain.Ethereum:
-    case Chain.Monad: {
+    case Chain.Ethereum: {
       const { getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
       const { prepareNetworkSwitch } = await import("@swapkit/helpers");
       const { BrowserProvider } = await import("ethers");
