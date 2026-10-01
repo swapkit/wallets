@@ -12,7 +12,11 @@ import type { OfflineAminoSigner } from "@swapkit/toolboxes/cosmos";
 
 import type { LedgerDMKSession } from "../helpers/dmk";
 import { createLedgerSessionSigner } from "../helpers/dmk";
-import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "../helpers/executeDeviceAction";
+import {
+  executeLedgerDeviceAction,
+  type LedgerDeviceActionStateHandler,
+  ZONDAX_USER_REFUSED_STATUS_WORDS,
+} from "../helpers/executeDeviceAction";
 import { toLowSSignature } from "../helpers/lowS";
 
 interface CosmosLedgerParams {
@@ -119,6 +123,7 @@ export class CosmosLedger {
     const signature = await executeLedgerDeviceAction({
       action: signer.signTransaction(this.derivationPath, this.chain, message),
       onDeviceActionState: this.onDeviceActionState,
+      userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
     return normalizeCosmosSignature(signature);
   }
@@ -143,6 +148,7 @@ export class CosmosLedger {
     const { address, publicKey } = await executeLedgerDeviceAction({
       action: signer.getAddress(this.derivationPath, this.chain),
       onDeviceActionState: this.onDeviceActionState,
+      userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
     return { address, publicKey: hex.encode(publicKey) };
   }
@@ -156,6 +162,7 @@ export class CosmosLedger {
     const { address, publicKey } = await executeLedgerDeviceAction({
       action: signer.getAddress(this.derivationPath, this.chain, { checkOnDevice: true }),
       onDeviceActionState: this.onDeviceActionState,
+      userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
     return { address, publicKey: hex.encode(publicKey) };
   }

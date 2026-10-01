@@ -9,6 +9,7 @@ import {
   executeLedgerDeviceAction,
   LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerDeviceActionStateHandler,
+  ZONDAX_USER_REFUSED_STATUS_WORDS,
 } from "../../helpers/executeDeviceAction";
 import { toLowSSignature } from "../../helpers/lowS";
 import {
@@ -195,6 +196,7 @@ export class THORChainLedger {
     const result = await executeLedgerDeviceAction({
       action: dmkSession.dmk.executeDeviceAction({ deviceAction, sessionId: dmkSession.sessionId }),
       onDeviceActionState: this.onDeviceActionState,
+      userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS,
     });
 
     return result.response;
