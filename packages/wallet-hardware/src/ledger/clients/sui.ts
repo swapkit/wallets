@@ -33,6 +33,7 @@ export class SuiLedgerInterface {
     this.connection = connection;
   }
 
+  // The Sui app wants every level hardened and no `m/`: m/44'/784'/0'/0/0 becomes 44'/784'/0'/0'/0'.
   private getLedgerPath() {
     return this.derivationPath.replace(/^m\//, "").replace(/\/(\d+)\/(\d+)$/, "/$1'/$2'");
   }
@@ -82,6 +83,8 @@ export class SuiLedgerInterface {
 
     try {
       const ledgerPath = this.getLedgerPath();
+      // The app signs the intent message, not the raw bytes. Its three-byte prefix (scope TransactionData,
+      // version V0, app Sui) is all zeros, which the fresh buffer already holds.
       const intentMessage = new Uint8Array(3 + txBytes.length);
       intentMessage.set(txBytes, 3);
 
@@ -97,7 +100,8 @@ export class SuiLedgerInterface {
         throw new SwapKitError("wallet_ledger_signing_error", { error: "Invalid public key length" });
       }
 
-      const serializedSignature = new Uint8Array(97);
+      // Sui serialised signature: Ed25519 flag (0x00), 64-byte signature, 32-byte public key.
+      const serializedSignature = new Uint8Array(1 + 64 + 32);
       serializedSignature.set(result.signature, 1);
       serializedSignature.set(pubKey, 65);
 
@@ -106,6 +110,7 @@ export class SuiLedgerInterface {
         signature: Buffer.from(serializedSignature).toString("base64"),
       };
     } catch (error) {
+      if (error instanceof SwapKitError) throw error;
       throw new SwapKitError("wallet_ledger_signing_error", { error });
     }
   }

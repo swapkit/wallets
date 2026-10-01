@@ -87,6 +87,7 @@ export class TronLedgerInterface implements TronSigner {
       if (!signature) throw new SwapKitError("wallet_ledger_signing_error");
       return { ...transaction, signature: [signature] };
     } catch (error) {
+      if (error instanceof SwapKitError) throw error;
       throw new SwapKitError("wallet_ledger_signing_error", { error });
     }
   };

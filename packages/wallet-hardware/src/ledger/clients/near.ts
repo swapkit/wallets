@@ -1,4 +1,5 @@
 import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type Near from "@ledgerhq/hw-app-near";
 import type Transport from "@ledgerhq/hw-transport";
 import type { SignedTransaction, Transaction } from "@near-js/transactions";
 import { Chain, type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
@@ -24,14 +25,14 @@ export async function getNearLedgerClient(
     operation,
     requiredUserInteraction,
   }: {
-    operation: (app: InstanceType<typeof import("@ledgerhq/hw-app-near")["default"]>) => Promise<Output>;
+    operation: (app: Near) => Promise<Output>;
     requiredUserInteraction?: UserInteractionRequired;
   }) {
-    const Near = (await import("@ledgerhq/hw-app-near")).default;
+    const NearApp = (await import("@ledgerhq/hw-app-near")).default;
     return runLedgerJsOperation({
       appName: "NEAR",
       connection,
-      createApp: (ledgerTransport) => new Near(ledgerTransport),
+      createApp: (ledgerTransport) => new NearApp(ledgerTransport),
       operation,
       requiredUserInteraction,
     });
@@ -49,7 +50,7 @@ export async function getNearLedgerClient(
       return PublicKey.fromString(encodedPublicKey);
     },
 
-    signDelegateAction(_delegateAction: any) {
+    signDelegateAction(_delegateAction: unknown) {
       return Promise.reject(
         new SwapKitError("wallet_ledger_method_not_supported", { method: "signDelegateAction", wallet: "Ledger" }),
       );
@@ -74,13 +75,16 @@ export async function getNearLedgerClient(
           operation: (app) => app.signTransaction(transaction.encode(), path),
           requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
-        if (!signatureArray) throw new Error("Signature undefined");
+        if (!signatureArray) {
+          throw new SwapKitError("wallet_ledger_signing_error", { reason: "Ledger returned no NEAR signature" });
+        }
 
         const signature = new Signature({ data: signatureArray, keyType: 0 });
         const signedTransaction = new SignedTransaction({ signature, transaction });
 
         return [signatureArray, signedTransaction] as [Uint8Array<ArrayBufferLike>, SignedTransaction];
       } catch (error) {
+        if (error instanceof SwapKitError) throw error;
         throw new SwapKitError("wallet_ledger_signing_error", { error });
       }
     },
