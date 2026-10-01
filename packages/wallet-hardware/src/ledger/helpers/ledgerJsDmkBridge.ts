@@ -7,6 +7,7 @@ import {
   executeLedgerDeviceAction,
   LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerDeviceActionStateHandler,
+  toLedgerDeviceError,
 } from "./executeDeviceAction";
 
 export { LEDGER_USER_INTERACTION_REQUIRED };
@@ -61,7 +62,14 @@ export async function runLedgerJsOperation<App, Output>({
     });
   }
 
-  if (transport) return operation(createApp(transport));
+  if (transport) {
+    try {
+      return await operation(createApp(transport));
+    } catch (error) {
+      // hw-transport rejects with status errors; map them as the DMK path below does.
+      throw toLedgerDeviceError(error);
+    }
+  }
 
   const session = dmkSession ?? (await getLedgerDMKSession());
 

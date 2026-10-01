@@ -7,6 +7,7 @@ import {
   type InternalApi,
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
+import Transport from "@ledgerhq/hw-transport";
 import type { Transaction as NearTransaction } from "@near-js/transactions";
 import type { TronTransaction } from "@swapkit/toolboxes/tron";
 import { decode } from "ripple-binary-codec";
@@ -240,6 +241,16 @@ describe("LedgerJS clients over the operation-scoped DMK bridge", () => {
 
     const tron = TronLedger({ dmkSession: createDmkHarness({ rejectedIns: 0x04 }).dmkSession });
     await expect(tron.signTransaction(tronTransaction)).rejects.toMatchObject(userRejection);
+  });
+
+  it("reports a signature rejected through an injected LedgerJS transport as a user rejection", async () => {
+    const transport = new Transport();
+    transport.exchange = () => Promise.resolve(Buffer.from([0x69, 0x85]));
+
+    await expect(TronLedger({ transport }).signTransaction(tronTransaction)).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6985" },
+    });
   });
 
   it("opens each alt-UTXO app through its own operation and keeps address output intact", async () => {

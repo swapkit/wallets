@@ -39,6 +39,11 @@ const DISCONNECTED_ERROR_TAGS = new Set([
   "NoAccessibleDeviceError",
   "ReconnectionFailedError",
 ]);
+// LedgerJS transports (hw-transport-webhid, -webusb) reject an exchange cut off by an unplug with these errors. The
+// @ledgerhq packages advise matching on `name`, which also holds across duplicate copies of @ledgerhq/errors.
+const DISCONNECTED_ERROR_NAMES = new Set(["DisconnectedDevice", "DisconnectedDeviceDuringOperation"]);
+// hw-app-cosmos turns the app's final 0x6986 on a signature into this @ledgerhq/errors class, which carries no word.
+const USER_REFUSED_ERROR_NAMES = new Set(["UserRefusedOnDevice"]);
 // DMK nests causes in `originalError` and the LedgerJS bridge wraps once more, so real chains are two or three
 // levels deep; the bound stops a malformed or cyclic chain.
 const MAX_NESTED_ERROR_DEPTH = 4;
@@ -48,6 +53,7 @@ type DeviceErrorLike = {
   _tag?: unknown;
   errorCode?: unknown;
   message?: unknown;
+  name?: unknown;
   originalError?: unknown;
   statusCode?: unknown;
 };
@@ -89,6 +95,7 @@ export function toLedgerDeviceError(error: unknown, { userRefusedStatusWords = [
   if (swapKitError) return swapKitError;
 
   const errorTags = errorChain.flatMap(({ _tag }) => (typeof _tag === "string" ? [_tag] : []));
+  const errorNames = errorChain.flatMap(({ name }) => (typeof name === "string" ? [name] : []));
   const statusWord = errorChain.map(statusWordOf).find((word) => word !== undefined);
   // The innermost cause says what failed; DMK and the bridge wrap it in generic "device exchange" messages.
   const message = errorChain
@@ -97,10 +104,12 @@ export function toLedgerDeviceError(error: unknown, { userRefusedStatusWords = [
     .at(-1);
   const refusedStatusWords = new Set([...USER_REFUSED_STATUS_WORDS, ...userRefusedStatusWords]);
 
-  const errorKey = match({ errorTags, statusWord })
+  const errorKey = match({ errorNames, errorTags, statusWord })
     .when(
-      ({ errorTags, statusWord }) =>
-        errorTags.includes("RefusedByUserDAError") || (!!statusWord && refusedStatusWords.has(statusWord)),
+      ({ errorNames, errorTags, statusWord }) =>
+        errorTags.includes("RefusedByUserDAError") ||
+        errorNames.some((name) => USER_REFUSED_ERROR_NAMES.has(name)) ||
+        (!!statusWord && refusedStatusWords.has(statusWord)),
       () => "wallet_connection_rejected_by_user" as const,
     )
     .when(
@@ -114,7 +123,9 @@ export function toLedgerDeviceError(error: unknown, { userRefusedStatusWords = [
       () => "wallet_ledger_app_not_open" as const,
     )
     .when(
-      ({ errorTags }) => errorTags.some((errorTag) => DISCONNECTED_ERROR_TAGS.has(errorTag)),
+      ({ errorNames, errorTags }) =>
+        errorTags.some((errorTag) => DISCONNECTED_ERROR_TAGS.has(errorTag)) ||
+        errorNames.some((name) => DISCONNECTED_ERROR_NAMES.has(name)),
       () => "wallet_ledger_connection_error" as const,
     )
     .otherwise(() => "wallet_ledger_transport_error" as const);

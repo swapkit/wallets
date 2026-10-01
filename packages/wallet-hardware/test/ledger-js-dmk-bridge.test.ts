@@ -7,7 +7,7 @@ import {
   type InternalApi,
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
-import type Transport from "@ledgerhq/hw-transport";
+import Transport from "@ledgerhq/hw-transport";
 import { SwapKitError } from "@swapkit/helpers";
 import { concat, from, of } from "rxjs";
 
@@ -30,6 +30,14 @@ function createInternalApi({
   }) as InternalApi["sendCommand"];
 
   return { abortTimeouts, apdus, internalApi: { sendCommand } as unknown as InternalApi, sendCommand };
+}
+
+// An injected LedgerJS transport whose device answers every APDU with `statusWord`, so hw-transport's own `send`
+// rejects with its TransportStatusError.
+function createStatusWordTransport(statusWord: number) {
+  const transport = new Transport();
+  transport.exchange = () => Promise.resolve(Buffer.from([statusWord >> 8, statusWord & 0xff]));
+  return transport;
 }
 
 function createDmkHarness(internalApi: InternalApi) {
@@ -210,6 +218,61 @@ describe("operation-scoped LedgerJS DMK bridge", () => {
 
     expect(output).toBe("rLedger");
     expect(createAppTransports).toEqual([transport]);
+  });
+
+  it("maps a device error from an injected LedgerJS transport to a typed SwapKit error", async () => {
+    const getAddress = (statusWord: number) =>
+      runLedgerJsOperation({
+        appName: "XRP",
+        connection: { transport: createStatusWordTransport(statusWord) },
+        createApp: (transport) => ({ getAddress: () => transport.send(0xe0, 0x02, 0x01, 0x00) }),
+        operation: (app) => app.getAddress(),
+      });
+
+    await expect(getAddress(0x6985)).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6985" },
+    });
+    await expect(getAddress(0x5515)).rejects.toMatchObject({
+      errorKey: "wallet_ledger_device_locked",
+      info: { statusWord: "5515" },
+    });
+  });
+
+  it("maps an unplug on an injected LedgerJS transport to a connection error", async () => {
+    // hw-transport-webhid rejects an exchange cut off by an unplug with this error; the class is matched by name.
+    const transport = new Transport();
+    transport.exchange = () =>
+      Promise.reject(
+        Object.assign(new Error("Failed to write the report."), { name: "DisconnectedDeviceDuringOperation" }),
+      );
+
+    await expect(
+      runLedgerJsOperation({
+        appName: "XRP",
+        connection: { transport },
+        createApp: (ledgerTransport) => ({ getAddress: () => ledgerTransport.send(0xe0, 0x02, 0x01, 0x00) }),
+        operation: (app) => app.getAddress(),
+      }),
+    ).rejects.toMatchObject({
+      errorKey: "wallet_ledger_connection_error",
+      info: { message: "Failed to write the report." },
+    });
+  });
+
+  it("surfaces a SwapKitError thrown with an injected LedgerJS transport unchanged", async () => {
+    const validationError = new SwapKitError("wallet_ledger_invalid_params", { reason: "Paths do not match inputs" });
+
+    await expect(
+      runLedgerJsOperation({
+        appName: "Litecoin",
+        connection: { transport: createStatusWordTransport(0x9000) },
+        createApp: () => ({}),
+        operation: () => {
+          throw validationError;
+        },
+      }),
+    ).rejects.toBe(validationError);
   });
 
   it("surfaces a SwapKitError thrown by the app operation unchanged", async () => {
