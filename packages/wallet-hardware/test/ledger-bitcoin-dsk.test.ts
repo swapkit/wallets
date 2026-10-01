@@ -3,11 +3,12 @@ import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-m
 import { hex } from "@scure/base";
 import { HDKey } from "@scure/bip32";
 import * as realUtxoToolbox from "@swapkit/toolboxes/utxo";
-import { p2pkh, p2sh, p2tr, p2wpkh, Script, Transaction } from "@swapkit/utxo-signer";
+import { p2pkh, p2sh, p2tr, p2wpkh, RawTx, Script, Transaction } from "@swapkit/utxo-signer";
 import { of } from "rxjs";
 
 const accountKey = HDKey.fromMasterSeed(new Uint8Array(32).fill(7)).derive("m/84'/0'/0'");
 const accountXpub = accountKey.publicExtendedKey;
+const fundingKey = HDKey.fromMasterSeed(new Uint8Array(32).fill(8)).derive("m/84'/0'/0'/0/0");
 const zeroAuxRand = new Uint8Array(32);
 const walletAddressCalls: Array<{
   addressIndex: number;
@@ -141,12 +142,17 @@ function outputScript(purpose: Purpose, publicKey: Uint8Array) {
   return p2wpkh(publicKey).script;
 }
 
-// A funding transaction paying `amount` to each script, so inputs can reference a real txid.
+// A signed funding transaction paying `amount` to each script, so inputs can reference a real txid. It spends a
+// P2WPKH output, so its raw form carries witness data, as the transactions the UTXO APIs return do.
 function previousTransaction(scripts: Uint8Array[], amount = 10_000n) {
-  const funding = new Transaction({ allowLegacyWitnessUtxo: true });
-  funding.addInput({ index: 0, txid: new Uint8Array(32).fill(9) });
+  if (!(fundingKey.publicKey && fundingKey.privateKey)) throw new Error("Fixture funding key did not derive");
+  const spent = { amount: amount * BigInt(scripts.length) + 1_000n, script: p2wpkh(fundingKey.publicKey).script };
+  const funding = new Transaction();
+  funding.addInput({ index: 0, txid: new Uint8Array(32).fill(9), witnessUtxo: spent });
   for (const script of scripts) funding.addOutput({ amount, script });
-  return { txHex: hex.encode(funding.unsignedTx), txid: funding.id };
+  funding.sign(fundingKey.privateKey);
+  funding.finalize();
+  return { txHex: hex.encode(funding.extract()), txid: funding.id };
 }
 
 /**
@@ -245,6 +251,20 @@ describe("Ledger Bitcoin Device Signer Kit client", () => {
       expect(input.nonWitnessUtxo).toBeDefined();
     }
     expect(xpubCalls).toEqual([{ options: undefined, path: "84'/0'/0'" }]);
+  });
+
+  it("verifies a previous transaction serialised with witness data against the input txid", async () => {
+    const { funding, tx } = makeTransaction();
+    expect(RawTx.decode(hex.decode(funding.txHex)).segwitFlag).toBe(true);
+    const client = BitcoinLedger({ derivationPath: "84'/0'/0'/0/0", dmkSession });
+
+    const raw = await client.signTransactionHex({
+      inputUtxos: [{ hash: funding.txid, index: 0, txHex: funding.txHex, value: 10_000 }],
+      tx,
+    });
+
+    expect(Transaction.fromRaw(hex.decode(raw)).getInput(0).finalScriptWitness).toHaveLength(2);
+    expect(signCalls).toHaveLength(1);
   });
 
   it("fetches previous transactions the toolbox PSBT omits so the device can verify amounts", async () => {

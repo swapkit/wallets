@@ -174,7 +174,9 @@ async function verifiedSpentOutput({
   }
 
   const { RawTx, utils } = await import("@swapkit/utxo-signer");
-  const previousTxid = utils.sha256x2(RawTx.encode(previousTransaction)).reverse();
+  // The txid commits to the legacy serialisation; raw SegWit transactions also carry the marker, flag and witnesses.
+  const legacySerialisation = RawTx.encode({ ...previousTransaction, segwitFlag: false, witnesses: undefined });
+  const previousTxid = utils.sha256x2(legacySerialisation).reverse();
   if (hex.encode(previousTxid) !== hex.encode(input.txid)) {
     throw new SwapKitError("wallet_ledger_invalid_params", {
       inputIndex,
