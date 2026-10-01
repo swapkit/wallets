@@ -149,6 +149,15 @@ import { getLedgerClient } from "../src/ledger/helpers";
 import { ledgerWallet } from "../src/ledger/index";
 
 const dmkSession = { dmk: { id: "test-dmk" } as unknown as DeviceManagementKit, sessionId: "test-session" };
+// Valid account addresses: outside Bitcoin a Ledger UTXO account takes its script type from the address form.
+const utxoAccountAddresses = {
+  [Chain.Bitcoin]: "bc1qfk47rgkt40ncznlvrjph74wne6qjjl38aun098",
+  [Chain.BitcoinCash]: "qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
+  [Chain.Dash]: "XhmXmZ1mXDRRxw98rmxJJS1zTRqmkdmzTq",
+  [Chain.Dogecoin]: "DCDnUZJWrv78Lzj9jUddzfVoWDzP6CX5HT",
+  [Chain.Litecoin]: "ltc1qfk47rgkt40ncznlvrjph74wne6qjjl38eqftah",
+  [Chain.Zcash]: "t1QxHwdn1XpzSQdbSwKTCaiS7skTAYaYRTR",
+} as const;
 
 describe("wallet-hardware/ledger", () => {
   beforeEach(() => {
@@ -471,12 +480,19 @@ describe("wallet-hardware/ledger", () => {
   });
 
   it("connectLedger: routes every UTXO account xpub path and version", async () => {
-    for (const chain of [Chain.Bitcoin, Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash]) {
+    for (const chain of [
+      Chain.Bitcoin,
+      Chain.BitcoinCash,
+      Chain.Dash,
+      Chain.Dogecoin,
+      Chain.Litecoin,
+      Chain.Zcash,
+    ] as const) {
       const addChain = mock(() => {});
       const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain });
       const transport = { id: chain } as unknown as Transport;
 
-      await connectLedger([chain], undefined, { address: "provided-ledger-address", transport });
+      await connectLedger([chain], undefined, { address: utxoAccountAddresses[chain], transport });
       const walletMethods = addChain.mock.calls[0]?.[0] as
         | { getExtendedPublicKey?: (params?: { accountIndex?: number }) => Promise<{ xpub: string }> }
         | undefined;
@@ -497,13 +513,15 @@ describe("wallet-hardware/ledger", () => {
     [Chain.Bitcoin, [44, 0, 0, 0, 0], UTXOScriptType.P2PKH],
     [Chain.Bitcoin, [84, 0, 0, 0, 0], UTXOScriptType.P2WPKH],
     [Chain.Litecoin, [84, 2, 0, 0, 0], UTXOScriptType.P2WPKH],
+    // The Litecoin app has no taproot policy: an 86' account receives and signs for its ltc1q address.
+    [Chain.Litecoin, [86, 2, 0, 0, 0], UTXOScriptType.P2WPKH],
     [Chain.BitcoinCash, [44, 145, 0, 0, 0], UTXOScriptType.P2PKH],
   ] as const)("connectLedger: reports the script type of a %s %p account", async (chain, derivationPath, scriptType) => {
     const addChain = mock((_wallet: { scriptType?: UTXOScriptType }) => {});
     const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain: addChain as never });
 
     await connectLedger([chain], [...derivationPath] as never, {
-      address: "provided-ledger-address",
+      address: utxoAccountAddresses[chain],
       transport: { id: chain } as unknown as Transport,
     });
 

@@ -301,8 +301,11 @@ async function getUTXOWalletMethods({
   const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
 
   const address = providedAddress ?? (await getLedgerAddress({ chain, ledgerClient: signer }));
-  // The account's path states its encoding (BIP44/49/84/86); a custom purpose falls back to the address form.
-  const scriptType = getUTXOScriptTypeForPath(derivationPath) ?? getScriptTypeForAddress(address, utxoChain);
+  // On Bitcoin the account's path states its encoding (BIP44/49/84/86). The other apps sign for the address format
+  // the client derives (an 86' Litecoin account is ltc1q), so they, like a custom purpose, follow the address form.
+  const scriptType =
+    (chain === Chain.Bitcoin ? getUTXOScriptTypeForPath(derivationPath) : undefined) ??
+    getScriptTypeForAddress(address, utxoChain);
 
   const { publicKey, signLedgerTransaction, toolboxSigner } = await match(chain)
     .with(Chain.Bitcoin, async () => {
