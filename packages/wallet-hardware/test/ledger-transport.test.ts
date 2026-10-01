@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import * as realContextModule from "@ledgerhq/context-module";
 import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
+import * as realBitcoinApp from "@ledgerhq/hw-app-btc";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, UTXOScriptType, WalletOption } from "@swapkit/helpers";
 import { hexlify, Signature, Transaction } from "ethers";
@@ -36,6 +37,10 @@ function deviceAction<Output>(output: Output) {
     ),
   };
 }
+
+// mock.module replaces the whole export namespace process-wide; snapshot the real module so
+// afterAll can restore it for test files that run later.
+const realBitcoinAppSnapshot = { ...realBitcoinApp };
 
 mock.module("@ledgerhq/hw-app-btc", () => ({
   default: class MockBitcoinApp {
@@ -536,5 +541,6 @@ describe("wallet-hardware/ledger", () => {
 });
 
 afterAll(() => {
+  mock.module("@ledgerhq/hw-app-btc", () => realBitcoinAppSnapshot);
   mock.module("@ledgerhq/context-module", () => realContextModuleSnapshot);
 });
