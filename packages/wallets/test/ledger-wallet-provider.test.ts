@@ -25,6 +25,7 @@ const accountsChangedListeners = new Set<(accounts: string[]) => void>();
 let ledgerAccounts: string[] = [ADDRESS];
 let announcesProvider = true;
 let rpcProviderCount = 0;
+let web3WalletMethodsGate: Promise<void> | undefined;
 
 class MockBrowserProvider {
   constructor(
@@ -100,9 +101,10 @@ mock.module("@swapkit/helpers", () => ({ ...realHelpers, getRPCUrl: () => Promis
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider, JsonRpcProvider: MockJsonRpcProvider }));
 
 mock.module("@swapkit/wallet-extensions/evm-extensions", () => ({
-  getWeb3WalletMethods: (options: Record<string, unknown>) => {
+  getWeb3WalletMethods: async (options: Record<string, unknown>) => {
     web3WalletMethodCalls.push(options);
-    return Promise.resolve({ getBalance: () => Promise.resolve([]) });
+    await web3WalletMethodsGate;
+    return { getBalance: () => Promise.resolve([]) };
   },
 }));
 
@@ -130,6 +132,7 @@ describe("ledger wallet provider connector", () => {
     accountsChangedListeners.clear();
     ledgerAccounts = [ADDRESS];
     announcesProvider = true;
+    web3WalletMethodsGate = undefined;
 
     const eventTarget = new EventTarget();
     eventTarget.addEventListener("eip6963:requestProvider", () => {
@@ -221,7 +224,14 @@ describe("ledger wallet provider connector", () => {
     expect(await adapter?.request({ method: "eth_getTransactionCount", params: [ADDRESS, "pending"] })).toBe(
       "rpc:eth_getTransactionCount",
     );
-    expect(rpcRequests).toEqual([{ method: "eth_getTransactionCount", params: [ADDRESS, "pending"] }]);
+    expect(await adapter?.request({ method: "eth_sendRawTransaction", params: ["0xsigned"] })).toBe(
+      "rpc:eth_sendRawTransaction",
+    );
+    expect(rpcRequests).toEqual([
+      { method: "eth_getTransactionCount", params: [ADDRESS, "pending"] },
+      { method: "eth_sendRawTransaction", params: ["0xsigned"] },
+    ]);
+    expect(ledgerRequests.map(({ method }) => method)).not.toContain("eth_sendRawTransaction");
   });
 
   test("re-adds the connected chains when the device switches account", async () => {
@@ -269,6 +279,44 @@ describe("ledger wallet provider connector", () => {
     expect(accountsChangedListeners.size).toBe(0);
     expect(destroyedRpcProviders).toHaveLength(2);
     expect(providerDisconnectCalls).toEqual([1]);
+  });
+
+  test("disconnect cancels an account switch that is still rebuilding", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum]);
+
+    let releaseGate = () => {};
+    web3WalletMethodsGate = new Promise((resolve) => {
+      releaseGate = resolve;
+    });
+
+    const [handleAccountsChanged] = [...accountsChangedListeners];
+    handleAccountsChanged?.([NEXT_ADDRESS]);
+    while (web3WalletMethodCalls.length < 2) await Bun.sleep(0);
+
+    await (addChainCalls[0]?.disconnect as () => Promise<void>)();
+    releaseGate();
+    await Bun.sleep(5);
+
+    expect(addChainCalls).toHaveLength(1);
+  });
+
+  test("the returned cleanup mounts the SDK again on the next initialization", async () => {
+    const { initializeLedgerWalletProvider } = await import("../src/ledger-wallet-provider");
+
+    const cleanup = await initializeLedgerWalletProvider();
+    expect(await initializeLedgerWalletProvider()).toBe(cleanup);
+
+    cleanup();
+    cleanup();
+    expect(teardownCalls).toEqual([1]);
+
+    await initializeLedgerWalletProvider();
+    expect(initializeCalls).toHaveLength(2);
   });
 
   test("throws when the device returns no account", async () => {

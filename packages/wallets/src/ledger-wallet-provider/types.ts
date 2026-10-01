@@ -1,9 +1,26 @@
-export type LedgerWalletProviderEvent = "accountsChanged" | "chainChanged" | "connect" | "disconnect";
+export type LedgerWalletProviderEventPayloads = {
+  accountsChanged: string[];
+  chainChanged: string;
+  connect: { chainId: string };
+  disconnect: { code: number; message: string };
+};
+
+export type LedgerWalletProviderEvent = keyof LedgerWalletProviderEventPayloads;
+
+export type LedgerWalletProviderListener<TEvent extends LedgerWalletProviderEvent> = (
+  payload: LedgerWalletProviderEventPayloads[TEvent],
+) => void;
 
 export type LedgerWalletProviderEip1193 = {
   request: (args: { method: string; params?: readonly unknown[] | object }) => Promise<unknown>;
-  on?: (event: LedgerWalletProviderEvent, listener: (payload: any) => void) => unknown;
-  removeListener?: (event: LedgerWalletProviderEvent, listener: (payload: any) => void) => unknown;
+  on?: <TEvent extends LedgerWalletProviderEvent>(
+    event: TEvent,
+    listener: LedgerWalletProviderListener<TEvent>,
+  ) => unknown;
+  removeListener?: <TEvent extends LedgerWalletProviderEvent>(
+    event: TEvent,
+    listener: LedgerWalletProviderListener<TEvent>,
+  ) => unknown;
   isConnected?: () => boolean;
   disconnect?: () => Promise<void>;
 };

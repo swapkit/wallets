@@ -39,6 +39,7 @@ export const ledgerWalletProviderWallet = createWallet({
 
       let connectedAddress = address;
       let accountChangeVersion = 0;
+      let disconnected = false;
       const adapters = await Promise.all(
         filteredChains.map(async (chain) => ({
           chain,
@@ -59,7 +60,7 @@ export const ledgerWalletProviderWallet = createWallet({
           })),
         );
 
-        if (version !== accountChangeVersion) return;
+        if (disconnected || version !== accountChangeVersion) return;
 
         for (const { chain, walletMethods } of connectedChains) {
           addChain({ ...walletMethods, address: nextAddress, chain, disconnect, walletType });
@@ -68,7 +69,7 @@ export const ledgerWalletProviderWallet = createWallet({
 
       function handleAccountsChanged(nextAccounts: string[]) {
         const [nextAddress] = nextAccounts;
-        if (!nextAddress || nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
+        if (disconnected || !nextAddress || nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
 
         connectedAddress = nextAddress;
         accountChangeVersion += 1;
@@ -76,6 +77,8 @@ export const ledgerWalletProviderWallet = createWallet({
       }
 
       async function disconnect() {
+        disconnected = true;
+        accountChangeVersion += 1;
         provider.removeListener?.("accountsChanged", handleAccountsChanged);
         for (const { destroy } of adapters) destroy();
         await provider.disconnect?.();

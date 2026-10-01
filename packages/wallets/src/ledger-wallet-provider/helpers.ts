@@ -51,17 +51,30 @@ export function initializeLedgerWalletProvider(
 ): Promise<() => void> {
   if (initialization) return initialization;
 
-  initialization = mountLedgerWalletProvider(options).catch((error) => {
-    initialization = undefined;
-    throw error;
-  });
+  const mount: Promise<() => void> = mountLedgerWalletProvider(options).then(
+    (cleanup) => {
+      let cleaned = false;
 
-  return initialization;
+      return () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (initialization === mount) initialization = undefined;
+        cleanup();
+      };
+    },
+    (error) => {
+      if (initialization === mount) initialization = undefined;
+      throw error;
+    },
+  );
+
+  initialization = mount;
+
+  return mount;
 }
 
 export async function teardownLedgerWalletProvider() {
   const cleanup = await initialization;
-  initialization = undefined;
   cleanup?.();
 }
 
@@ -114,7 +127,6 @@ export async function resolveLedgerWalletProvider({
 
 const LEDGER_HANDLED_METHODS = new Set([
   "eth_chainId",
-  "eth_sendRawTransaction",
   "eth_sendTransaction",
   "eth_sign",
   "eth_signRawTransaction",
