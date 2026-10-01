@@ -203,15 +203,6 @@ export const ledgerWallet = createWallet({
 
 export const LEDGER_SUPPORTED_CHAINS = getWalletSupportedChains(ledgerWallet);
 
-// reduce memo length by removing trade limit
-function reduceMemo(memo?: string, affiliateAddress = "t") {
-  if (!memo?.includes("=:")) return memo;
-
-  const removedAffiliate = memo.includes(`:${affiliateAddress}:`) ? memo.split(`:${affiliateAddress}:`)[0] : memo;
-
-  return removedAffiliate?.substring(0, removedAffiliate.lastIndexOf(":"));
-}
-
 function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccountXpubParams) {
   const ledgerPath = match(chain)
     .with(Chain.Bitcoin, Chain.Litecoin, () => path)
@@ -372,16 +363,11 @@ async function getUTXOWalletMethods({
 
   const transfer = async (params: UTXOBuildTxParams) => {
     const feeRate = params.feeRate || (await toolbox.getFeeRates())[FeeOption.Average];
-    const memo = match(chain)
-      .with(Chain.Bitcoin, () => params.memo)
-      .with(Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash, () => reduceMemo(params.memo))
-      .exhaustive();
 
     const { tx, inputs } = await toolbox.createTransaction({
       ...params,
       feeRate,
       fetchTxHex: true,
-      memo,
       publicKey: params.publicKey ?? publicKey,
       sender: address,
     });
