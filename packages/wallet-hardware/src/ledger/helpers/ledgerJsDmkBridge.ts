@@ -1,12 +1,5 @@
-import type {
-  Apdu,
-  ApduResponse,
-  Command,
-  InternalApi,
-  UnknownDeviceExchangeError,
-  UserInteractionRequired,
-} from "@ledgerhq/device-management-kit";
-import Transport, { TransportError } from "@ledgerhq/hw-transport";
+import type { UnknownDeviceExchangeError, UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type Transport from "@ledgerhq/hw-transport";
 import { type DerivationPathArray, SwapKitError } from "@swapkit/helpers";
 
 import { getLedgerDMKSession, type LedgerDMKSession } from "./dmk";
@@ -17,84 +10,6 @@ import {
 } from "./executeDeviceAction";
 
 export { LEDGER_USER_INTERACTION_REQUIRED };
-
-const STATUS_CODE_LENGTH = 2;
-const TransportBase =
-  typeof Transport === "function" ? Transport : (Transport as unknown as { default: typeof Transport }).default;
-
-interface RawApduResponse {
-  response: Uint8Array;
-}
-
-class RawApduCommand implements Command<RawApduResponse> {
-  readonly name = "ledgerJsRawApdu";
-
-  constructor(
-    private readonly apdu: Apdu,
-    private readonly dmkModule: typeof import("@ledgerhq/device-management-kit"),
-  ) {}
-
-  getApdu() {
-    return this.apdu;
-  }
-
-  parseResponse({ data, statusCode }: ApduResponse) {
-    if (statusCode.length !== STATUS_CODE_LENGTH) {
-      return this.dmkModule.CommandResultFactory<RawApduResponse>({
-        error: new this.dmkModule.UnknownDeviceExchangeError(new Error("Ledger returned an invalid APDU status code")),
-      });
-    }
-
-    const response = new Uint8Array(data.length + statusCode.length);
-    response.set(data);
-    response.set(statusCode, data.length);
-
-    return this.dmkModule.CommandResultFactory<RawApduResponse>({ data: { response } });
-  }
-}
-
-function parseShortApdu(apdu: Buffer) {
-  if (apdu.length < 5) {
-    throw new TransportError("Ledger APDU must contain a five-byte short-APDU header", "InvalidAPDU");
-  }
-
-  const dataLength = apdu[4];
-  if (dataLength === undefined || apdu.length !== dataLength + 5) {
-    throw new TransportError("Ledger APDU payload length does not match its short-APDU header", "InvalidAPDU");
-  }
-
-  const cla = apdu[0];
-  const ins = apdu[1];
-  const p1 = apdu[2];
-  const p2 = apdu[3];
-  if (cla === undefined || ins === undefined || p1 === undefined || p2 === undefined) {
-    throw new TransportError("Ledger APDU header is incomplete", "InvalidAPDU");
-  }
-
-  return { cla, data: apdu.subarray(5), ins, p1, p2 };
-}
-
-export class LedgerJsDmkTransport extends TransportBase {
-  constructor(private readonly internalApi: InternalApi) {
-    super();
-  }
-
-  async exchange(apdu: Buffer, { abortTimeoutMs }: { abortTimeoutMs?: number } = {}) {
-    const dmkModule = await import("@ledgerhq/device-management-kit");
-    const { cla, data, ins, p1, p2 } = parseShortApdu(apdu);
-    const command = new RawApduCommand(new dmkModule.Apdu(cla, ins, p1, p2, data), dmkModule);
-    // Forward only an explicit timeout: hw-transport's 30 s default would cut off a user still confirming
-    // on the device once DMK honours the argument.
-    const result = await this.internalApi.sendCommand(command, abortTimeoutMs);
-
-    if (!dmkModule.isSuccessCommandResult(result)) throw result.error;
-    return Buffer.from(result.data.response);
-  }
-
-  close() {
-    return Promise.resolve();
-  }
-}
 
 export interface LedgerJsClientConnection {
   dmkSession?: LedgerDMKSession;
@@ -150,9 +65,10 @@ export async function runLedgerJsOperation<App, Output>({
 
   const session = dmkSession ?? (await getLedgerDMKSession());
 
-  const { CallTaskInAppDeviceAction, DmkResultFactory, UnknownDeviceExchangeError } = await import(
-    "@ledgerhq/device-management-kit"
-  );
+  // Loaded before the action is built, so a chunk that fails to load rejects before the app opens. The bridge
+  // transport stays lazy because its hw-transport base class does not load under Node ESM (see its module).
+  const [{ CallTaskInAppDeviceAction, DmkResultFactory, UnknownDeviceExchangeError }, { LedgerJsDmkTransport }] =
+    await Promise.all([import("@ledgerhq/device-management-kit"), import("./ledgerJsDmkTransport")]);
 
   const deviceAction = new CallTaskInAppDeviceAction<
     { output: Output },

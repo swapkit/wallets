@@ -8,9 +8,11 @@ import {
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
 import type Transport from "@ledgerhq/hw-transport";
+import { SwapKitError } from "@swapkit/helpers";
 import { concat, from, of } from "rxjs";
 
-import { LedgerJsDmkTransport, runLedgerJsOperation } from "../src/ledger/helpers/ledgerJsDmkBridge";
+import { runLedgerJsOperation } from "../src/ledger/helpers/ledgerJsDmkBridge";
+import { LedgerJsDmkTransport } from "../src/ledger/helpers/ledgerJsDmkTransport";
 
 function createInternalApi({
   responseData = new Uint8Array([0xaa]),
@@ -208,6 +210,23 @@ describe("operation-scoped LedgerJS DMK bridge", () => {
 
     expect(output).toBe("rLedger");
     expect(createAppTransports).toEqual([transport]);
+  });
+
+  it("surfaces a SwapKitError thrown by the app operation unchanged", async () => {
+    const { internalApi } = createInternalApi();
+    const harness = createDmkHarness(internalApi);
+    const validationError = new SwapKitError("wallet_ledger_invalid_params", { reason: "Paths do not match inputs" });
+
+    await expect(
+      runLedgerJsOperation({
+        appName: "Litecoin",
+        connection: { dmkSession: { dmk: harness.dmk, sessionId: "ledger-session" } },
+        createApp: () => ({}),
+        operation: () => {
+          throw validationError;
+        },
+      }),
+    ).rejects.toBe(validationError);
   });
 
   it("rejects ambiguous DMK plus LedgerJS transport ownership", async () => {
