@@ -244,6 +244,14 @@ class EVMLedgerInterface extends AbstractSigner {
     delete request.from;
     delete request.authorizationList;
     request.chainId = expectedChainId;
+    // ethers infers EIP-2930 for an untyped gasPrice-only request; sign it as legacy, as before the signer kit.
+    const isUntypedLegacyRequest =
+      request.type == null &&
+      request.gasPrice != null &&
+      request.accessList == null &&
+      request.maxFeePerGas == null &&
+      request.maxPriorityFeePerGas == null;
+    if (isUntypedLegacyRequest) request.type = 0;
     request.nonce ??= await this.provider?.getTransactionCount(signerAddress ?? (await this.getAddress()));
 
     const baseTx = Transaction.from(request as TransactionLike<string>);
