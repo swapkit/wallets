@@ -1,4 +1,5 @@
-import type { BuildArtifact, BuildConfig } from "bun";
+import type { BuildArtifact, BuildConfig, BuildOutput } from "bun";
+import { writeThirdPartyNotices } from "./thirdPartyNotices";
 
 const isDebug = process.env.DEBUG === "true";
 const sizeData: Record<string, { esm: number; cjs: number }> = {};
@@ -40,6 +41,7 @@ export async function buildPackage({
     define: { "process.env.NODE_ENV": JSON.stringify(isDebug ? "development" : "production") },
     entrypoints,
     external: [...packageExternals, ...external],
+    metafile: Boolean(bundlePackages),
     minify: !isDebug,
     outdir: "./dist",
     packages: bundlePackages ? "bundle" : (packages ?? "external"),
@@ -51,7 +53,7 @@ export async function buildPackage({
   const buildESM = await Bun.build(buildOptions);
   // Code splitting is esm-only — bun 1.4.0 rejects it for other formats
   // (older bun silently ignored it on the cjs pass).
-  const buildCJS = evmOnly
+  const buildCJS: BuildOutput = evmOnly
     ? { logs: [], outputs: [], success: true }
     : await Bun.build({ ...buildOptions, format: "cjs", naming: "[dir]/[name].cjs", splitting: false });
 
@@ -60,6 +62,7 @@ export async function buildPackage({
   }
 
   await copyLicense();
+  if (bundlePackages) await writeThirdPartyNotices([buildESM.metafile, buildCJS.metafile]);
 
   if (entrypoints.length === 1) {
     const esmBytesize = buildESM.outputs
