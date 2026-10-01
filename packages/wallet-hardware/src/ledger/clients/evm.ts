@@ -218,6 +218,16 @@ class EVMLedgerInterface extends AbstractSigner {
       });
     }
 
+    const expectedChainId = BigInt(this.chainId);
+
+    if (request.chainId != null && request.chainId !== expectedChainId) {
+      throw new SwapKitError("wallet_ledger_invalid_params", {
+        chainId: request.chainId,
+        expectedChainId,
+        message: "Transaction chainId does not match the Ledger client chain",
+      });
+    }
+
     const { from, to } = await resolveProperties({
       from: request.from ? resolveAddress(request.from, this) : undefined,
       to: request.to ? resolveAddress(request.to, this) : undefined,
@@ -233,7 +243,7 @@ class EVMLedgerInterface extends AbstractSigner {
     if (to) request.to = to;
     delete request.from;
     delete request.authorizationList;
-    request.chainId ??= BigInt(this.chainId);
+    request.chainId = expectedChainId;
     request.nonce ??= await this.provider?.getTransactionCount(signerAddress ?? (await this.getAddress()));
 
     const baseTx = Transaction.from(request as TransactionLike<string>);
