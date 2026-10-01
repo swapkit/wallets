@@ -8,6 +8,7 @@ import {
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
 import type { Transaction as NearTransaction } from "@near-js/transactions";
+import type { TronTransaction } from "@swapkit/toolboxes/tron";
 import { decode } from "ripple-binary-codec";
 import { from } from "rxjs";
 import type { Payment } from "xrpl";
@@ -17,6 +18,8 @@ import { SuiLedger } from "../src/ledger/clients/sui";
 import { TronLedger } from "../src/ledger/clients/tron";
 import { BitcoinCashLedger, DashLedger, DogecoinLedger, LitecoinLedger } from "../src/ledger/clients/utxo";
 import { XRPLedger } from "../src/ledger/clients/xrp";
+
+const tronTransaction = { raw_data_hex: "0a00", txID: "ledger-tron-tx" } as TronTransaction;
 
 interface ExchangeRecord {
   actionIndex: number;
@@ -83,7 +86,8 @@ function getResponseData({ appName, ins, p1 }: Pick<ExchangeRecord, "appName" | 
   throw new Error(`Unexpected ${appName} APDU instruction 0x${ins.toString(16)}`);
 }
 
-function createDmkHarness() {
+// `rejectedIns` answers that instruction with 0x6985, as the device does when the user declines it.
+function createDmkHarness({ rejectedIns }: { rejectedIns?: number } = {}) {
   const actions: Array<{ appName: string; requiredUserInteraction: UserInteractionRequired }> = [];
   const exchanges: ExchangeRecord[] = [];
   const executeDeviceAction = mock(
@@ -117,12 +121,11 @@ function createDmkHarness() {
             p2: apdu.p2,
           };
           exchanges.push(exchange);
-          return Promise.resolve(
-            command.parseResponse(
-              new ApduResponse({ data: getResponseData(exchange), statusCode: new Uint8Array([0x90, 0x00]) }),
-              undefined,
-            ),
-          );
+          const response =
+            exchange.ins === rejectedIns
+              ? new ApduResponse({ data: new Uint8Array(), statusCode: new Uint8Array([0x69, 0x85]) })
+              : new ApduResponse({ data: getResponseData(exchange), statusCode: new Uint8Array([0x90, 0x00]) });
+          return Promise.resolve(command.parseResponse(response, undefined));
         };
         const result = await deviceAction.input.task({ sendCommand } as unknown as InternalApi);
         return result.status === DmkResultStatus.Success
@@ -194,16 +197,14 @@ describe("LedgerJS clients over the operation-scoped DMK bridge", () => {
   it("preserves Tron's raw transaction and 65-byte signature array", async () => {
     const harness = createDmkHarness();
     const client = TronLedger({ dmkSession: harness.dmkSession });
-    const transaction = { raw_data_hex: "0a00", txID: "ledger-tron-tx" } as Parameters<
-      typeof client.signTransaction
-    >[0];
 
-    const signed = await client.signTransaction(transaction);
+    const signed = await client.signTransaction(tronTransaction);
 
     expect(signed).toMatchObject({ raw_data_hex: "0a00", signature: ["ab".repeat(65)], txID: "ledger-tron-tx" });
     expect(harness.actions).toEqual([
       { appName: "Tron", requiredUserInteraction: UserInteractionRequired.SignTransaction },
     ]);
+    expect(harness.exchanges.map(({ ins }) => ins)).toEqual([0x04]);
   });
 
   it("preserves Sui's intent bytes and serialized signature layout", async () => {
@@ -224,6 +225,21 @@ describe("LedgerJS clients over the operation-scoped DMK bridge", () => {
     expect(harness.exchanges.filter(({ actionIndex }) => actionIndex === 1).map(({ ins }) => ins)).toEqual([
       0x00, 0x03,
     ]);
+  });
+
+  it("reports a NEAR, Sui or Tron signature rejected on the device as a user rejection", async () => {
+    const userRejection = { errorKey: "wallet_connection_rejected_by_user", info: { statusWord: "6985" } };
+
+    const near = await getNearLedgerClient({ dmkSession: createDmkHarness({ rejectedIns: 0x02 }).dmkSession });
+    const nearTransaction = { encode: () => new Uint8Array(8) } as unknown as NearTransaction;
+    await expect(near.signTransaction(nearTransaction)).rejects.toMatchObject(userRejection);
+
+    const sui = SuiLedger({ dmkSession: createDmkHarness({ rejectedIns: 0x03 }).dmkSession });
+    await sui.connect();
+    await expect(sui.signTransaction(new Uint8Array([0xaa]))).rejects.toMatchObject(userRejection);
+
+    const tron = TronLedger({ dmkSession: createDmkHarness({ rejectedIns: 0x04 }).dmkSession });
+    await expect(tron.signTransaction(tronTransaction)).rejects.toMatchObject(userRejection);
   });
 
   it("opens each alt-UTXO app through its own operation and keeps address output intact", async () => {
