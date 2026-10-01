@@ -1,4 +1,10 @@
-import type { LegacyCreateTransactionArg, LegacyTransaction, SignerZcash } from "@ledgerhq/device-signer-kit-zcash";
+import type {
+  LegacyCreateTransactionArg,
+  LegacyTransaction,
+  LegacyTransactionInput,
+  LegacyTransactionOutput,
+  SignerZcash,
+} from "@ledgerhq/device-signer-kit-zcash";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import {
@@ -16,8 +22,8 @@ import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "
 import { runLedgerJsOperation } from "../helpers/ledgerJsDmkBridge";
 import { ZcashLedger as LegacyZcashLedger } from "./utxo";
 
+// @swapkit/utxo-signer 3.1.0 exports only the Ironwood activation height.
 const NU6_2_ACTIVATION_HEIGHT = 3_364_600;
-const IRONWOOD_ACTIVATION_HEIGHT = 3_428_143;
 
 interface ZcashLedgerParams {
   derivationPath?: DerivationPathArray | string;
@@ -80,38 +86,9 @@ function uint64LE(value: bigint) {
   return bytes;
 }
 
-function compactSize(value: number) {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new SwapKitError("wallet_ledger_invalid_params", { reason: `Invalid compact-size value: ${value}` });
-  }
-  if (value < 0xfd) return Uint8Array.of(value);
-  if (value <= 0xffff) return Uint8Array.of(0xfd, value & 0xff, (value >>> 8) & 0xff);
-  if (value <= 0xffffffff) {
-    return Uint8Array.of(0xfe, value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, value >>> 24);
-  }
-
-  const bytes = new Uint8Array(9);
-  bytes[0] = 0xff;
-  new DataView(bytes.buffer).setBigUint64(1, BigInt(value), true);
-  return bytes;
-}
-
-function readCompactSize({ bytes, offset }: { bytes: Uint8Array; offset: number }) {
-  const prefix = bytes[offset];
-  if (prefix === undefined) throw new Error("Unexpected end of previous transaction");
-  if (prefix < 0xfd) return { offset: offset + 1, value: prefix };
-
-  const byteLength = prefix === 0xfd ? 2 : prefix === 0xfe ? 4 : 8;
-  if (offset + 1 + byteLength > bytes.length) throw new Error("Truncated compact-size value");
-  const view = new DataView(bytes.buffer, bytes.byteOffset + offset + 1, byteLength);
-  const value =
-    byteLength === 2
-      ? view.getUint16(0, true)
-      : byteLength === 4
-        ? view.getUint32(0, true)
-        : Number(view.getBigUint64(0, true));
-  if (!Number.isSafeInteger(value)) throw new Error("Previous transaction compact-size value exceeds safe range");
-  return { offset: offset + 1 + byteLength, value };
+// Keeps the failure context in the error info, and so in its message, rather than only in its cause.
+function invalidParams(info: Record<string, unknown>, cause?: unknown) {
+  return new SwapKitError({ errorKey: "wallet_ledger_invalid_params", info }, cause);
 }
 
 function readUint32LE({ bytes, offset }: { bytes: Uint8Array; offset: number }) {
@@ -119,88 +96,95 @@ function readUint32LE({ bytes, offset }: { bytes: Uint8Array; offset: number }) 
   return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true);
 }
 
-function parsePreviousTransactionOutput({ bytes, outputIndex }: { bytes: Uint8Array; outputIndex: number }) {
-  const version = readUint32LE({ bytes, offset: 0 }) & 0x7fffffff;
-  const overwintered = (readUint32LE({ bytes, offset: 0 }) & 0x80000000) !== 0;
-  let offset = overwintered ? 8 : 4;
-  let consensusBranchId = new Uint8Array();
-  let expiryHeight = new Uint8Array();
-  let locktime = new Uint8Array();
-
-  if (version >= 5) {
-    if (bytes.length < 20) throw new Error("Truncated Zcash v5 transaction header");
-    consensusBranchId = bytes.slice(8, 12);
-    locktime = bytes.slice(12, 16);
-    expiryHeight = bytes.slice(16, 20);
-    offset = 20;
-  }
-
-  const inputCount = readCompactSize({ bytes, offset });
-  offset = inputCount.offset;
-  for (let index = 0; index < inputCount.value; index += 1) {
-    if (offset + 36 > bytes.length) throw new Error("Truncated previous transaction input");
-    offset += 36;
-    const scriptLength = readCompactSize({ bytes, offset });
-    offset = scriptLength.offset + scriptLength.value + 4;
-    if (offset > bytes.length) throw new Error("Truncated previous transaction input script");
-  }
-
-  const outputCount = readCompactSize({ bytes, offset });
-  offset = outputCount.offset;
-  if (outputIndex < 0 || outputIndex >= outputCount.value) {
-    throw new Error("Zcash input references an output outside its previous transaction");
-  }
-
-  let referencedOutput: { amount: Uint8Array; script: Uint8Array } | undefined;
-  for (let index = 0; index < outputCount.value; index += 1) {
-    if (offset + 8 > bytes.length) throw new Error("Truncated previous transaction output amount");
-    const amount = bytes.slice(offset, offset + 8);
-    offset += 8;
-    const scriptLength = readCompactSize({ bytes, offset });
-    offset = scriptLength.offset;
-    if (offset + scriptLength.value > bytes.length) throw new Error("Truncated previous transaction output script");
-    const script = bytes.slice(offset, offset + scriptLength.value);
-    offset += scriptLength.value;
-    if (index === outputIndex) referencedOutput = { amount, script };
-  }
-
-  if (version < 5) {
-    if (offset + 4 > bytes.length) throw new Error("Previous transaction is missing locktime");
-    locktime = bytes.slice(offset, offset + 4);
-    offset += 4;
-    expiryHeight = overwintered ? bytes.slice(offset, offset + 4) : new Uint8Array();
-  }
-
-  if (!referencedOutput) throw new Error("Previous transaction output could not be parsed");
-  return { consensusBranchId, expiryHeight, locktime, outputCount: outputCount.value, referencedOutput };
-}
-
-function concatBytes(parts: Uint8Array[]) {
-  const result = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+// @swapkit/utxo-signer 3.1.0 has no bounds-checked, v5-aware decoder (ZcashTransaction.fromBytes reads only the
+// v4 layout and its Reader is not exported), so previous transactions are read here.
+function createPreviousTransactionReader(bytes: Uint8Array) {
   let offset = 0;
-  for (const part of parts) {
-    result.set(part, offset);
-    offset += part.length;
+
+  function take(length: number) {
+    if (offset + length > bytes.length) throw new Error(`Previous transaction ends before byte ${offset + length}`);
+    offset += length;
+    return bytes.slice(offset - length, offset);
   }
-  return result;
+
+  function compactSize() {
+    const prefix = take(1)[0] ?? 0;
+    if (prefix < 0xfd) return prefix;
+
+    const view = new DataView(take(prefix === 0xfd ? 2 : prefix === 0xfe ? 4 : 8).buffer);
+    const value =
+      view.byteLength === 2
+        ? view.getUint16(0, true)
+        : view.byteLength === 4
+          ? view.getUint32(0, true)
+          : Number(view.getBigUint64(0, true));
+    if (!Number.isSafeInteger(value)) throw new Error("Previous transaction compact-size value exceeds safe range");
+    return value;
+  }
+
+  return { compactSize, rest: () => take(bytes.length - offset), take, varBytes: () => take(compactSize()) };
 }
 
-function serializeOutputs(tx: ZcashTransaction) {
+// Fields are read into locals in wire order: object keys are kept sorted, which is not the order on the wire.
+function parsePreviousTransaction({ bytes, version }: { bytes: Uint8Array; version: number }) {
+  const reader = createPreviousTransactionReader(bytes);
+  const header = reader.take(version === 4 ? 8 : 20);
+
+  const inputs: LegacyTransactionInput[] = [];
+  for (let count = reader.compactSize(); inputs.length < count; ) {
+    const prevout = reader.take(36);
+    const script = reader.varBytes();
+    const sequence = reader.take(4);
+    inputs.push({ prevout, script, sequence });
+  }
+
+  const outputs: LegacyTransactionOutput[] = [];
+  for (let count = reader.compactSize(); outputs.length < count; ) {
+    const amount = reader.take(8);
+    const script = reader.varBytes();
+    outputs.push({ amount, script });
+  }
+
+  const transparentFields = { inputs, nVersionGroupId: header.slice(4, 8), outputs, version: header.slice(0, 4) };
+  if (version >= 5) {
+    return {
+      ...transparentFields,
+      consensusBranchId: header.slice(8, 12),
+      locktime: header.slice(12, 16),
+      nExpiryHeight: header.slice(16, 20),
+    };
+  }
+
+  const locktime = reader.take(4);
+  const nExpiryHeight = reader.take(4);
+  // Value balance, Sapling spends and outputs, JoinSplits and the binding signature follow nExpiryHeight.
+  return { ...transparentFields, extraData: reader.rest(), locktime, nExpiryHeight };
+}
+
+// Either byte order binds a txid equally: toolbox-built transactions keep display-order txids, while
+// ZcashTransaction.fromBytes keeps them in wire order.
+function matchesTxid({ hash, txid }: { hash: string; txid: Uint8Array }) {
+  const normalized = hash.toLowerCase();
+  return normalized === hex.encode(txid) || normalized === hex.encode(txid.slice().reverse());
+}
+
+async function serializeOutputs(tx: ZcashTransaction) {
+  const { CompactSize, utils } = await import("@swapkit/utxo-signer");
   const outputs = Array.from({ length: tx.outputsLength }, (_, index) => tx.getOutput(index));
-  return concatBytes([
-    compactSize(outputs.length),
-    ...outputs.flatMap(({ amount, script }) => [uint64LE(amount), compactSize(script.length), script]),
-  ]);
+  return utils.concatBytes(
+    CompactSize.encode(BigInt(outputs.length)),
+    ...outputs.flatMap(({ amount, script }) => [uint64LE(amount), CompactSize.encode(BigInt(script.length)), script]),
+  );
 }
 
 async function activationHeight(consensusBranchId: number) {
-  const { ZcashConsensusBranchId } = await import("@swapkit/utxo-signer");
+  const { ZCASH_IRONWOOD_ACTIVATION_HEIGHT, ZcashConsensusBranchId } = await import("@swapkit/utxo-signer");
 
   switch (consensusBranchId) {
     case ZcashConsensusBranchId.NU6_2:
       return NU6_2_ACTIVATION_HEIGHT;
     case ZcashConsensusBranchId.IRONWOOD:
-      return IRONWOOD_ACTIVATION_HEIGHT;
+      return ZCASH_IRONWOOD_ACTIVATION_HEIGHT;
     default:
       throw new SwapKitError("wallet_ledger_invalid_params", {
         consensusBranchId,
@@ -209,37 +193,68 @@ async function activationHeight(consensusBranchId: number) {
   }
 }
 
-function previousTransaction({ inputIndex, utxo }: { inputIndex: number; utxo: UTXOType }): LegacyTransaction {
-  if (!utxo.txHex) {
-    throw new SwapKitError("wallet_ledger_invalid_params", {
-      inputIndex,
+async function previousTransaction({
+  inputIndex,
+  utxo,
+}: {
+  inputIndex: number;
+  utxo: UTXOType;
+}): Promise<LegacyTransaction> {
+  const { hash: txid, index: outputIndex, txHex } = utxo;
+  const context = { inputIndex, outputIndex, txid };
+  if (!txHex) {
+    throw invalidParams({
+      ...context,
       reason: "Zcash Ledger signing requires the full previous transaction txHex for every input",
     });
   }
 
-  const raw = hex.decode(utxo.txHex.replace(/^0x/i, ""));
-  const parsed = (() => {
+  function readPrevious<T>(read: () => T) {
     try {
-      return parsePreviousTransactionOutput({ bytes: raw, outputIndex: utxo.index });
+      return read();
     } catch (error) {
-      throw new SwapKitError("wallet_ledger_invalid_params", error);
+      throw invalidParams({ ...context, reason: error instanceof Error ? error.message : String(error) }, error);
     }
-  })();
+  }
 
-  const outputs = Array.from({ length: utxo.index + 1 }, (_, outputIndex) =>
-    outputIndex === utxo.index ? parsed.referencedOutput : { amount: new Uint8Array(8), script: new Uint8Array() },
-  );
+  const raw = readPrevious(() => hex.decode(txHex.replace(/^0x/i, "")));
+  const header = readPrevious(() => readUint32LE({ bytes: raw, offset: 0 }));
+  const version = header & 0x7fffffff;
+  // The Zcash DSK can stream only v4 (Sapling) and v5/v6 previous transactions into a trusted input.
+  if ((header & 0x80000000) === 0 || version < 4 || version > 6) {
+    throw invalidParams({
+      ...context,
+      reason: "Ledger Zcash signing supports only overwintered v4, v5 and v6 previous transactions",
+      version,
+    });
+  }
 
-  return {
-    consensusBranchId: parsed.consensusBranchId,
-    inputs: [],
-    locktime: parsed.locktime,
-    nExpiryHeight: parsed.expiryHeight,
-    nVersionGroupId: (readUint32LE({ bytes: raw, offset: 0 }) & 0x80000000) !== 0 ? raw.slice(4, 8) : undefined,
-    outputs,
-    serializedPreviousTransactionOverride: raw,
-    version: raw.slice(0, 4),
-  };
+  const parsed = readPrevious(() => parsePreviousTransaction({ bytes: raw, version }));
+  if (outputIndex < 0 || outputIndex >= parsed.outputs.length) {
+    throw invalidParams({
+      ...context,
+      outputCount: parsed.outputs.length,
+      reason: "Zcash input references an output outside its previous transaction",
+    });
+  }
+
+  // The DSK streams a v5/v6 previous transaction from its wire bytes and the device computes its ZIP-244 txid.
+  // Override bytes must use that layout, so the DSK frames a v4 itself from the parsed fields instead.
+  if (version >= 5) return { ...parsed, serializedPreviousTransactionOverride: raw };
+
+  // A v4 txid is the double SHA-256 of its bytes, so bind the transaction to the planned input before the
+  // device trusts its amounts.
+  const { utils } = await import("@swapkit/utxo-signer");
+  const previousTxid = utils.sha256x2(raw);
+  if (!matchesTxid({ hash: txid, txid: previousTxid })) {
+    throw invalidParams({
+      ...context,
+      previousTxid: hex.encode(previousTxid.reverse()),
+      reason: "Previous transaction does not hash to the input txid",
+    });
+  }
+
+  return parsed;
 }
 
 function validateSigningParams({
@@ -261,6 +276,18 @@ function validateSigningParams({
       reason: "Zcash input UTXOs and derivation paths must match the transaction input count",
     });
   }
+
+  inputUtxos.forEach((utxo, inputIndex) => {
+    const input = tx.getInput(inputIndex);
+    if (!matchesTxid({ hash: utxo.hash, txid: input.txid }) || utxo.index !== input.index) {
+      throw invalidParams({
+        inputIndex,
+        reason: "Zcash input UTXO does not match the transaction input",
+        transactionInput: { index: input.index, txid: hex.encode(input.txid) },
+        utxo: { hash: utxo.hash, index: utxo.index },
+      });
+    }
+  });
 
   return derivationPaths.map((path) => {
     const parsedPath = parseZcashPath(path);
@@ -360,20 +387,25 @@ export function ZcashLedger({
     }
 
     const blockHeight = await activationHeight(tx.consensusBranchId);
+    const inputs = await Promise.all(
+      inputUtxos.map(
+        async (utxo, inputIndex): Promise<LegacyCreateTransactionArg["inputs"][number]> => [
+          await previousTransaction({ inputIndex, utxo }),
+          utxo.index,
+          null,
+          tx.getInput(inputIndex).sequence ?? 0xffffffff,
+        ],
+      ),
+    );
     const args: LegacyCreateTransactionArg = {
       additionals: ["zcash", "sapling"],
       associatedKeysets: paths,
       blockHeight,
       changePath: changePath ? parseZcashPath(changePath).fullPath : configuredPath.fullPath,
       expiryHeight: uint32LE(tx.expiryHeight),
-      inputs: inputUtxos.map((utxo, inputIndex) => [
-        previousTransaction({ inputIndex, utxo }),
-        utxo.index,
-        null,
-        tx.getInput(inputIndex).sequence ?? 0xffffffff,
-      ]),
+      inputs,
       lockTime: tx.lockTime,
-      outputScriptHex: hex.encode(serializeOutputs(tx)),
+      outputScriptHex: hex.encode(await serializeOutputs(tx)),
     };
     const signer = await getSigner();
     const signed = await executeLedgerDeviceAction({ action: signer.signTransaction(args), onDeviceActionState });
