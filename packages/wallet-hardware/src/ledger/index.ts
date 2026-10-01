@@ -7,8 +7,6 @@ import {
   derivationPathToString,
   FeeOption,
   filterSupportedChains,
-  type GenericTransferParams,
-  getRPCUrl,
   getUTXOScriptTypeForPath,
   NetworkDerivationPath,
   SwapKitError,
@@ -617,47 +615,12 @@ async function getCosmosWalletMethods({
   onDeviceActionState,
   transport,
 }: WalletMethodsParams<Chain.Cosmos>) {
-  const { createSigningStargateClient, getDefaultChainFee, getMsgSendDenom, getCosmosToolbox } = await import(
-    "@swapkit/toolboxes/cosmos"
-  );
   const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
+  const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
+  const toolbox = getCosmosToolbox(chain, { signer });
   const address = await getLedgerAddress({ chain, ledgerClient: signer });
-  const toolbox = await getCosmosToolbox(Chain.Cosmos, { signer });
 
-  const transfer = async ({
-    assetValue,
-    feeOptionKey = FeeOption.Average,
-    feeRate,
-    memo,
-    recipient,
-  }: GenericTransferParams) => {
-    if (!assetValue) throw new SwapKitError("wallet_ledger_invalid_asset");
-
-    const sendCoinsMessage = {
-      amount: [
-        { amount: assetValue.getBaseValue("string"), denom: getMsgSendDenom(`u${assetValue.symbol}`).toLowerCase() },
-      ],
-      fromAddress: address,
-      toAddress: recipient,
-    };
-
-    // Same fee as the toolbox's own transfer. The static default (0.0025 uatom/gas) is below the Hub's
-    // feemarket minimum of 0.005 uatom/gas, so every transfer paying it was rejected.
-    const fee = feeRate ?? (await toolbox.getFees())[feeOptionKey].getBaseValue("number");
-    const rpcUrl = await getRPCUrl(chain);
-    const signingClient = await createSigningStargateClient(rpcUrl, signer);
-
-    const { transactionHash } = await signingClient.signAndBroadcast(
-      address,
-      [{ typeUrl: "/cosmos.bank.v1beta1.MsgSend", value: sendCoinsMessage }],
-      { amount: [{ amount: fee.toString(), denom: "uatom" }], gas: getDefaultChainFee(Chain.Cosmos).gas },
-      memo,
-    );
-
-    return transactionHash;
-  };
-
-  return { ...toolbox, address, transfer };
+  return { ...toolbox, address };
 }
 
 async function getTHORChainWalletMethods({

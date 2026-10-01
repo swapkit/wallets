@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { StdSignDoc } from "@cosmjs/amino";
 import {
   ApduResponse,
@@ -6,6 +6,7 @@ import {
   type DeviceManagementKit,
   GlobalCommandErrorHandler,
 } from "@ledgerhq/device-management-kit";
+import { AssetValue, Chain, type GenericTransferParams } from "@swapkit/helpers";
 import { of } from "rxjs";
 
 const publicKey = Uint8Array.from([2, ...new Uint8Array(32).fill(9)]);
@@ -52,6 +53,7 @@ mock.module("@ledgerhq/device-signer-kit-cosmos", () => ({
 }));
 
 import { CosmosLedger } from "../src/ledger/clients/cosmos";
+import { ledgerWallet } from "../src/ledger/index";
 
 // cosmjs is CJS requiring ESM-only `@scure/base`; a static import next to `@swapkit/*` fails under Bun.
 const { encodeSecp256k1Signature, serializeSignDoc } = await import("@cosmjs/amino");
@@ -130,5 +132,114 @@ describe("Ledger Cosmos Device Signer Kit client", () => {
       errorKey: "wallet_connection_rejected_by_user",
       info: { statusWord: "6986" },
     });
+  });
+});
+
+describe("Ledger Cosmos wallet", () => {
+  const ledgerAddress = "cosmos1ledgerdsk";
+  const recipient = "cosmos1recipient";
+  const broadcasts: string[] = [];
+  let broadcastCode = 0;
+  let fetchSpy: { mockRestore: () => void } | undefined;
+
+  // QueryAccountResponse { account: Any(BaseAccount { address, account_number: 17, sequence: 4 }) } in protobuf.
+  function encodeAccountResponse() {
+    const field = (tag: number, bytes: Uint8Array) => [tag, bytes.length, ...bytes];
+    const text = (value: string) => new TextEncoder().encode(value);
+    const baseAccount = Uint8Array.from([...field(0x0a, text(ledgerAddress)), 0x18, 17, 0x20, 4]);
+    const account = Uint8Array.from([
+      ...field(0x0a, text("/cosmos.auth.v1beta1.BaseAccount")),
+      ...field(0x12, baseAccount),
+    ]);
+    return Buffer.from(field(0x0a, account)).toString("base64");
+  }
+
+  // A Cosmos Hub node over Tendermint JSON-RPC; the SwapKit gas endpoint (GET) returns no rate.
+  function mockCosmosNode(_input: string | URL | Request, init?: RequestInit) {
+    if (!init?.body) return Promise.resolve(Response.json([]));
+
+    const { id, method, params } = JSON.parse(String(init.body)) as {
+      id?: number;
+      method?: string;
+      params?: { tx?: string };
+    };
+    if (method === "broadcast_tx_sync") broadcasts.push(params?.tx ?? "");
+
+    const result =
+      method === "abci_query"
+        ? { response: { code: 0, height: "1", value: encodeAccountResponse() } }
+        : method === "broadcast_tx_sync"
+          ? { code: broadcastCode, hash: "LEDGERTXHASH", log: broadcastCode ? "insufficient fees" : "" }
+          : { node_info: { network: "cosmoshub-4" }, sync_info: { latest_block_height: "1" } };
+    return Promise.resolve(Response.json({ id, jsonrpc: "2.0", result }));
+  }
+
+  async function connectCosmosLedger() {
+    const addChain = mock((_wallet: unknown) => {});
+    const connectLedger = ledgerWallet.connectLedger.connectWallet({ addChain: addChain as never });
+
+    await connectLedger([Chain.Cosmos], undefined, { dmkSession });
+    return addChain.mock.calls[0]?.[0] as {
+      address: string;
+      getFees: () => Promise<{
+        average: { getBaseValue: (type: "string") => string };
+        fast: { getBaseValue: (type: "string") => string };
+      }>;
+      transfer: (params: GenericTransferParams) => Promise<string>;
+    };
+  }
+
+  beforeEach(() => {
+    addressCalls.length = 0;
+    signCalls.length = 0;
+    broadcasts.length = 0;
+    broadcastCode = 0;
+    signatureError = undefined;
+    signatureOutput = Uint8Array.from({ length: 64 }, (_, index) => index + 1);
+    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(mockCosmosNode as typeof fetch);
+  });
+
+  afterEach(() => {
+    fetchSpy?.mockRestore();
+  });
+
+  it("signs and broadcasts through the toolbox transfer", async () => {
+    const wallet = await connectCosmosLedger();
+
+    const txHash = await wallet.transfer({
+      assetValue: AssetValue.from({ chain: Chain.Cosmos, value: "0.1" }),
+      memo: "ledger transfer",
+      recipient,
+    });
+    const fees = await wallet.getFees();
+
+    expect(wallet.address).toBe(ledgerAddress);
+    expect(txHash).toBe("LEDGERTXHASH");
+    expect(broadcasts).toHaveLength(1);
+    // Without a feeOptionKey the toolbox pays its Fast fee, clear of the Hub feemarket floor that Average sits on.
+    expect(fees.fast.getBaseValue("string")).not.toBe(fees.average.getBaseValue("string"));
+    expect(JSON.parse(new TextDecoder().decode(signCalls[0]?.message))).toEqual({
+      account_number: "17",
+      chain_id: "cosmoshub-4",
+      fee: { amount: [{ amount: fees.fast.getBaseValue("string"), denom: "uatom" }], gas: "200000" },
+      memo: "ledger transfer",
+      msgs: [
+        {
+          type: "cosmos-sdk/MsgSend",
+          value: { amount: [{ amount: "100000", denom: "uatom" }], from_address: ledgerAddress, to_address: recipient },
+        },
+      ],
+      sequence: "4",
+    });
+  });
+
+  it("rejects a transfer the node refuses at CheckTx", async () => {
+    broadcastCode = 13;
+    const wallet = await connectCosmosLedger();
+
+    await expect(
+      wallet.transfer({ assetValue: AssetValue.from({ chain: Chain.Cosmos, value: "0.1" }), recipient }),
+    ).rejects.toMatchObject({ cause: { code: 13 }, errorKey: "core_swap_transaction_error" });
+    expect(broadcasts).toHaveLength(1);
   });
 });
