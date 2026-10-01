@@ -8,7 +8,7 @@ import { splitTransaction } from "@ledgerhq/hw-app-btc/splitTransaction";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import { AssetValue, Chain, FeeOption, type GenericTransferParams } from "@swapkit/helpers";
-import type { UTXOBuildTxParams, UTXOType } from "@swapkit/toolboxes/utxo";
+import type { UTXOBuildTxParams, UTXOForMultiAddressTransfer, UTXOType } from "@swapkit/toolboxes/utxo";
 import * as realUtxoToolbox from "@swapkit/toolboxes/utxo";
 import {
   createZcashTransaction,
@@ -53,6 +53,11 @@ type LedgerUTXOTestChain = keyof typeof senders;
 
 interface LedgerUTXOTestWallet {
   transfer: (params: GenericTransferParams) => Promise<string>;
+  transferFromMultipleAddresses: (params: {
+    assetValue: AssetValue;
+    recipient: string;
+    utxos: UTXOForMultiAddressTransfer[];
+  }) => Promise<string>;
 }
 
 const createTransactionCalls: UTXOBuildTxParams[] = [];
@@ -190,6 +195,7 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
 mock.module("@swapkit/toolboxes/utxo", () => ({
   ...realUtxoToolboxSnapshot,
   getUtxoToolbox: () => ({
+    accumulative: realUtxoToolboxSnapshot.accumulative,
     broadcastTx: (txHex: string) => Promise.resolve(`broadcast:${txHex.length}`),
     createTransaction: (params: UTXOBuildTxParams) => {
       createTransactionCalls.push(params);
@@ -256,6 +262,44 @@ describe("Ledger UTXO transfer", () => {
     });
 
     expect(createTransactionCalls[0]?.feeRate).toBe(expected);
+  });
+
+  it("signs each input of a multi-address transfer with the path of its own address", async () => {
+    const wallet = await connect(Chain.BitcoinCash);
+    const address = senders[Chain.BitcoinCash].address;
+
+    await wallet.transferFromMultipleAddresses({
+      assetValue: AssetValue.from({ chain: Chain.BitcoinCash, value: "0.0015" }),
+      recipient: address,
+      utxos: [
+        { ...fundingUtxo({ fill: 1, value: 100_000 }), address, derivationIndex: 7, isChange: false },
+        { ...fundingUtxo({ fill: 2, value: 100_000 }), address, derivationIndex: 3, isChange: true },
+      ],
+    });
+
+    // Keyed by the funding transaction each input spends, which the test fills with one byte.
+    const payment = btcPaymentCalls[0];
+    const pathsByFunding = Object.fromEntries(
+      payment?.inputs.map(([previous], inputIndex) => [
+        previous.inputs[0]?.prevout[0],
+        payment.associatedKeysets[inputIndex],
+      ]) ?? [],
+    );
+    expect(pathsByFunding).toEqual({ 1: "m/44'/145'/0'/0/7", 2: "m/44'/145'/0'/1/3" });
+  });
+
+  it("refuses a multi-address input with a negative address index before reaching the device", async () => {
+    const wallet = await connect(Chain.BitcoinCash);
+    const address = senders[Chain.BitcoinCash].address;
+
+    await expect(
+      wallet.transferFromMultipleAddresses({
+        assetValue: AssetValue.from({ chain: Chain.BitcoinCash, value: "0.0005" }),
+        recipient: address,
+        utxos: [{ ...fundingUtxo({ fill: 1, value: 100_000 }), address, derivationIndex: -1, isChange: false }],
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(btcPaymentCalls).toHaveLength(0);
   });
 });
 

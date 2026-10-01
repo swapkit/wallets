@@ -534,12 +534,14 @@ async function getUTXOWalletMethods({
       tx,
     });
 
-    const basePath = getUTXOAccountPath({ chain: utxoChain, derivationPath });
     const inputDerivationPaths = selectedInputs.map((input: { hash: string; index: number }) => {
       const utxoInfo = utxos.find((u) => u.hash === input.hash && u.index === input.index);
-      const derivationIndex = utxoInfo?.derivationIndex ?? 0;
-      const isChange = utxoInfo?.isChange ?? false;
-      const fullPath = [...basePath, Number(isChange), derivationIndex] as unknown as DerivationPathArray;
+      const fullPath = getUTXOAddressPath({
+        chain: utxoChain,
+        change: utxoInfo?.isChange ?? false,
+        derivationPath,
+        index: utxoInfo?.derivationIndex ?? 0,
+      });
       return derivationPathToString(fullPath);
     });
 
