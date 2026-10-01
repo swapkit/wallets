@@ -234,8 +234,18 @@ const BaseLedgerUTXO = ({
 export const BitcoinLedger = BaseLedgerUTXO({ chain: "bitcoin" });
 export const LitecoinLedger = BaseLedgerUTXO({ chain: "litecoin" });
 
+// "abc" makes hw-app-btc sign with BIP143, which SIGHASH_ALL | SIGHASH_FORKID (0x41) requires, and "cashaddr" opens
+// the transaction with HASH_INPUT_START P2 0x03 so the app shows the outputs as CashAddr, as the dApp does. Trusted
+// inputs (useTrustedInputForSegwit covers every BIP143 transaction) let the app take each amount from a previous
+// transaction it hashed itself; without them it warns about unverified inputs once per transaction. Ledger Live signs
+// CashAddr recipients the same way, with trusted inputs from app 1.4.0.
 export const BitcoinCashLedger = BaseLedgerUTXO({
-  additionalSignParams: { additionals: ["abc"], segwit: false, sigHashType: 0x41 },
+  additionalSignParams: {
+    additionals: ["abc", "cashaddr"],
+    segwit: false,
+    sigHashType: 0x41,
+    useTrustedInputForSegwit: true,
+  },
   chain: "bitcoin-cash",
 });
 
