@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { StdSignDoc } from "@cosmjs/amino";
-import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-management-kit";
+import {
+  ApduResponse,
+  DeviceActionStatus,
+  type DeviceManagementKit,
+  GlobalCommandErrorHandler,
+} from "@ledgerhq/device-management-kit";
 import { of } from "rxjs";
 
 const publicKey = Uint8Array.from([2, ...new Uint8Array(32).fill(9)]);
 const addressCalls: Array<{ hrp: string; options?: { checkOnDevice?: boolean }; path: string }> = [];
 const signCalls: Array<{ hrp: string; message: Uint8Array; path: string }> = [];
 let signatureOutput = new Uint8Array(64);
+let signatureError: unknown;
 
 function deviceAction<Output>(output: Output) {
   return {
@@ -14,6 +20,16 @@ function deviceAction<Output>(output: Output) {
     observable: of(
       { intermediateValue: { requiredUserInteraction: "confirm-on-device" }, status: DeviceActionStatus.Pending },
       { output, status: DeviceActionStatus.Completed },
+    ),
+  };
+}
+
+function failedDeviceAction(error: unknown) {
+  return {
+    cancel: mock(() => {}),
+    observable: of(
+      { intermediateValue: { requiredUserInteraction: "confirm-on-device" }, status: DeviceActionStatus.Pending },
+      { error, status: DeviceActionStatus.Error },
     ),
   };
 }
@@ -28,7 +44,7 @@ mock.module("@ledgerhq/device-signer-kit-cosmos", () => ({
         },
         signTransaction: (path: string, hrp: string, message: Uint8Array) => {
           signCalls.push({ hrp, message, path });
-          return deviceAction(signatureOutput);
+          return signatureError ? failedDeviceAction(signatureError) : deviceAction(signatureOutput);
         },
       };
     }
@@ -55,6 +71,7 @@ describe("Ledger Cosmos Device Signer Kit client", () => {
     addressCalls.length = 0;
     signCalls.length = 0;
     signatureOutput = new Uint8Array(64);
+    signatureError = undefined;
   });
 
   it("serializes the amino sign doc and normalizes a DER signature", async () => {
@@ -100,5 +117,18 @@ describe("Ledger Cosmos Device Signer Kit client", () => {
 
     expect(response).toEqual({ address: "cosmos1ledgerdsk", publicKey: Buffer.from(publicKey).toString("hex") });
     expect(addressCalls).toEqual([{ hrp: "cosmos", options: { checkOnDevice: true }, path: "44'/118'/0'/1/12" }]);
+  });
+
+  it("reports a signature rejected on the device as a user rejection", async () => {
+    // The app rejects with 0x6986; the signer kit keys its error table "0x6986", so DMK's fallback handler reports it.
+    signatureError = GlobalCommandErrorHandler.handle(
+      new ApduResponse({ data: new Uint8Array(), statusCode: Uint8Array.of(0x69, 0x86) }),
+    );
+    const client = new CosmosLedger({ dmkSession });
+
+    await expect(client.signAmino("cosmos1ledgerdsk", signDoc)).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6986" },
+    });
   });
 });

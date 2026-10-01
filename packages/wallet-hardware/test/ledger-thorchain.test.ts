@@ -106,12 +106,13 @@ function createThorDmkHarness({
 
 describe("ledger THORChain protocol", () => {
   it("reports a signature rejected on the device as a user rejection", async () => {
-    const harness = createThorDmkHarness({ signStatus: [0x69, 0x85], version: "2.2.3" });
+    // The Zondax-built THORChain app rejects with COMMAND_NOT_ALLOWED rather than 0x6985.
+    const harness = createThorDmkHarness({ signStatus: [0x69, 0x86], version: "2.2.3" });
     const ledger = new THORChainLedger({ derivationPath: [44, 931, 0, 0, 0], dmkSession: harness.dmkSession });
 
     await expect(ledger.sign("x")).rejects.toMatchObject({
       errorKey: "wallet_connection_rejected_by_user",
-      info: { statusWord: "6985" },
+      info: { statusWord: "6986" },
     });
   });
 
