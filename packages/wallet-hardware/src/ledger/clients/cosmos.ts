@@ -1,5 +1,6 @@
 import type { StdSignDoc } from "@cosmjs/amino";
 import type { SignerCosmos } from "@ledgerhq/device-signer-kit-cosmos";
+import type LegacyCosmosApp from "@ledgerhq/hw-app-cosmos";
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import {
@@ -15,6 +16,7 @@ import { createLedgerSessionSigner } from "../helpers/dmk";
 import {
   executeLedgerDeviceAction,
   type LedgerDeviceActionStateHandler,
+  toLedgerDeviceError,
   ZONDAX_USER_REFUSED_STATUS_WORDS,
 } from "../helpers/executeDeviceAction";
 import { toLowSSignature } from "../helpers/lowS";
@@ -66,7 +68,7 @@ export class CosmosLedger {
   readonly derivationPath: string;
   private readonly onDeviceActionState?: LedgerDeviceActionStateHandler;
   private readonly transport?: Transport;
-  private legacyAppPromise?: Promise<import("@ledgerhq/hw-app-cosmos").default>;
+  private legacyAppPromise?: Promise<LegacyCosmosApp>;
   private pubKey: string | null = null;
   private readonly getSessionSigner: () => Promise<SignerCosmos>;
 
@@ -109,10 +111,22 @@ export class CosmosLedger {
     return this.legacyAppPromise;
   }
 
+  // An injected LedgerJS transport rejects with hw-transport and hw-app-cosmos errors; map them as the signer kit
+  // path below does.
+  private async runLegacyOperation<Output>(operation: (app: LegacyCosmosApp) => Promise<Output>) {
+    const app = await this.getLegacyApp();
+    try {
+      return await operation(app);
+    } catch (error) {
+      throw toLedgerDeviceError(error, { userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS });
+    }
+  }
+
   private async signBytes(message: Uint8Array) {
     if (this.transport) {
-      const app = await this.getLegacyApp();
-      const response = await app.sign(this.derivationPath, new TextDecoder().decode(message));
+      const response = await this.runLegacyOperation((app) =>
+        app.sign(this.derivationPath, new TextDecoder().decode(message)),
+      );
       if (response.return_code !== 0x9000 || !response.signature) {
         throw new SwapKitError("wallet_ledger_invalid_response", { returnCode: response.return_code });
       }
@@ -141,7 +155,7 @@ export class CosmosLedger {
 
   async getAddressAndPubKey(): Promise<CosmosAddressAndPublicKey> {
     if (this.transport) {
-      return this.getLegacyApp().then((app) => app.getAddress(this.derivationPath, this.chain));
+      return this.runLegacyOperation((app) => app.getAddress(this.derivationPath, this.chain));
     }
 
     const signer = await this.getSigner();
@@ -155,7 +169,7 @@ export class CosmosLedger {
 
   async showAddressAndPubKey(): Promise<CosmosAddressAndPublicKey> {
     if (this.transport) {
-      return this.getLegacyApp().then((app) => app.getAddress(this.derivationPath, this.chain, true));
+      return this.runLegacyOperation((app) => app.getAddress(this.derivationPath, this.chain, true));
     }
 
     const signer = await this.getSigner();

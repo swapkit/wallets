@@ -9,7 +9,7 @@ import {
   type InternalApi,
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
-import type Transport from "@ledgerhq/hw-transport";
+import Transport from "@ledgerhq/hw-transport";
 import { base64, hex } from "@scure/base";
 import { concat, from, of } from "rxjs";
 
@@ -109,6 +109,19 @@ describe("ledger THORChain protocol", () => {
     // The Zondax-built THORChain app rejects with COMMAND_NOT_ALLOWED rather than 0x6985.
     const harness = createThorDmkHarness({ signStatus: [0x69, 0x86], version: "2.2.3" });
     const ledger = new THORChainLedger({ derivationPath: [44, 931, 0, 0, 0], dmkSession: harness.dmkSession });
+
+    await expect(ledger.sign("x")).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6986" },
+    });
+  });
+
+  it("reports a signature rejected through an injected LedgerJS transport as a user rejection", async () => {
+    // hw-transport's own `send` rejects the app's 0x6986 with a TransportStatusError.
+    const transport = new Transport();
+    transport.exchange = (apdu) =>
+      Promise.resolve(Buffer.from(apdu[1] === 0x00 ? [0x00, 0x02, 0x05, 0x01, 0x90, 0x00] : [0x69, 0x86]));
+    const ledger = new THORChainLedger({ derivationPath: [44, 931, 0, 0, 0], transport });
 
     await expect(ledger.sign("x")).rejects.toMatchObject({
       errorKey: "wallet_connection_rejected_by_user",

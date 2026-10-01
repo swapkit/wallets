@@ -9,6 +9,7 @@ import {
   executeLedgerDeviceAction,
   LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerDeviceActionStateHandler,
+  toLedgerDeviceError,
   ZONDAX_USER_REFUSED_STATUS_WORDS,
 } from "../../helpers/executeDeviceAction";
 import { toLowSSignature } from "../../helpers/lowS";
@@ -75,6 +76,20 @@ async function getFixedSignature({ signature }: { signature: Uint8Array }) {
   }
 }
 
+async function executeThorLegacyCommands({ commands, transport }: { commands: ThorCommand[]; transport: Transport }) {
+  const version = await getThorLegacyVersion({ transport });
+  if (!version.startsWith("2.")) {
+    const { InvalidResponseFormatError } = await import("@ledgerhq/device-management-kit");
+    throw new InvalidResponseFormatError(invalidThorAppVersionMessage({ version }));
+  }
+
+  let response = new Uint8Array();
+  for (const command of commands) {
+    response = await sendThorLegacyCommand({ command, transport });
+  }
+  return response;
+}
+
 export class THORChainLedger {
   readonly derivationPath: DerivationPathArray;
   private readonly dmkSession?: LedgerDMKSession;
@@ -112,17 +127,12 @@ export class THORChainLedger {
     requiredUserInteraction: UserInteractionRequired;
   }) => {
     if (this.transport) {
-      const version = await getThorLegacyVersion({ transport: this.transport });
-      if (!version.startsWith("2.")) {
-        const { InvalidResponseFormatError } = await import("@ledgerhq/device-management-kit");
-        throw new InvalidResponseFormatError(invalidThorAppVersionMessage({ version }));
+      try {
+        return await executeThorLegacyCommands({ commands, transport: this.transport });
+      } catch (error) {
+        // hw-transport rejects with status errors; map them as the DMK action below does.
+        throw toLedgerDeviceError(error, { userRefusedStatusWords: ZONDAX_USER_REFUSED_STATUS_WORDS });
       }
-
-      let response = new Uint8Array();
-      for (const command of commands) {
-        response = await sendThorLegacyCommand({ command, transport: this.transport });
-      }
-      return response;
     }
 
     const dmkSession = this.dmkSession ?? (await getLedgerDMKSession());

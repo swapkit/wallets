@@ -6,6 +6,7 @@ import {
   type DeviceManagementKit,
   GlobalCommandErrorHandler,
 } from "@ledgerhq/device-management-kit";
+import Transport from "@ledgerhq/hw-transport";
 import { AssetValue, Chain, type GenericTransferParams } from "@swapkit/helpers";
 import { of } from "rxjs";
 
@@ -131,6 +132,39 @@ describe("Ledger Cosmos Device Signer Kit client", () => {
     await expect(client.signAmino("cosmos1ledgerdsk", signDoc)).rejects.toMatchObject({
       errorKey: "wallet_connection_rejected_by_user",
       info: { statusWord: "6986" },
+    });
+  });
+});
+
+describe("Ledger Cosmos legacy transport", () => {
+  // An injected LedgerJS transport for the Cosmos app that answers the given instruction with 0x6986, as the app
+  // does when the user rejects a request.
+  function createCosmosAppTransport({ rejectedIns }: { rejectedIns: number }) {
+    const transport = new Transport();
+    transport.exchange = (apdu) =>
+      Promise.resolve(
+        apdu[1] === rejectedIns
+          ? Buffer.from([0x69, 0x86])
+          : Buffer.from([...publicKey, ...new TextEncoder().encode("cosmos1ledgerdsk"), 0x90, 0x00]),
+      );
+    return transport;
+  }
+
+  it("reports an address rejected on the device as a user rejection", async () => {
+    const client = new CosmosLedger({ transport: createCosmosAppTransport({ rejectedIns: 0x04 }) });
+
+    await expect(client.showAddressAndPubKey()).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { statusWord: "6986" },
+    });
+  });
+
+  it("reports a signature rejected on the device as a user rejection", async () => {
+    // hw-app-cosmos turns the refusal into a UserRefusedOnDevice error that carries no status word.
+    const client = new CosmosLedger({ transport: createCosmosAppTransport({ rejectedIns: 0x02 }) });
+
+    await expect(client.signAmino("cosmos1ledgerdsk", signDoc)).rejects.toMatchObject({
+      errorKey: "wallet_connection_rejected_by_user",
     });
   });
 });
