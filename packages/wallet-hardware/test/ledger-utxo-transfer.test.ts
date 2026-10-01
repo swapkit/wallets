@@ -15,6 +15,7 @@ import {
   Script,
   Transaction,
   ZcashConsensusBranchId,
+  ZcashTransaction,
   ZcashVersionGroupId,
 } from "@swapkit/utxo-signer";
 import { of } from "rxjs";
@@ -52,6 +53,7 @@ const senders = {
 type LedgerUTXOTestChain = keyof typeof senders;
 
 interface LedgerUTXOTestWallet {
+  signAndBroadcastTransaction: (transaction: ZcashTransaction) => Promise<string>;
   transfer: (params: GenericTransferParams) => Promise<string>;
   transferFromMultipleAddresses: (params: {
     assetValue: AssetValue;
@@ -63,6 +65,10 @@ interface LedgerUTXOTestWallet {
 const createTransactionCalls: UTXOBuildTxParams[] = [];
 const btcPaymentCalls: CreateTransactionArg[] = [];
 const zcashSignCalls: LegacyCreateTransactionArg[] = [];
+const broadcastTxs: string[] = [];
+// Previous Zcash transactions the UTXO API knows, keyed by display-order txid, and every txid it was asked for.
+const zcashRawTxs = new Map<string, string>();
+const zcashRawTxRequests: string[] = [];
 
 function deviceAction<Output>(output: Output) {
   return {
@@ -146,6 +152,24 @@ function buildTransaction({ assetValue, memo, recipient, sender }: UTXOBuildTxPa
   return { inputs: [utxo], tx };
 }
 
+// A Zcash swap spending one output of each previous transaction, built as the toolbox builds it: txids in display
+// order, the order the UTXO API names transactions by.
+function zcashRouteTransaction(previousTxids: string[]) {
+  const tx = createZcashTransaction({
+    consensusBranchId: ZcashConsensusBranchId.NU6_2,
+    expiryHeight: 0,
+    lockTime: 0,
+    version: 4,
+    versionGroupId: ZcashVersionGroupId.SAPLING,
+  });
+  for (const txid of previousTxids) {
+    tx.addInput({ index: 0, script: P2PKH_SCRIPT, txid: hex.decode(txid), value: 10_000n });
+  }
+  tx.addOutput({ amount: 9_000n, script: P2PKH_SCRIPT });
+  tx.addOutput({ amount: 0n, script: realUtxoToolbox.compileMemo(SWAP_MEMO) });
+  return tx;
+}
+
 // Reads the OP_RETURN payloads back out of the serialised outputs the device is asked to sign. These
 // transactions carry a few short scripts, so every count and length is a one-byte CompactSize.
 function signedMemos(outputScriptHex: string) {
@@ -194,9 +218,21 @@ mock.module("@ledgerhq/hw-app-btc", () => ({
 
 mock.module("@swapkit/toolboxes/utxo", () => ({
   ...realUtxoToolboxSnapshot,
+  getUtxoApi: (chain: LedgerUTXOTestChain) =>
+    chain === Chain.Zcash
+      ? {
+          getRawTx: (txid: string) => {
+            zcashRawTxRequests.push(txid);
+            return Promise.resolve(zcashRawTxs.get(txid) ?? "");
+          },
+        }
+      : realUtxoToolboxSnapshot.getUtxoApi(chain),
   getUtxoToolbox: () => ({
     accumulative: realUtxoToolboxSnapshot.accumulative,
-    broadcastTx: (txHex: string) => Promise.resolve(`broadcast:${txHex.length}`),
+    broadcastTx: (txHex: string) => {
+      broadcastTxs.push(txHex);
+      return Promise.resolve(`broadcast:${txHex.length}`);
+    },
     createTransaction: (params: UTXOBuildTxParams) => {
       createTransactionCalls.push(params);
       return Promise.resolve(buildTransaction(params));
@@ -228,6 +264,9 @@ describe("Ledger UTXO transfer", () => {
     createTransactionCalls.length = 0;
     btcPaymentCalls.length = 0;
     zcashSignCalls.length = 0;
+    broadcastTxs.length = 0;
+    zcashRawTxs.clear();
+    zcashRawTxRequests.length = 0;
   });
 
   const memoCases = ([Chain.BitcoinCash, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash] as const).flatMap(
@@ -286,6 +325,64 @@ describe("Ledger UTXO transfer", () => {
       ]) ?? [],
     );
     expect(pathsByFunding).toEqual({ 1: "m/44'/145'/0'/0/7", 2: "m/44'/145'/0'/1/3" });
+  });
+
+  describe("Zcash signAndBroadcastTransaction", () => {
+    // Neither txid reads the same reversed, so a lookup in the wrong byte order cannot succeed by accident.
+    const previousTxids = [
+      hex.encode(Uint8Array.from({ length: 32 }, (_, index) => index + 1)),
+      hex.encode(Uint8Array.from({ length: 32 }, (_, index) => 0xa0 + index)),
+    ];
+    const previousTransactions = [v5Transaction(10_000n), v5Transaction(20_000n)];
+    const reversed = (txid: string) => hex.encode(hex.decode(txid).reverse());
+
+    beforeEach(() => {
+      for (const [index, txid] of previousTxids.entries()) zcashRawTxs.set(txid, previousTransactions[index] ?? "");
+    });
+
+    function signedPreviousTransactions() {
+      return zcashSignCalls[0]?.inputs.map(([previous, outputIndex]) => [
+        hex.encode(previous.serializedPreviousTransactionOverride ?? new Uint8Array()),
+        outputIndex,
+      ]);
+    }
+
+    it("resolves the previous transactions of a raw API route transaction, whose txids fromBytes keeps in wire order", async () => {
+      const wallet = await connect(Chain.Zcash);
+      const decoded = ZcashTransaction.fromBytes(zcashRouteTransaction(previousTxids).toBytes());
+
+      const txHash = await wallet.signAndBroadcastTransaction(decoded);
+
+      // Each input is looked up as given (wire order, unknown to the API) and then reversed.
+      expect([...zcashRawTxRequests].sort()).toEqual([...previousTxids, ...previousTxids.map(reversed)].sort());
+      expect(signedPreviousTransactions()).toEqual(previousTransactions.map((transaction) => [transaction, 0]));
+      expect(signedMemos(deviceOutputs(Chain.Zcash))).toEqual([SWAP_MEMO]);
+      expect(broadcastTxs).toEqual([v5Transaction(9_000n)]);
+      expect(txHash).toBe(`broadcast:${v5Transaction(9_000n).length}`);
+    });
+
+    it("looks each previous transaction of a toolbox-built transaction up once, by its display-order txid", async () => {
+      const wallet = await connect(Chain.Zcash);
+
+      await wallet.signAndBroadcastTransaction(zcashRouteTransaction(previousTxids));
+
+      expect(zcashRawTxRequests).toEqual(previousTxids);
+      expect(signedPreviousTransactions()).toEqual(previousTransactions.map((transaction) => [transaction, 0]));
+      expect(broadcastTxs).toEqual([v5Transaction(9_000n)]);
+    });
+
+    it("refuses a previous transaction the API knows in neither byte order before reaching the device", async () => {
+      const wallet = await connect(Chain.Zcash);
+      const unknownTxid = hex.encode(Uint8Array.from({ length: 32 }, (_, index) => 0x40 + index));
+
+      await expect(wallet.signAndBroadcastTransaction(zcashRouteTransaction([unknownTxid]))).rejects.toMatchObject({
+        cause: { inputIndex: 0, reversedTxid: reversed(unknownTxid), txid: unknownTxid },
+        errorKey: "wallet_ledger_invalid_params",
+      });
+      expect(zcashRawTxRequests).toEqual([unknownTxid, reversed(unknownTxid)]);
+      expect(zcashSignCalls).toHaveLength(0);
+      expect(broadcastTxs).toHaveLength(0);
+    });
   });
 
   it("refuses a multi-address input with a negative address index before reaching the device", async () => {

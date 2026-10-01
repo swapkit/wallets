@@ -219,7 +219,10 @@ function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccoun
     .exhaustive();
 }
 
-function resolveZcashInputUtxos(transaction: ZcashTransaction) {
+// Toolbox-built transactions keep input txids in display order, the order the UTXO API looks transactions up by,
+// while ZcashTransaction.fromBytes (raw API route transactions) keeps them in wire order, so try both. A txid and its
+// byte reversal cannot both name real transactions, so the fallback cannot fetch an unrelated one.
+function resolveZcashInputUtxos(transaction: ZcashTransaction): Promise<UTXOType[]> {
   const zcashApi = getUtxoApi(Chain.Zcash);
   const getRawTx = createCachedRawTxResolver((txid) => zcashApi.getRawTx(txid));
 
@@ -227,22 +230,21 @@ function resolveZcashInputUtxos(transaction: ZcashTransaction) {
     Array.from({ length: transaction.inputsLength }, async (_, inputIndex) => {
       const input = transaction.getInput(inputIndex);
       const txid = hex.encode(input.txid);
-      const txHex = await getRawTx(txid);
+      const reversedTxid = hex.encode(input.txid.slice().reverse());
+      const directTxHex = await getRawTx(txid);
+      const [hash, txHex] = directTxHex ? [txid, directTxHex] : [reversedTxid, await getRawTx(reversedTxid)];
       if (!txHex) {
         throw new SwapKitError("wallet_ledger_invalid_params", {
           inputIndex,
-          reason: "Unable to resolve previous transaction hex for Ledger signing",
+          outputIndex: input.index,
+          reason: "Unable to resolve previous transaction hex for Ledger signing in either txid byte order",
+          reversedTxid,
           txid,
         });
       }
 
-      return {
-        hash: txid,
-        index: input.index,
-        txHex,
-        value: Number(input.value),
-        witnessUtxo: input.script ? { script: input.script, value: Number(input.value) } : undefined,
-      } as UTXOType;
+      // The Zcash client takes amounts from the device's trusted inputs; fromBytes leaves input values at zero.
+      return { hash, index: input.index, txHex, value: Number(input.value) };
     }),
   );
 }
