@@ -1,6 +1,13 @@
-import type { DeviceManagementKit, DeviceSessionId } from "@ledgerhq/device-management-kit";
+import type { DeviceManagementKit, DeviceSessionId, DiscoveredDevice } from "@ledgerhq/device-management-kit";
 import { SwapKitError } from "@swapkit/helpers";
-import { firstValueFrom } from "rxjs";
+import { filter, firstValueFrom, map, timeout } from "rxjs";
+
+import { toLedgerDeviceError } from "./executeDeviceAction";
+
+// Bounds the wait for a granted device that DMK never lists (an unrecognised model); the picker opens instead.
+const AUTHORISED_DEVICE_TIMEOUT_MS = 1_000;
+
+type WebHidNavigator = Navigator & { hid?: { getDevices?: () => Promise<Array<{ vendorId: number }>> } };
 
 export interface LedgerDMKSession {
   dmk: DeviceManagementKit;
@@ -35,6 +42,10 @@ function createDefaultSessionPromise() {
   return getDefaultDMK().then((dmk) => connectLedgerDMK({ dmk }));
 }
 
+function isSessionNotFound(error: unknown) {
+  return typeof error === "object" && error !== null && "_tag" in error && error._tag === "DeviceSessionNotFound";
+}
+
 function isSessionConnected({ dmk, sessionId }: LedgerDMKSession) {
   try {
     dmk.getConnectedDevice({ sessionId });
@@ -67,10 +78,52 @@ async function getValidDefaultSession({ sessionPromise }: { sessionPromise: Prom
   }
 }
 
+async function hasAuthorisedLedger() {
+  const hid = typeof navigator === "undefined" ? undefined : (navigator as WebHidNavigator).hid;
+  if (typeof hid?.getDevices !== "function") return false;
+
+  try {
+    const [devices, { LEDGER_VENDOR_ID }] = await Promise.all([
+      hid.getDevices(),
+      import("@ledgerhq/device-management-kit"),
+    ]);
+    return devices.some(({ vendorId }) => vendorId === LEDGER_VENDOR_ID);
+  } catch (error) {
+    void error;
+    return false;
+  }
+}
+
+/**
+ * `startDiscovering` always opens the WebHID picker, which needs a fresh user gesture. A plugged-in Ledger the user
+ * already granted (page reload, replug after DMK's reconnect window) is listed without one.
+ */
+async function findAuthorisedDevice({ dmk }: { dmk: DeviceManagementKit }) {
+  // Nothing granted: go straight to the picker while the caller's user gesture is still fresh.
+  if (!(await hasAuthorisedLedger())) return undefined;
+
+  try {
+    return await firstValueFrom(
+      dmk.listenToAvailableDevices({}).pipe(
+        // The WebHID list replays its last value (initially empty) before it re-reads the granted devices.
+        map(([device]) => device),
+        filter((device): device is DiscoveredDevice => device !== undefined),
+        timeout({ first: AUTHORISED_DEVICE_TIMEOUT_MS }),
+      ),
+    );
+  } catch (error) {
+    void error;
+    return undefined;
+  }
+}
+
 async function connectLedgerDMK({ dmk }: { dmk: DeviceManagementKit }) {
   let discoveryStarted = false;
 
   try {
+    const authorisedDevice = await findAuthorisedDevice({ dmk });
+    if (authorisedDevice) return { dmk, sessionId: await dmk.connect({ device: authorisedDevice }) };
+
     const discoveredDevices = dmk.startDiscovering({});
     discoveryStarted = true;
     const device = await firstValueFrom(discoveredDevices);
@@ -103,7 +156,9 @@ export function getLedgerDMKSession({ dmk }: { dmk?: DeviceManagementKit } = {})
 /**
  * Builds a signer kit instance for the session an operation runs on. A caller-owned session is used
  * as given; the default session is re-validated on every call and the signer is rebuilt when it was
- * replaced, so a device that was unplugged and reconnected keeps working without a new connect.
+ * replaced. DMK keeps a session through a brief unplug; once it drops one, the next operation connects
+ * again, silently to a Ledger the user already granted, otherwise through the WebHID picker, which
+ * needs a user gesture.
  */
 export function createLedgerSessionSigner<Signer>({
   build,
@@ -129,7 +184,10 @@ export function createLedgerSessionSigner<Signer>({
 }
 
 export function preloadLedgerDMK() {
-  return getDefaultDMK();
+  const dmkPromise = getDefaultDMK();
+  // Preloading is usually fire-and-forget; the connection that follows reports the same failure.
+  void dmkPromise.catch(() => undefined);
+  return dmkPromise;
 }
 
 export async function disconnectLedgerDMKSession({ dmkSession }: { dmkSession?: LedgerDMKSession } = {}) {
@@ -163,5 +221,11 @@ export async function disconnectLedgerDMKSession({ dmkSession }: { dmkSession?: 
     }
   }
 
-  await sessionToDisconnect.dmk.disconnect({ sessionId: sessionToDisconnect.sessionId });
+  try {
+    await sessionToDisconnect.dmk.disconnect({ sessionId: sessionToDisconnect.sessionId });
+  } catch (error) {
+    // DMK already dropped the session (device unplugged past its reconnect window): nothing left to release.
+    if (isSessionNotFound(error)) return;
+    throw toLedgerDeviceError(error);
+  }
 }
