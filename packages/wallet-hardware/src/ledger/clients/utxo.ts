@@ -13,11 +13,17 @@ import {
   normalizeLedgerJsClientParams,
   runLedgerJsOperation,
 } from "../helpers/ledgerJsDmkBridge";
+import { splitOutputsForLegacyApp, withOutputAlignedFinalize } from "./utxo-legacy-outputs";
 
 const nonSegwitLedgerChains = ["bitcoin-cash", "dash", "dogecoin", "zcash"];
 
 type LedgerUTXOChain = "bitcoin-cash" | "bitcoin" | "litecoin" | "dogecoin" | "dash" | "zcash";
 type UTXOLedgerParams = LedgerJsClientParams<DerivationPathArray | string>;
+
+// The Bitcoin Cash, Dash, Dogecoin and Litecoin apps are built on lib-app-bitcoin, which checks every output in a
+// 100-byte buffer (see utxo-legacy-outputs). Bitcoin signs through app-bitcoin-new, and clients/zcash.ts refuses to sign
+// over the legacy Zcash client.
+const libAppBitcoinChains: LedgerUTXOChain[] = ["bitcoin-cash", "dash", "dogecoin", "litecoin"];
 
 const ledgerAppNames: Record<LedgerUTXOChain, string> = {
   bitcoin: "Bitcoin",
@@ -29,7 +35,7 @@ const ledgerAppNames: Record<LedgerUTXOChain, string> = {
 };
 
 type Params = {
-  tx: Transaction;
+  outputScriptHex: string;
   inputUtxos: UTXOType[];
   btcApp: BitcoinApp;
   derivationPath: string;
@@ -42,7 +48,7 @@ type MultiPathParams = Omit<Params, "derivationPath"> & {
 };
 
 const signUTXOTransaction = (
-  { tx, inputUtxos, btcApp, derivationPath, chain }: Params,
+  { outputScriptHex, inputUtxos, btcApp, derivationPath, chain }: Params,
   options?: Partial<CreateTransactionArg>,
 ) => {
   const inputs = inputUtxos.map((item) => {
@@ -54,11 +60,6 @@ const signUTXOTransaction = (
 
     return [splitTx, item.index, undefined as string | null | undefined, undefined as number | null | undefined] as any;
   });
-
-  const newTxHex = hex.encode(tx.unsignedTx);
-
-  const splitNewTx = btcApp.splitTransaction(newTxHex, true);
-  const outputScriptHex = btcApp.serializeTransactionOutputs(splitNewTx).toString("hex");
 
   // hw-app-btc derives the signing policy from these flags:
   //   additionals ["bech32"] + segwit  → wpkh (native segwit, m/84')
@@ -84,7 +85,7 @@ const signUTXOTransaction = (
  * Each input can have its own derivation path for HD wallet multi-address support.
  */
 const signUTXOTransactionWithMultiplePaths = (
-  { tx, inputUtxos, btcApp, derivationPaths, chain }: MultiPathParams,
+  { outputScriptHex, inputUtxos, btcApp, derivationPaths, chain }: MultiPathParams,
   options?: Partial<CreateTransactionArg>,
 ) => {
   if (derivationPaths.length !== inputUtxos.length) {
@@ -102,11 +103,6 @@ const signUTXOTransactionWithMultiplePaths = (
 
     return [splitTx, item.index, undefined as string | null | undefined, undefined as number | null | undefined] as any;
   });
-
-  const newTxHex = hex.encode(tx.unsignedTx);
-
-  const splitNewTx = btcApp.splitTransaction(newTxHex, true);
-  const outputScriptHex = btcApp.serializeTransactionOutputs(splitNewTx).toString("hex");
 
   // Same policy/path matching rules as signUTXOTransaction; all paths share
   // one account so the first path determines the format.
@@ -131,6 +127,8 @@ const BaseLedgerUTXO = ({
   chain: LedgerUTXOChain;
   additionalSignParams?: Partial<CreateTransactionArg>;
 }) => {
+  const usesLibAppBitcoin = libAppBitcoinChains.includes(chain);
+
   return (paramsOrPath?: UTXOLedgerParams | DerivationPathArray | string, transport?: Transport) => {
     const { derivationPath: derivationPathParam, ...connection } = normalizeLedgerJsClientParams({
       paramsOrPath,
@@ -153,10 +151,28 @@ const BaseLedgerUTXO = ({
       return runLedgerJsOperation({
         appName: ledgerAppNames[chain],
         connection,
-        createApp: (ledgerTransport) => new BitcoinApp({ currency: chain, transport: ledgerTransport }),
+        // A wrapper per operation, so no collected output chunk outlives the operation that sent it.
+        createApp: (ledgerTransport) =>
+          new BitcoinApp({
+            currency: chain,
+            transport: usesLibAppBitcoin ? withOutputAlignedFinalize(ledgerTransport, chain) : ledgerTransport,
+          }),
         operation,
         requiredUserInteraction,
       });
+    }
+
+    // The outputs hw-app-btc streams to the app, checked before any device call so that an output the app cannot
+    // buffer fails with a typed error rather than a 0x6a80 from the device.
+    async function getOutputScriptHex(tx: Transaction): Promise<string> {
+      const [{ splitTransaction }, { serializeTransactionOutputs }] = await Promise.all([
+        import("@ledgerhq/hw-app-btc/splitTransaction"),
+        import("@ledgerhq/hw-app-btc/serializeTransaction"),
+      ]);
+      const outputs = serializeTransactionOutputs(splitTransaction(hex.encode(tx.unsignedTx), true));
+      if (usesLibAppBitcoin) splitOutputsForLegacyApp(outputs, chain);
+
+      return outputs.toString("hex");
     }
 
     return {
@@ -185,9 +201,13 @@ const BaseLedgerUTXO = ({
       },
 
       signTransaction: async (tx: Transaction, inputUtxos: UTXOType[]) => {
+        const outputScriptHex = await getOutputScriptHex(tx);
         return await runBtcOperation({
           operation: (app) =>
-            signUTXOTransaction({ btcApp: app, chain, derivationPath, inputUtxos, tx }, additionalSignParams),
+            signUTXOTransaction(
+              { btcApp: app, chain, derivationPath, inputUtxos, outputScriptHex },
+              additionalSignParams,
+            ),
           requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
         });
       },
@@ -197,10 +217,11 @@ const BaseLedgerUTXO = ({
        * Each input can be signed with its own derivation path.
        */
       signTransactionWithMultiplePaths: async (tx: Transaction, inputUtxos: UTXOType[], derivationPaths: string[]) => {
+        const outputScriptHex = await getOutputScriptHex(tx);
         return await runBtcOperation({
           operation: (app) =>
             signUTXOTransactionWithMultiplePaths(
-              { btcApp: app, chain, derivationPaths, inputUtxos, tx },
+              { btcApp: app, chain, derivationPaths, inputUtxos, outputScriptHex },
               additionalSignParams,
             ),
           requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
