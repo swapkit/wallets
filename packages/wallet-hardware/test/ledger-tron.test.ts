@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import * as realTronApp from "@ledgerhq/hw-app-trx";
 import type Transport from "@ledgerhq/hw-transport";
 
+// mock.module replaces the whole export namespace process-wide; snapshot the real module so
+// afterAll can restore it for test files that run later.
+const realTronAppSnapshot = { ...realTronApp };
 const signTransactionInvocations: Array<{ path: string; rawTxHex: string; tokenSignatures: string[] }> = [];
 
 mock.module("@ledgerhq/hw-app-trx", () => ({
@@ -55,4 +59,8 @@ describe("ledger Tron signer", () => {
     ]);
     expect(signed).toEqual({ ...transaction, signature: ["ab".repeat(65)] });
   });
+});
+
+afterAll(() => {
+  mock.module("@ledgerhq/hw-app-trx", () => realTronAppSnapshot);
 });

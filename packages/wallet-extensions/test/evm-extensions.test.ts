@@ -63,7 +63,7 @@ class MockBrowserProvider {
 const realEthersSnapshot = { ...realEthers };
 const realEvmToolboxSnapshot = { ...realEvmToolbox };
 
-mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
+mock.module("ethers", () => ({ ...realEthersSnapshot, BrowserProvider: MockBrowserProvider }));
 
 mock.module("@swapkit/toolboxes/evm", () => ({
   getEvmToolboxAsync: async () => ({
