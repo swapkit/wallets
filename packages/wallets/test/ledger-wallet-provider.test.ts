@@ -92,6 +92,7 @@ function announceLedgerProvider() {
   );
 }
 
+const originalGlobals = { document: globalThis.document, window: globalThis.window };
 const realHelpersSnapshot = { ...realHelpers };
 const realEthersSnapshot = { ...realEthers };
 const realEvmExtensionsSnapshot = { ...realEvmExtensions };
@@ -148,6 +149,7 @@ describe("ledger wallet provider connector", () => {
   });
 
   afterAll(() => {
+    Object.assign(globalThis, originalGlobals);
     mock.module("@swapkit/helpers", () => realHelpersSnapshot);
     mock.module("ethers", () => realEthersSnapshot);
     mock.module("@swapkit/wallet-extensions/evm-extensions", () => realEvmExtensionsSnapshot);
