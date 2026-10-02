@@ -1,5 +1,13 @@
 # @swapkit/sdk
 
+## 5.1.0
+
+### Minor Changes
+
+- [#137](https://github.com/swapkit/wallets/pull/137) [`6f2d300`](https://github.com/swapkit/wallets/commit/6f2d300b8096b535d224b043a9b214a63852d069) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Migrate Ledger connections to the Device Management Kit by default. `@swapkit/wallets` and `@swapkit/sdk` re-export the Ledger wallet, so they carry these changes too.
+- [#137](https://github.com/swapkit/wallets/pull/137) [`6f2d300`](https://github.com/swapkit/wallets/commit/6f2d300b8096b535d224b043a9b214a63852d069) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Ledger Bitcoin wallets take their script type from the account path (BIP44 legacy, BIP49 nested SegWit, BIP84 native SegWit, BIP86 taproot) and fall back to the address form only for a custom purpose, so `scriptType` and `getAddressFromKeys` report the account's real type. The other Ledger UTXO chains keep taking it from the address the device returns, which is the form their app signs for.
+- [#165](https://github.com/swapkit/wallets/pull/165) [`95568eb`](https://github.com/swapkit/wallets/commit/95568eb36c29cfabef29188d12ebdfd90416a92e) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Remove Monad from the Phantom connector since Phantom no longer supports it. (via @swapkit/wallets@5.1.0)
+
 ## 5.0.1
 
 ### Patch Changes

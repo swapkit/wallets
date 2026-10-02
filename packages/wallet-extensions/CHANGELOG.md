@@ -1,5 +1,11 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.6.5
+
+### Patch Changes
+
+- [#165](https://github.com/swapkit/wallets/pull/165) [`95568eb`](https://github.com/swapkit/wallets/commit/95568eb36c29cfabef29188d12ebdfd90416a92e) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Remove Monad from the Phantom connector since Phantom no longer supports it.
+
 ## 4.6.4
 
 ### Patch Changes
