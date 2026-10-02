@@ -21,6 +21,7 @@ const solanaSigners: Record<string, unknown>[] = [];
 const browserProviders: MockBrowserProvider[] = [];
 
 let connectError: unknown;
+let invokeResult: unknown;
 let sessionData: SessionData | undefined;
 
 class MockBrowserProvider {
@@ -44,7 +45,7 @@ const mockClient = {
   },
   invokeMethod: (options: InvokeOptions) => {
     invokeCalls.push(options);
-    return Promise.resolve("0x123");
+    return Promise.resolve(invokeResult);
   },
   provider: { getSession: async () => sessionData },
 };
@@ -87,6 +88,7 @@ describe("metamask multichain wallet", () => {
     solanaSigners.length = 0;
     browserProviders.length = 0;
     connectError = undefined;
+    invokeResult = "0x123";
     sessionData = {
       sessionScopes: {
         eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] },
@@ -205,6 +207,42 @@ describe("metamask multichain wallet", () => {
     await (solanaWallet?.disconnect as () => Promise<void>)();
 
     expect(disconnectCalls).toEqual([[SOLANA_MAINNET_CAIP2]]);
+  });
+
+  test("signs Solana transactions with the multichain signTransaction method", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    const { PublicKey, SystemProgram, Transaction } = await import("@solana/web3.js");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await metamaskWallet.connectMetamask.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Solana], {
+      dapp: { name: "SwapKit Test" },
+      supportedNetworks: { [SOLANA_MAINNET_CAIP2]: "https://solana.example/rpc" },
+    });
+
+    const feePayer = new PublicKey(SOLANA_ADDRESS);
+    const transaction = new Transaction({ feePayer, recentBlockhash: SOLANA_ADDRESS }).add(
+      SystemProgram.transfer({ fromPubkey: feePayer, lamports: 1, toPubkey: feePayer }),
+    );
+    const base64Transaction = Buffer.from(
+      transaction.serialize({ requireAllSignatures: false, verifySignatures: false }),
+    ).toString("base64");
+    invokeResult = { signedTransaction: base64Transaction };
+
+    const signer = solanaSigners[0] as { signTransaction: (tx: typeof transaction) => Promise<unknown> };
+    const signed = await signer.signTransaction(transaction);
+
+    expect(invokeCalls).toEqual([
+      {
+        request: {
+          method: "signTransaction",
+          params: { account: { address: SOLANA_ADDRESS }, scope: SOLANA_MAINNET_CAIP2, transaction: base64Transaction },
+        },
+        scope: SOLANA_MAINNET_CAIP2,
+      },
+    ]);
+    expect(signed).toBeInstanceOf(Transaction);
   });
 
   test("loadWallet returns the multichain MetaMask connector", async () => {
