@@ -1,18 +1,44 @@
+import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
+import type Near from "@ledgerhq/hw-app-near";
 import type Transport from "@ledgerhq/hw-transport";
 import type { SignedTransaction, Transaction } from "@near-js/transactions";
-import type { DerivationPathArray } from "@swapkit/helpers";
+import { Chain, type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
-import { getLedgerTransport } from "../helpers/getLedgerTransport";
 
-export async function getNearLedgerClient(derivationPath?: DerivationPathArray, injectedTransport?: Transport) {
-  const Near = (await import("@ledgerhq/hw-app-near")).default;
-  const { Chain, NetworkDerivationPath, SwapKitError } = await import("@swapkit/helpers");
-  const transport = injectedTransport ?? (await getLedgerTransport());
-  const nearApp = new Near(transport);
+import {
+  LEDGER_USER_INTERACTION_REQUIRED,
+  type LedgerJsClientParams,
+  normalizeLedgerJsClientParams,
+  runLedgerJsOperation,
+} from "../helpers/ledgerJsDmkBridge";
 
+type NearLedgerParams = LedgerJsClientParams<DerivationPathArray>;
+
+export async function getNearLedgerClient(
+  paramsOrPath?: NearLedgerParams | DerivationPathArray,
+  transport?: Transport,
+) {
+  const { derivationPath, ...connection } = normalizeLedgerJsClientParams({ paramsOrPath, transport });
   const path = (derivationPath || NetworkDerivationPath[Chain.Near]).join("'/").concat("'");
 
-  const { address, publicKey: pubKeyHex } = await nearApp.getAddress(path);
+  async function runNearOperation<Output>({
+    operation,
+    requiredUserInteraction,
+  }: {
+    operation: (app: Near) => Promise<Output>;
+    requiredUserInteraction?: UserInteractionRequired;
+  }) {
+    const NearApp = (await import("@ledgerhq/hw-app-near")).default;
+    return runLedgerJsOperation({
+      appName: "NEAR",
+      connection,
+      createApp: (ledgerTransport) => new NearApp(ledgerTransport),
+      operation,
+      requiredUserInteraction,
+    });
+  }
+
+  const { address, publicKey } = await runNearOperation({ operation: (app) => app.getAddress(path) });
 
   const signer = {
     getAddress() {
@@ -20,10 +46,11 @@ export async function getNearLedgerClient(derivationPath?: DerivationPathArray, 
     },
     async getPublicKey() {
       const { PublicKey } = await import("@near-js/crypto");
-      return PublicKey.fromString(`ed25519:${pubKeyHex}`);
+      const encodedPublicKey = publicKey.startsWith("ed25519:") ? publicKey : `ed25519:${publicKey}`;
+      return PublicKey.fromString(encodedPublicKey);
     },
 
-    signDelegateAction(_delegateAction: any) {
+    signDelegateAction(_delegateAction: unknown) {
       return Promise.reject(
         new SwapKitError("wallet_ledger_method_not_supported", { method: "signDelegateAction", wallet: "Ledger" }),
       );
@@ -44,17 +71,20 @@ export async function getNearLedgerClient(derivationPath?: DerivationPathArray, 
     async signTransaction(transaction: Transaction) {
       const { Signature, SignedTransaction } = await import("@near-js/transactions");
       try {
-        const signatureArray = await nearApp.signTransaction(transaction.encode(), path);
+        const signatureArray = await runNearOperation({
+          operation: (app) => app.signTransaction(transaction.encode(), path),
+          requiredUserInteraction: LEDGER_USER_INTERACTION_REQUIRED.SignTransaction,
+        });
         if (!signatureArray) {
-          throw new Error("Signature undefined");
+          throw new SwapKitError("wallet_ledger_signing_error", { reason: "Ledger returned no NEAR signature" });
         }
 
         const signature = new Signature({ data: signatureArray, keyType: 0 });
-
         const signedTransaction = new SignedTransaction({ signature, transaction });
 
         return [signatureArray, signedTransaction] as [Uint8Array<ArrayBufferLike>, SignedTransaction];
       } catch (error) {
+        if (error instanceof SwapKitError) throw error;
         throw new SwapKitError("wallet_ledger_signing_error", { error });
       }
     },

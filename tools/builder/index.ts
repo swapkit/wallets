@@ -1,14 +1,23 @@
-import type { BuildArtifact, BuildConfig } from "bun";
+import type { BuildArtifact, BuildConfig, BuildOutput } from "bun";
+import { writeThirdPartyNotices } from "./thirdPartyNotices";
 
 const isDebug = process.env.DEBUG === "true";
 const sizeData: Record<string, { esm: number; cjs: number }> = {};
 
 export async function buildPackage({
+  bundlePackages,
   entrypoints: packageEntrypoints,
   evmOnly,
+  external = [],
+  packages,
   ...rest
-}: Omit<BuildConfig, "entrypoints"> & { evmOnly?: boolean; entrypoints?: string[] } = {}) {
-  const { exports, name: pkgName } = (await Bun.file("package.json").json()) as {
+}: Omit<BuildConfig, "entrypoints"> & { bundlePackages?: string[]; evmOnly?: boolean; entrypoints?: string[] } = {}) {
+  const {
+    dependencies = {},
+    exports,
+    name: pkgName,
+  } = (await Bun.file("package.json").json()) as {
+    dependencies?: Record<string, string>;
     exports: Record<string, { bun: string }>;
     name: string;
   };
@@ -21,12 +30,21 @@ export async function buildPackage({
     console.info("Entrypoints:", entrypoints);
   }
 
+  const bundledDependencies = new Set(bundlePackages);
+  const packageExternals = bundlePackages
+    ? Object.keys(dependencies)
+        .filter((dependency) => !bundledDependencies.has(dependency))
+        .flatMap((dependency) => [dependency, `${dependency}/*`])
+    : [];
+
   const buildOptions: BuildConfig = {
     define: { "process.env.NODE_ENV": JSON.stringify(isDebug ? "development" : "production") },
     entrypoints,
+    external: [...packageExternals, ...external],
+    metafile: Boolean(bundlePackages),
     minify: !isDebug,
     outdir: "./dist",
-    packages: "external",
+    packages: bundlePackages ? "bundle" : (packages ?? "external"),
     sourcemap: "linked",
     splitting: !pkgName.includes("toolboxes"),
     ...rest,
@@ -35,15 +53,16 @@ export async function buildPackage({
   const buildESM = await Bun.build(buildOptions);
   // Code splitting is esm-only — bun 1.4.0 rejects it for other formats
   // (older bun silently ignored it on the cjs pass).
-  const buildCJS = evmOnly
+  const buildCJS: BuildOutput = evmOnly
     ? { logs: [], outputs: [], success: true }
     : await Bun.build({ ...buildOptions, format: "cjs", naming: "[dir]/[name].cjs", splitting: false });
 
-  if (!(buildESM.success || buildCJS.success)) {
+  if (!buildESM.success || !buildCJS.success) {
     throw new AggregateError(buildESM.logs.concat(buildCJS.logs), "Build failed");
   }
 
   await copyLicense();
+  if (bundlePackages) await writeThirdPartyNotices([buildESM.metafile, buildCJS.metafile]);
 
   if (entrypoints.length === 1) {
     const esmBytesize = buildESM.outputs
