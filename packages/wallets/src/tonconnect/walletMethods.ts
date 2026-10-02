@@ -16,10 +16,8 @@ const TON_MAINNET = "-239" as CHAIN.MAINNET;
 
 let sharedInstance: TonConnectUI | undefined;
 
-// SKConfigIntegrations has no tonConnect key yet; drop the cast once @swapkit/helpers types it.
 export function resolveManifestUrl(config: TonConnectConfig = {}) {
-  const integrations = SKConfig.get("integrations") as { tonConnect?: { manifestUrl?: string } };
-  return config.manifestUrl || integrations.tonConnect?.manifestUrl;
+  return config.manifestUrl || SKConfig.get("integrations").tonConnect?.manifestUrl;
 }
 
 export async function getTonConnectInstance(config: TonConnectConfig = {}): Promise<TonConnectUI> {
