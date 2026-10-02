@@ -22,6 +22,7 @@ const browserProviders: MockBrowserProvider[] = [];
 
 let connectError: unknown;
 let invokeResult: unknown;
+let invokeError: unknown;
 let sessionData: SessionData | undefined;
 
 class MockBrowserProvider {
@@ -45,6 +46,7 @@ const mockClient = {
   },
   invokeMethod: (options: InvokeOptions) => {
     invokeCalls.push(options);
+    if (invokeError) return Promise.reject(invokeError);
     return Promise.resolve(invokeResult);
   },
   provider: { getSession: async () => sessionData },
@@ -60,6 +62,7 @@ mock.module("@metamask/connect-multichain", () => ({
     createClientOptions.push(options);
     return Promise.resolve(mockClient);
   },
+  isRejectionError: realConnectMultichain.isRejectionError,
 }));
 
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
@@ -89,6 +92,7 @@ describe("metamask multichain wallet", () => {
     browserProviders.length = 0;
     connectError = undefined;
     invokeResult = "0x123";
+    invokeError = undefined;
     sessionData = {
       sessionScopes: {
         eip155: { accounts: [`eip155:1:${ETHEREUM_ADDRESS}`] },
@@ -243,6 +247,28 @@ describe("metamask multichain wallet", () => {
       },
     ]);
     expect(signed).toBeInstanceOf(Transaction);
+  });
+
+  test("surfaces wallet rejections with the wallet's EIP-1193 code", async () => {
+    const { metamaskWallet } = await import("../src/metamask");
+    const { isUserRejectedRequest } = await import("@swapkit/helpers");
+
+    await metamaskWallet.connectMetamask.connectWallet({ addChain: () => {} })([Chain.Ethereum], {
+      dapp: { name: "SwapKit Test" },
+      supportedNetworks: { "eip155:1": "https://ethereum.example/rpc" },
+    });
+    invokeError = new realConnectMultichain.RPCInvokeMethodErr(
+      "User rejected the request.",
+      4001,
+      "User rejected the request.",
+    );
+
+    const error = await browserProviders[0]?.walletProvider
+      .request({ method: "eth_sendTransaction", params: [] })
+      .catch((e: unknown) => e);
+
+    expect(error).toHaveProperty("code", 4001);
+    expect(isUserRejectedRequest(error)).toBe(true);
   });
 
   test("loadWallet returns the multichain MetaMask connector", async () => {

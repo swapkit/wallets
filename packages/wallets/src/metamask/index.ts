@@ -50,8 +50,17 @@ export type ConnectMetamaskOptions = {
 
 type MultichainClient = MultichainCore;
 
-const isUserRejection = (error: unknown) =>
-  typeof error === "object" && error !== null && (error as { code?: number }).code === 4001;
+// invokeMethod hides the wallet code in rpcCode (RPCErr53); restore it so rejections and reverts are recognized.
+const toProviderError = (error: unknown) => {
+  if (!(error instanceof Error) || typeof (error as { rpcCode?: unknown }).rpcCode !== "number") return error;
+  const { rpcCode, rpcData, rpcMessage } = error as Error & { rpcCode: number; rpcData?: unknown; rpcMessage?: string };
+  return Object.assign(new Error(rpcMessage ?? error.message, { cause: error }), { code: rpcCode, data: rpcData });
+};
+
+const invoke = (client: MultichainClient, options: InvokeMethodOptions) =>
+  client.invokeMethod(options).catch((error: unknown) => {
+    throw toProviderError(error);
+  });
 
 // Resolve the address for a CAIP-2 scope from a session.
 //
@@ -92,7 +101,7 @@ const makeEip1193ForScope = (client: MultichainClient, scope: Scope, address: st
         case "wallet_addEthereumChain":
           return Promise.resolve(null);
         default:
-          return client.invokeMethod({ request: { method, params }, scope });
+          return invoke(client, { request: { method, params }, scope });
       }
     },
   } as unknown as Eip1193Provider;
@@ -104,6 +113,8 @@ const makeEip1193ForScope = (client: MultichainClient, scope: Scope, address: st
 // so we sign-and-return (signTransaction), we do NOT send.
 const makeSolanaSigner = async (client: MultichainClient, scope: Scope, address: string) => {
   const { PublicKey, Transaction, VersionedTransaction } = await import("@solana/web3.js");
+  // Duck-typed: instanceof breaks when the toolbox resolves a different @solana/web3.js copy.
+  const isVersioned = (tx: object) => "version" in tx;
   const publicKey = new PublicKey(address);
 
   const signTransaction = async <
@@ -114,16 +125,14 @@ const makeSolanaSigner = async (client: MultichainClient, scope: Scope, address:
     const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
     const base64Transaction = Buffer.from(serialized).toString("base64");
 
-    const { signedTransaction } = (await client.invokeMethod({
+    const { signedTransaction } = (await invoke(client, {
       request: { method: "signTransaction", params: { account: { address }, scope, transaction: base64Transaction } },
       scope,
     })) as { signedTransaction: string };
 
     const signedBuffer = Buffer.from(signedTransaction, "base64");
     return (
-      transaction instanceof VersionedTransaction
-        ? VersionedTransaction.deserialize(signedBuffer)
-        : Transaction.from(signedBuffer)
+      isVersioned(transaction) ? VersionedTransaction.deserialize(signedBuffer) : Transaction.from(signedBuffer)
     ) as T;
   };
 
@@ -139,7 +148,7 @@ export const metamaskWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectMetamask(chains: Chain[], options?: ConnectMetamaskOptions) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
-      const { createMultichainClient } = await import("@metamask/connect-multichain");
+      const { createMultichainClient, isRejectionError } = await import("@metamask/connect-multichain");
 
       const chainScopes = filteredChains.map((chain) => ({ chain, scope: chainToScope(chain) }));
       const scopes = [...new Set(chainScopes.map(({ scope }) => scope))];
@@ -159,7 +168,7 @@ export const metamaskWallet = createWallet({
         // Single approval prompt for every requested scope.
         await client.connect(scopes, []);
       } catch (error) {
-        if (isUserRejection(error)) throw new SwapKitError("wallet_connection_rejected_by_user", error);
+        if (isRejectionError(error)) throw new SwapKitError("wallet_connection_rejected_by_user", error);
         throw error;
       }
 
