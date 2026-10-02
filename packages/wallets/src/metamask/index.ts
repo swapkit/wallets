@@ -101,7 +101,7 @@ const makeEip1193ForScope = (client: MultichainClient, scope: Scope, address: st
 // ---- Solana adapter: invokeMethod -> SolanaProvider-style signer ------------
 // Matches the SolanaProvider interface getSolanaToolbox({ signer }) consumes:
 // the toolbox calls signer.signTransaction(tx) and broadcasts the result itself,
-// so we sign-and-return (solana_signTransaction), we do NOT send.
+// so we sign-and-return (signTransaction), we do NOT send.
 const makeSolanaSigner = async (client: MultichainClient, scope: Scope, address: string) => {
   const { PublicKey, Transaction, VersionedTransaction } = await import("@solana/web3.js");
   const publicKey = new PublicKey(address);
@@ -114,12 +114,12 @@ const makeSolanaSigner = async (client: MultichainClient, scope: Scope, address:
     const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
     const base64Transaction = Buffer.from(serialized).toString("base64");
 
-    const result = (await client.invokeMethod({
-      request: { method: "solana_signTransaction", params: { transaction: base64Transaction } },
+    const { signedTransaction } = (await client.invokeMethod({
+      request: { method: "signTransaction", params: { account: { address }, scope, transaction: base64Transaction } },
       scope,
-    })) as { transaction: string };
+    })) as { signedTransaction: string };
 
-    const signedBuffer = Buffer.from(result.transaction, "base64");
+    const signedBuffer = Buffer.from(signedTransaction, "base64");
     return (
       transaction instanceof VersionedTransaction
         ? VersionedTransaction.deserialize(signedBuffer)

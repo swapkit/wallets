@@ -18,6 +18,7 @@ type Eip1193EventProvider = Eip1193Provider & {
   removeListener?: (event: "accountsChanged", listener: AccountsChangedListener) => void;
 };
 
+/** `WalletOption.METAMASK` is deprecated here and will be removed in the next major; use `connectMetamask` from `@swapkit/wallets/metamask`. */
 export type EVMWalletOptions =
   | typeof WalletOption.BRAVE
   | typeof WalletOption.OKX_MOBILE
