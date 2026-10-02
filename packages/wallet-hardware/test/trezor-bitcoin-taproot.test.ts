@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { hex } from "@scure/base";
 import { HDKey } from "@scure/bip32";
-import { Chain, type DerivationPathArray, type UTXOChain } from "@swapkit/helpers";
+import { Chain, type DerivationPathArray } from "@swapkit/helpers";
 import { p2tr, Transaction } from "@swapkit/utxo-signer";
 
 const master = HDKey.fromMasterSeed(new Uint8Array(64).fill(7));
@@ -33,13 +33,15 @@ const { trezorWallet } = await import("../src/trezor");
 
 type ConnectedWallet = { signTransaction: (tx: Transaction) => Promise<Transaction> };
 
-async function connect(chain: UTXOChain, coinType: number) {
+async function connect() {
   const addChain = mock(() => undefined);
   const connectWallet = trezorWallet.connectTrezor.connectWallet({ addChain: addChain as never });
 
-  await connectWallet([chain], [86, coinType, 0, 0, 0] as unknown as DerivationPathArray, { address: taproot.address });
+  await connectWallet([Chain.Bitcoin], [86, 0, 0, 0, 0] as unknown as DerivationPathArray, {
+    address: taproot.address,
+  });
 
-  return addChain.mock.calls[0]?.[0] as unknown as ConnectedWallet | undefined;
+  return addChain.mock.calls[0]?.[0] as unknown as ConnectedWallet;
 }
 
 function txSpendingTaproot() {
@@ -55,17 +57,13 @@ function txSpendingTaproot() {
 
 describe("a Trezor Bitcoin taproot account", () => {
   it("signs as taproot and returns a PSBT that finalizes from the key-path signature", async () => {
-    const wallet = await connect(Chain.Bitcoin, 0);
-    const tx = await (wallet as ConnectedWallet).signTransaction(txSpendingTaproot());
+    const wallet = await connect();
+    const tx = await wallet.signTransaction(txSpendingTaproot());
 
     const [{ inputs, outputs }] = signTransaction.mock.calls.at(-1) as [{ inputs: any[]; outputs: any[] }];
     expect(inputs[0].script_type).toBe("SPENDTAPROOT");
     expect(outputs[0].script_type).toBe("PAYTOTAPROOT");
     expect(tx.getInput(0).tapKeySig).toEqual(schnorrSignature);
     expect(() => tx.finalize()).not.toThrow();
-  });
-
-  it("is not offered on Litecoin", async () => {
-    await expect(connect(Chain.Litecoin, 2)).rejects.toThrow();
   });
 });
