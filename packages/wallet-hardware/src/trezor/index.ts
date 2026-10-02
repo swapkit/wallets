@@ -204,8 +204,12 @@ function decodeOpReturnData(script: Uint8Array): string | null {
   return Buffer.from(script.slice(2, 2 + dataLen)).toString("hex");
 }
 
-function getScriptType(derivationPath: DerivationPathArray) {
+function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
   switch (derivationPath[0]) {
+    case 86:
+      return chain === Chain.Bitcoin
+        ? ({ input: "SPENDTAPROOT", output: "PAYTOTAPROOT", utxo: UTXOScriptType.P2TR } as const)
+        : null;
     case 84:
       return { input: "SPENDWITNESS", output: "PAYTOWITNESS", utxo: UTXOScriptType.P2WPKH } as const;
     case 49:
@@ -701,7 +705,7 @@ async function getTrezorWallet<T extends Chain>({
     case Chain.Litecoin: {
       const { toCashAddress, getUtxoToolbox, stripPrefix } = await import("@swapkit/toolboxes/utxo");
       const utxoChain = chain as UTXOChain;
-      const scriptType = getScriptType(derivationPath);
+      const scriptType = getScriptType(chain, derivationPath);
 
       if (!scriptType) {
         throw new SwapKitError({ errorKey: "wallet_trezor_derivation_path_not_supported", info: { derivationPath } });
@@ -873,6 +877,12 @@ async function getTrezorWallet<T extends Chain>({
         result.payload.signatures.forEach((signatureHex, inputIndex) => {
           const pubkey = signerPubkeys[inputIndex];
           if (!(signatureHex && pubkey)) return;
+
+          // Taproot key-path signatures are Schnorr, not DER, and finalize from tapKeySig.
+          if (resolvedScriptType.utxo === UTXOScriptType.P2TR) {
+            tx.updateInput(inputIndex, { tapKeySig: hexEncode.decode(signatureHex) });
+            return;
+          }
 
           tx.updateInput(inputIndex, { partialSig: [[pubkey, normalizeTrezorSignature(signatureHex, chain)]] });
         });
