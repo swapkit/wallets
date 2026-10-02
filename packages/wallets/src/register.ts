@@ -12,4 +12,5 @@
  * it need nothing extra.
  */
 import "@swapkit/wallet-extensions/noir-wallet/register";
+import "./ledger-wallet-provider/register";
 import "./tonconnect/register";
