@@ -59,7 +59,6 @@ mock.module("@metamask/connect-multichain", () => ({
     createClientOptions.push(options);
     return Promise.resolve(mockClient);
   },
-  isRejectionError: realConnectMultichain.isRejectionError,
 }));
 
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider }));
