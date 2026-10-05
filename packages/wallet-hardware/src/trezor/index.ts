@@ -245,6 +245,14 @@ function getFirstBip32Derivation(input: { bip32Derivation?: unknown }): TrezorBi
   return isTrezorBip32Derivation(firstDerivation) ? firstDerivation : undefined;
 }
 
+function getFirstTapKeyOrigin(input: { tapBip32Derivation?: unknown }) {
+  if (!Array.isArray(input.tapBip32Derivation)) return undefined;
+  const [xOnlyKey, origin] = (input.tapBip32Derivation[0] ?? []) as [unknown, { der?: { path?: unknown } }?];
+  const path = origin?.der?.path;
+
+  return xOnlyKey instanceof Uint8Array && Array.isArray(path) ? { path: path as number[], xOnlyKey } : undefined;
+}
+
 function getPrevoutAmount(input: {
   index?: number;
   nonWitnessUtxo?: { outputs?: Array<{ amount?: bigint | number }> };
@@ -814,10 +822,30 @@ async function getTrezorWallet<T extends Chain>({
         const signerPubkeys: Uint8Array[] = [];
         const trezorInputs = [];
 
-        for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
-          const input = tx.getInput(inputIndex);
+        async function resolveInputAddressN(inputIndex: number, input: ReturnType<Transaction["getInput"]>) {
+          const tapKeyOrigin =
+            resolvedScriptType.utxo === UTXOScriptType.P2TR ? getFirstTapKeyOrigin(input) : undefined;
+
+          if (tapKeyOrigin) {
+            // A BIP86 key-path input's internal key is the x-only key its origin names.
+            if (!input.tapInternalKey) tx.updateInput(inputIndex, { tapInternalKey: tapKeyOrigin.xOnlyKey });
+            return tapKeyOrigin.path;
+          }
+
           const existingDerivation = getFirstBip32Derivation(input);
           const derivation = existingDerivation ?? (await getFallbackDerivation());
+          signerPubkeys[inputIndex] = derivation[0];
+
+          if (!existingDerivation) {
+            tx.updateInput(inputIndex, { bip32Derivation: [derivation] });
+          }
+
+          await applyMissingSpendingMetadata({ chain: utxoChain, indexes: [inputIndex], publicKey: derivation[0], tx });
+          return derivation[1].path;
+        }
+
+        for (let inputIndex = 0; inputIndex < tx.inputsLength; inputIndex++) {
+          const input = tx.getInput(inputIndex);
           const amount = getPrevoutAmount(input);
 
           if (!input.txid || input.index === undefined || !amount) {
@@ -827,16 +855,10 @@ async function getTrezorWallet<T extends Chain>({
             });
           }
 
-          signerPubkeys[inputIndex] = derivation[0];
-
-          if (!existingDerivation) {
-            tx.updateInput(inputIndex, { bip32Derivation: [derivation] });
-          }
-
-          await applyMissingSpendingMetadata({ chain: utxoChain, indexes: [inputIndex], publicKey: derivation[0], tx });
+          const inputAddressN = await resolveInputAddressN(inputIndex, input);
 
           trezorInputs.push({
-            address_n: derivation[1].path,
+            address_n: inputAddressN,
             amount,
             prev_hash: hexEncode.encode(input.txid),
             prev_index: input.index,
@@ -875,14 +897,16 @@ async function getTrezorWallet<T extends Chain>({
         }
 
         result.payload.signatures.forEach((signatureHex, inputIndex) => {
-          const pubkey = signerPubkeys[inputIndex];
-          if (!(signatureHex && pubkey)) return;
+          if (!signatureHex) return;
 
           // Taproot key-path signatures are Schnorr, not DER, and finalize from tapKeySig.
           if (resolvedScriptType.utxo === UTXOScriptType.P2TR) {
             tx.updateInput(inputIndex, { tapKeySig: hexEncode.decode(signatureHex) });
             return;
           }
+
+          const pubkey = signerPubkeys[inputIndex];
+          if (!pubkey) return;
 
           tx.updateInput(inputIndex, { partialSig: [[pubkey, normalizeTrezorSignature(signatureHex, chain)]] });
         });

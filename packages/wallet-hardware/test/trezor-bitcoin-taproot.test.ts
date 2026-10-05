@@ -8,7 +8,10 @@ const master = HDKey.fromMasterSeed(new Uint8Array(64).fill(7));
 const accountKey = master.derive("m/86'/0'/0'");
 const xOnlyKey = (accountKey.derive("m/0/0").publicKey as Uint8Array).slice(1);
 const taproot = p2tr(xOnlyKey);
+const changeXOnlyKey = (accountKey.derive("m/1/3").publicKey as Uint8Array).slice(1);
+const changeTaproot = p2tr(changeXOnlyKey);
 const schnorrSignature = new Uint8Array(64).fill(3);
+const HARDENED = 0x80000000;
 
 const signTransaction = mock((_params: { inputs: Array<{ script_type: string }>; outputs: unknown[] }) =>
   Promise.resolve({ payload: { serializedTx: "", signatures: [hex.encode(schnorrSignature)] }, success: true }),
@@ -65,5 +68,24 @@ describe("a Trezor Bitcoin taproot account", () => {
     expect(outputs[0].script_type).toBe("PAYTOTAPROOT");
     expect(tx.getInput(0).tapKeySig).toEqual(schnorrSignature);
     expect(() => tx.finalize()).not.toThrow();
+  });
+
+  it("signs a change-address input with the path its taproot key origin names", async () => {
+    const changePath = [86 + HARDENED, HARDENED, HARDENED, 1, 3];
+    const tx = new Transaction({ allowUnknownOutputs: true });
+    tx.addInput({
+      index: 0,
+      tapBip32Derivation: [[changeXOnlyKey, { der: { fingerprint: 0, path: changePath }, hashes: [] }]],
+      txid: new Uint8Array(32).fill(2),
+      witnessUtxo: { amount: 100_000n, script: changeTaproot.script },
+    });
+    tx.addOutput({ amount: 90_000n, script: taproot.script });
+
+    const signed = await (await connect()).signTransaction(tx);
+
+    const [{ inputs }] = signTransaction.mock.calls.at(-1) as [{ inputs: any[] }];
+    expect(inputs[0].address_n).toEqual(changePath);
+    expect(signed.getInput(0).tapInternalKey).toEqual(changeXOnlyKey);
+    expect(() => signed.finalize()).not.toThrow();
   });
 });
