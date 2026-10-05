@@ -1,13 +1,12 @@
-import { base58, hex } from "@scure/base";
 import { Chain, type DerivationPathArray, derivationPathToString, SwapKitError } from "@swapkit/helpers";
-import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
+import {
+  type TronSignedTransaction,
+  type TronSigner,
+  type TronTransaction,
+  tronAddressToHex,
+} from "@swapkit/toolboxes/tron";
 
 type TronContractValue = Record<string, unknown>;
-
-export function tronAddressToHex(address: string) {
-  if (/^41[0-9a-fA-F]{40}$/.test(address)) return address.toLowerCase();
-  return hex.encode(base58.decode(address).slice(0, 21));
-}
 
 function getStringField(value: TronContractValue, field: string) {
   const fieldValue = value[field];
