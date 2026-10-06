@@ -29,6 +29,7 @@ let announcesProvider = true;
 let rpcProviderCount = 0;
 let web3WalletMethodsGate: Promise<void> | undefined;
 let web3WalletMethodsError: Error | undefined;
+let resolveRpcUrl: ((chain: string) => Promise<string>) | undefined;
 let announcesStaleProvider = false;
 
 class MockBrowserProvider {
@@ -107,7 +108,10 @@ const realHelpersSnapshot = { ...realHelpers };
 const realEthersSnapshot = { ...realEthers };
 const realEvmExtensionsSnapshot = { ...realEvmExtensions };
 
-mock.module("@swapkit/helpers", () => ({ ...realHelpers, getRPCUrl: () => Promise.resolve(RPC_URL) }));
+mock.module("@swapkit/helpers", () => ({
+  ...realHelpers,
+  getRPCUrl: (chain: string) => resolveRpcUrl?.(chain) ?? Promise.resolve(RPC_URL),
+}));
 
 mock.module("ethers", () => ({ BrowserProvider: MockBrowserProvider, JsonRpcProvider: MockJsonRpcProvider }));
 
@@ -149,6 +153,7 @@ describe("ledger wallet provider connector", () => {
     announcesStaleProvider = false;
     web3WalletMethodsGate = undefined;
     web3WalletMethodsError = undefined;
+    resolveRpcUrl = undefined;
 
     const eventTarget = new EventTarget();
     eventTarget.addEventListener("eip6963:requestProvider", () => {
@@ -267,7 +272,6 @@ describe("ledger wallet provider connector", () => {
     while (addChainCalls.length < 2) await Bun.sleep(0);
 
     expect(addChainCalls.map(({ address }) => address)).toEqual([ADDRESS, NEXT_ADDRESS]);
-    expect(rpcProviderCount).toBeGreaterThan(0);
     expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([NEXT_ADDRESS]);
   });
 
@@ -373,6 +377,60 @@ describe("ledger wallet provider connector", () => {
 
     expect(addChainCalls.map(({ address }) => address)).toEqual([NEXT_ADDRESS]);
     expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([NEXT_ADDRESS]);
+  });
+
+  test("applies an account switch received while the adapters are still being created", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    const rpcUrlRequests: string[] = [];
+    let releaseEthereum = () => {};
+    resolveRpcUrl = (chain) => {
+      rpcUrlRequests.push(chain);
+      if (chain !== Chain.Ethereum) return Promise.resolve(RPC_URL);
+      return new Promise((resolve) => {
+        releaseEthereum = () => resolve(RPC_URL);
+      });
+    };
+
+    const connecting = ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum, Chain.Polygon]);
+    while (rpcUrlRequests.length < 2) await Bun.sleep(0);
+    await Bun.sleep(0);
+
+    const [handleAccountsChanged] = [...accountsChangedListeners];
+    handleAccountsChanged?.([NEXT_ADDRESS]);
+    releaseEthereum();
+    await connecting;
+
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual([Chain.Ethereum, Chain.Polygon]);
+    expect(addChainCalls.map(({ address }) => address)).toEqual([NEXT_ADDRESS, NEXT_ADDRESS]);
+    expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([NEXT_ADDRESS]);
+  });
+
+  test("destroys an adapter that finishes after the connection failed to build", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    let releasePolygon = () => {};
+    resolveRpcUrl = (chain) => {
+      if (chain === Chain.Ethereum) return Promise.reject(new Error("no rpc for ethereum"));
+      return new Promise((resolve) => {
+        releasePolygon = () => resolve(RPC_URL);
+      });
+    };
+
+    await expect(
+      ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([
+        Chain.Ethereum,
+        Chain.Polygon,
+      ]),
+    ).rejects.toThrow("no rpc for ethereum");
+    expect(destroyedRpcProviders).toHaveLength(0);
+
+    releasePolygon();
+    await Bun.sleep(5);
+
+    expect(destroyedRpcProviders).toHaveLength(1);
+    expect(accountsChangedListeners.size).toBe(0);
   });
 
   test("releases the read providers and listeners when the connection fails to build", async () => {

@@ -8,7 +8,12 @@ import { createLedgerEip1193Adapter, resolveLedgerWalletProvider } from "./helpe
 import type { ConnectLedgerWalletProviderOptions } from "./types";
 
 export { initializeLedgerWalletProvider, resolveLedgerWalletProvider, teardownLedgerWalletProvider } from "./helpers";
-export * from "./types";
+export type {
+  ConnectLedgerWalletProviderOptions,
+  InitializeLedgerWalletProviderOptions,
+  LedgerFloatingButtonPosition,
+  LedgerWalletProviderEip1193,
+} from "./types";
 
 const LEDGER_WALLET_PROVIDER_CHAINS = [
   Chain.Arbitrum,
@@ -29,18 +34,18 @@ export const ledgerWalletProviderWallet = createWallet({
     async function connectLedgerWalletProvider(chains: Chain[], options: ConnectLedgerWalletProviderOptions = {}) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const provider = await resolveLedgerWalletProvider(options);
+      const { BrowserProvider } = await import("ethers");
 
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[] | undefined;
       const [address] = accounts ?? [];
 
       if (!address) throw new SwapKitError("wallet_ledger_wallet_provider_no_accounts");
 
-      const { BrowserProvider } = await import("ethers");
-
       let connectedAddress = address;
       let accountChangeVersion = 0;
       let disconnected = false;
       let providerClosed = false;
+      let adaptersReady = false;
       const adapters: Array<{ chain: EVMChain } & Awaited<ReturnType<typeof createLedgerEip1193Adapter>>> = [];
 
       function releaseConnection() {
@@ -53,7 +58,8 @@ export const ledgerWalletProviderWallet = createWallet({
         for (const adapter of adapters) adapter?.destroy();
       }
 
-      async function addConnectedChains(nextAddress: string, version = accountChangeVersion) {
+      async function addConnectedChains(nextAddress: string) {
+        const version = accountChangeVersion;
         const connectedChains = await Promise.all(
           adapters.map(async ({ chain, provider: eip1193Provider }) => ({
             chain,
@@ -85,7 +91,7 @@ export const ledgerWalletProviderWallet = createWallet({
 
         connectedAddress = nextAddress;
         accountChangeVersion += 1;
-        void addConnectedChains(nextAddress);
+        if (adaptersReady) addConnectedChains(nextAddress).catch(releaseConnection);
       }
 
       function handleDisconnect() {
@@ -109,9 +115,11 @@ export const ledgerWalletProviderWallet = createWallet({
               getAddress: () => (disconnected ? undefined : connectedAddress),
               provider,
             });
-            adapters[index] = { chain, ...adapter };
+            if (disconnected) adapter.destroy();
+            else adapters[index] = { chain, ...adapter };
           }),
         );
+        adaptersReady = true;
         await addConnectedChains(connectedAddress);
       } catch (error) {
         releaseConnection();
