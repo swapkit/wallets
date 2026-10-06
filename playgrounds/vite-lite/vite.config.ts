@@ -47,8 +47,6 @@ export default defineConfig({
       "@ledgerhq/devices",
       "@ledgerhq/errors",
       "@ledgerhq/hw-app-btc",
-      "@ledgerhq/hw-transport-webhid",
-      "@ledgerhq/hw-transport-webusb",
       // CJS deps dynamically imported with NAMED imports by the MetaMask connect
       // SDK; without listing them esbuild emits default-only interop and the
       // mobile/QR flow throws on undefined named members.
