@@ -720,6 +720,7 @@ async function getTrezorWallet<T extends Chain>({
       }
 
       const resolvedScriptType = scriptType;
+      const isTaproot = scriptType.utxo === UTXOScriptType.P2TR;
       const toolboxParams = { scriptType: scriptType.utxo };
       const coin = chain.toLowerCase();
 
@@ -822,14 +823,21 @@ async function getTrezorWallet<T extends Chain>({
         const signerPubkeys: Uint8Array[] = [];
         const trezorInputs = [];
 
-        async function resolveInputAddressN(inputIndex: number, input: ReturnType<Transaction["getInput"]>) {
-          const tapKeyOrigin =
-            resolvedScriptType.utxo === UTXOScriptType.P2TR ? getFirstTapKeyOrigin(input) : undefined;
+        async function prepareInputForSigning(inputIndex: number, input: ReturnType<Transaction["getInput"]>) {
+          if (isTaproot) {
+            let keyOrigin = getFirstTapKeyOrigin(input);
 
-          if (tapKeyOrigin) {
+            if (!keyOrigin) {
+              const [publicKey, { path }] = await getFallbackDerivation();
+              keyOrigin = { path, xOnlyKey: publicKey.slice(1) };
+              tx.updateInput(inputIndex, {
+                tapBip32Derivation: [[keyOrigin.xOnlyKey, { der: { fingerprint: 0, path }, hashes: [] }]],
+              });
+            }
+
             // A BIP86 key-path input's internal key is the x-only key its origin names.
-            if (!input.tapInternalKey) tx.updateInput(inputIndex, { tapInternalKey: tapKeyOrigin.xOnlyKey });
-            return tapKeyOrigin.path;
+            if (!input.tapInternalKey) tx.updateInput(inputIndex, { tapInternalKey: keyOrigin.xOnlyKey });
+            return keyOrigin.path;
           }
 
           const existingDerivation = getFirstBip32Derivation(input);
@@ -855,7 +863,7 @@ async function getTrezorWallet<T extends Chain>({
             });
           }
 
-          const inputAddressN = await resolveInputAddressN(inputIndex, input);
+          const inputAddressN = await prepareInputForSigning(inputIndex, input);
 
           trezorInputs.push({
             address_n: inputAddressN,
@@ -900,7 +908,7 @@ async function getTrezorWallet<T extends Chain>({
           if (!signatureHex) return;
 
           // Taproot key-path signatures are Schnorr, not DER, and finalize from tapKeySig.
-          if (resolvedScriptType.utxo === UTXOScriptType.P2TR) {
+          if (isTaproot) {
             tx.updateInput(inputIndex, { tapKeySig: hexEncode.decode(signatureHex) });
             return;
           }
