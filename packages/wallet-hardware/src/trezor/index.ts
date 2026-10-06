@@ -1,3 +1,4 @@
+import { hex } from "@scure/base";
 import { HDKey, type Versions } from "@scure/bip32";
 import {
   Chain,
@@ -29,6 +30,7 @@ import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyI
 import { applyMissingSpendingMetadata } from "../helpers/psbt";
 
 type TrezorBip32Derivation = [Uint8Array, { fingerprint: number; path: number[] }];
+type TrezorTapBip32Derivation = [Uint8Array, { der: { fingerprint: number; path: number[] }; hashes: Uint8Array[] }];
 type TrezorCoreMode = "auto" | "iframe" | "popup" | "suite-desktop" | "suite-web";
 type TrezorTransport = "BridgeTransport" | "WebUsbTransport" | "NodeUsbTransport";
 type ConnectTrezorOptions = { address?: string };
@@ -245,12 +247,35 @@ function getFirstBip32Derivation(input: { bip32Derivation?: unknown }): TrezorBi
   return isTrezorBip32Derivation(firstDerivation) ? firstDerivation : undefined;
 }
 
-function getFirstTapKeyOrigin(input: { tapBip32Derivation?: unknown }) {
-  if (!Array.isArray(input.tapBip32Derivation)) return undefined;
-  const [xOnlyKey, origin] = (input.tapBip32Derivation[0] ?? []) as [unknown, { der?: { path?: unknown } }?];
-  const path = origin?.der?.path;
+function isTrezorTapBip32Derivation(value: unknown): value is TrezorTapBip32Derivation {
+  if (!(Array.isArray(value) && value[0] instanceof Uint8Array)) return false;
+  const origin = value[1] as { der?: { path?: unknown }; hashes?: unknown } | undefined;
 
-  return xOnlyKey instanceof Uint8Array && Array.isArray(path) ? { path: path as number[], xOnlyKey } : undefined;
+  return Array.isArray(origin?.hashes) && Array.isArray(origin?.der?.path);
+}
+
+// Key-path origins carry no leaf hashes; take the one for the internal key, or the only one when it is unset.
+function selectTapKeyOrigin(input: { tapBip32Derivation?: unknown; tapInternalKey?: Uint8Array }, inputIndex: number) {
+  const origins = Array.isArray(input.tapBip32Derivation) ? input.tapBip32Derivation : [];
+  if (origins.length === 0) return undefined;
+
+  const { tapInternalKey } = input;
+  const keyPathOrigins = origins.filter(
+    (origin): origin is TrezorTapBip32Derivation =>
+      isTrezorTapBip32Derivation(origin) &&
+      origin[1].hashes.length === 0 &&
+      (!tapInternalKey || hex.encode(origin[0]) === hex.encode(tapInternalKey)),
+  );
+  const [xOnlyKey, origin] = keyPathOrigins[0] ?? [];
+
+  if (keyPathOrigins.length !== 1 || !(xOnlyKey && origin)) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain: Chain.Bitcoin, error: `Input ${inputIndex} has no single taproot key-path origin to sign with` },
+    });
+  }
+
+  return { path: origin.der.path, xOnlyKey };
 }
 
 function getPrevoutAmount(input: {
@@ -825,7 +850,7 @@ async function getTrezorWallet<T extends Chain>({
 
         async function prepareInputForSigning(inputIndex: number, input: ReturnType<Transaction["getInput"]>) {
           if (isTaproot) {
-            let keyOrigin = getFirstTapKeyOrigin(input);
+            let keyOrigin = selectTapKeyOrigin(input, inputIndex);
 
             if (!keyOrigin) {
               const [publicKey, { path }] = await getFallbackDerivation();

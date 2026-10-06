@@ -58,6 +58,28 @@ function txSpendingTaproot() {
   return tx;
 }
 
+const CHANGE_PATH = [86 + HARDENED, HARDENED, HARDENED, 1, 3];
+
+function keyOrigin(key: Uint8Array, path: number[], hashes: Uint8Array[] = []) {
+  return [key, { der: { fingerprint: 0, path }, hashes }] as [
+    Uint8Array,
+    { der: { fingerprint: number; path: number[] }; hashes: Uint8Array[] },
+  ];
+}
+
+function txSpendingChange(origins: ReturnType<typeof keyOrigin>[], tapInternalKey?: Uint8Array) {
+  const tx = new Transaction({ allowUnknownOutputs: true });
+  tx.addInput({
+    index: 0,
+    tapBip32Derivation: origins,
+    ...(tapInternalKey ? { tapInternalKey } : {}),
+    txid: new Uint8Array(32).fill(2),
+    witnessUtxo: { amount: 100_000n, script: changeTaproot.script },
+  });
+  tx.addOutput({ amount: 90_000n, script: taproot.script });
+  return tx;
+}
+
 describe("a Trezor Bitcoin taproot account", () => {
   it("signs as taproot and returns a PSBT that finalizes from the key-path signature", async () => {
     const wallet = await connect();
@@ -71,21 +93,30 @@ describe("a Trezor Bitcoin taproot account", () => {
   });
 
   it("signs a change-address input with the path its taproot key origin names", async () => {
-    const changePath = [86 + HARDENED, HARDENED, HARDENED, 1, 3];
-    const tx = new Transaction({ allowUnknownOutputs: true });
-    tx.addInput({
-      index: 0,
-      tapBip32Derivation: [[changeXOnlyKey, { der: { fingerprint: 0, path: changePath }, hashes: [] }]],
-      txid: new Uint8Array(32).fill(2),
-      witnessUtxo: { amount: 100_000n, script: changeTaproot.script },
-    });
-    tx.addOutput({ amount: 90_000n, script: taproot.script });
+    const tx = txSpendingChange([keyOrigin(changeXOnlyKey, CHANGE_PATH)]);
 
     const signed = await (await connect()).signTransaction(tx);
 
     const [{ inputs }] = signTransaction.mock.calls.at(-1) as [{ inputs: any[] }];
-    expect(inputs[0].address_n).toEqual(changePath);
+    expect(inputs[0].address_n).toEqual(CHANGE_PATH);
     expect(signed.getInput(0).tapInternalKey).toEqual(changeXOnlyKey);
     expect(() => signed.finalize()).not.toThrow();
+  });
+
+  it("picks the internal key's origin over script-leaf ones and refuses an ambiguous one", async () => {
+    const leafPath = [86 + HARDENED, HARDENED, HARDENED, 0, 17];
+    const leafOrigin = keyOrigin(xOnlyKey, leafPath, [new Uint8Array(32).fill(9)]);
+    const wallet = await connect();
+
+    await wallet.signTransaction(
+      txSpendingChange([leafOrigin, keyOrigin(changeXOnlyKey, CHANGE_PATH)], changeXOnlyKey),
+    );
+    const [{ inputs }] = signTransaction.mock.calls.at(-1) as [{ inputs: any[] }];
+    expect(inputs[0].address_n).toEqual(CHANGE_PATH);
+
+    const calls = signTransaction.mock.calls.length;
+    const ambiguous = txSpendingChange([keyOrigin(xOnlyKey, leafPath), keyOrigin(changeXOnlyKey, CHANGE_PATH)]);
+    await expect(wallet.signTransaction(ambiguous)).rejects.toThrow();
+    expect(signTransaction.mock.calls.length).toBe(calls);
   });
 });
