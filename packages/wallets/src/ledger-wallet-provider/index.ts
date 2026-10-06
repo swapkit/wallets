@@ -7,7 +7,7 @@ import { getWeb3WalletMethods } from "@swapkit/wallet-extensions/evm-extensions"
 import { createLedgerEip1193Adapter, resolveLedgerWalletProvider } from "./helpers";
 import type { ConnectLedgerWalletProviderOptions } from "./types";
 
-export * from "./helpers";
+export { initializeLedgerWalletProvider, resolveLedgerWalletProvider, teardownLedgerWalletProvider } from "./helpers";
 export * from "./types";
 
 const LEDGER_WALLET_PROVIDER_CHAINS = [
@@ -40,12 +40,18 @@ export const ledgerWalletProviderWallet = createWallet({
       let connectedAddress = address;
       let accountChangeVersion = 0;
       let disconnected = false;
-      const adapters = await Promise.all(
-        filteredChains.map(async (chain) => ({
-          chain,
-          ...(await createLedgerEip1193Adapter({ chain, getAddress: () => connectedAddress, provider })),
-        })),
-      );
+      let providerClosed = false;
+      const adapters: Array<{ chain: EVMChain } & Awaited<ReturnType<typeof createLedgerEip1193Adapter>>> = [];
+
+      function releaseConnection() {
+        if (disconnected) return;
+
+        disconnected = true;
+        accountChangeVersion += 1;
+        provider.removeListener?.("accountsChanged", handleAccountsChanged);
+        provider.removeListener?.("disconnect", handleDisconnect);
+        for (const adapter of adapters) adapter?.destroy();
+      }
 
       async function addConnectedChains(nextAddress: string, version = accountChangeVersion) {
         const connectedChains = await Promise.all(
@@ -60,7 +66,7 @@ export const ledgerWalletProviderWallet = createWallet({
           })),
         );
 
-        if (disconnected || version !== accountChangeVersion) return;
+        if (version !== accountChangeVersion) return;
 
         for (const { chain, walletMethods } of connectedChains) {
           addChain({ ...walletMethods, address: nextAddress, chain, disconnect, walletType });
@@ -68,24 +74,49 @@ export const ledgerWalletProviderWallet = createWallet({
       }
 
       function handleAccountsChanged(nextAccounts: string[]) {
+        if (disconnected) return;
+
         const [nextAddress] = nextAccounts;
-        if (disconnected || !nextAddress || nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
+        if (!nextAddress) {
+          releaseConnection();
+          return;
+        }
+        if (nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
 
         connectedAddress = nextAddress;
         accountChangeVersion += 1;
         void addConnectedChains(nextAddress);
       }
 
-      async function disconnect() {
-        disconnected = true;
-        accountChangeVersion += 1;
-        provider.removeListener?.("accountsChanged", handleAccountsChanged);
-        for (const { destroy } of adapters) destroy();
-        await provider.disconnect?.();
+      function handleDisconnect() {
+        providerClosed = true;
+        releaseConnection();
       }
 
-      await addConnectedChains(address);
+      async function disconnect() {
+        releaseConnection();
+        if (!providerClosed) await provider.disconnect?.();
+      }
+
       provider.on?.("accountsChanged", handleAccountsChanged);
+      provider.on?.("disconnect", handleDisconnect);
+
+      try {
+        await Promise.all(
+          filteredChains.map(async (chain, index) => {
+            const adapter = await createLedgerEip1193Adapter({
+              chain,
+              getAddress: () => (disconnected ? undefined : connectedAddress),
+              provider,
+            });
+            adapters[index] = { chain, ...adapter };
+          }),
+        );
+        await addConnectedChains(connectedAddress);
+      } catch (error) {
+        releaseConnection();
+        throw error;
+      }
 
       return true;
     },

@@ -21,11 +21,15 @@ const initializeCalls: unknown[] = [];
 const teardownCalls: number[] = [];
 const providerDisconnectCalls: number[] = [];
 const accountsChangedListeners = new Set<(accounts: string[]) => void>();
+const disconnectListeners = new Set<() => void>();
+const staleRequests: ProviderRequest[] = [];
 
 let ledgerAccounts: string[] = [ADDRESS];
 let announcesProvider = true;
 let rpcProviderCount = 0;
 let web3WalletMethodsGate: Promise<void> | undefined;
+let web3WalletMethodsError: Error | undefined;
+let announcesStaleProvider = false;
 
 class MockBrowserProvider {
   constructor(
@@ -63,9 +67,11 @@ const ledgerProvider = {
   isConnected: () => true,
   on: (event: string, listener: (accounts: string[]) => void) => {
     if (event === "accountsChanged") accountsChangedListeners.add(listener);
+    if (event === "disconnect") disconnectListeners.add(listener as () => void);
   },
   removeListener: (event: string, listener: (accounts: string[]) => void) => {
     if (event === "accountsChanged") accountsChangedListeners.delete(listener);
+    if (event === "disconnect") disconnectListeners.delete(listener as () => void);
   },
   request: ({ method, params }: ProviderRequest) => {
     ledgerRequests.push({ method, params });
@@ -81,13 +87,17 @@ const ledgerProvider = {
   },
 };
 
-function announceLedgerProvider() {
+const staleLedgerProvider = {
+  request: ({ method, params }: ProviderRequest) => {
+    staleRequests.push({ method, params });
+    return Promise.resolve(ledgerAccounts);
+  },
+};
+
+function announceLedgerProvider(provider: unknown = ledgerProvider, uuid = "ledger-uuid") {
   window.dispatchEvent(
     new CustomEvent("eip6963:announceProvider", {
-      detail: {
-        info: { icon: "data:,", name: "Ledger Wallet", rdns: LEDGER_RDNS, uuid: "ledger-uuid" },
-        provider: ledgerProvider,
-      },
+      detail: { info: { icon: "data:,", name: "Ledger Wallet", rdns: LEDGER_RDNS, uuid }, provider },
     }),
   );
 }
@@ -105,6 +115,7 @@ mock.module("@swapkit/wallet-extensions/evm-extensions", () => ({
   getWeb3WalletMethods: async (options: Record<string, unknown>) => {
     web3WalletMethodCalls.push(options);
     await web3WalletMethodsGate;
+    if (web3WalletMethodsError) throw web3WalletMethodsError;
     return { getBalance: () => Promise.resolve([]) };
   },
 }));
@@ -131,11 +142,18 @@ describe("ledger wallet provider connector", () => {
     teardownCalls.length = 0;
     providerDisconnectCalls.length = 0;
     accountsChangedListeners.clear();
+    disconnectListeners.clear();
+    staleRequests.length = 0;
     ledgerAccounts = [ADDRESS];
     announcesProvider = true;
+    announcesStaleProvider = false;
     web3WalletMethodsGate = undefined;
+    web3WalletMethodsError = undefined;
 
     const eventTarget = new EventTarget();
+    eventTarget.addEventListener("eip6963:requestProvider", () => {
+      if (announcesStaleProvider) announceLedgerProvider(staleLedgerProvider, "stale-uuid");
+    });
     eventTarget.addEventListener("eip6963:requestProvider", () => {
       if (announcesProvider) announceLedgerProvider();
     });
@@ -319,6 +337,93 @@ describe("ledger wallet provider connector", () => {
 
     await initializeLedgerWalletProvider();
     expect(initializeCalls).toHaveLength(2);
+  });
+
+  test("connects through the newest announcer when the SDK re-announces", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    announcesStaleProvider = true;
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([
+      Chain.Ethereum,
+    ]);
+
+    expect(staleRequests).toEqual([]);
+    expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
+  });
+
+  test("keeps an account switch that happens while the connection is being built", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    let releaseGate = () => {};
+    web3WalletMethodsGate = new Promise((resolve) => {
+      releaseGate = resolve;
+    });
+
+    const connecting = ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum]);
+    while (web3WalletMethodCalls.length < 1) await Bun.sleep(0);
+
+    const [handleAccountsChanged] = [...accountsChangedListeners];
+    handleAccountsChanged?.([NEXT_ADDRESS]);
+    releaseGate();
+    await connecting;
+    while (addChainCalls.length < 1) await Bun.sleep(0);
+
+    expect(addChainCalls.map(({ address }) => address)).toEqual([NEXT_ADDRESS]);
+    expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([NEXT_ADDRESS]);
+  });
+
+  test("releases the read providers and listeners when the connection fails to build", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    web3WalletMethodsError = new Error("wallet methods unavailable");
+
+    await expect(
+      ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([
+        Chain.Ethereum,
+        Chain.Base,
+      ]),
+    ).rejects.toThrow("wallet methods unavailable");
+
+    expect(destroyedRpcProviders).toHaveLength(2);
+    expect(accountsChangedListeners.size).toBe(0);
+    expect(disconnectListeners.size).toBe(0);
+  });
+
+  test("closes the connection when the device session ends on Ledger's side", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum]);
+
+    const [handleDisconnect] = [...disconnectListeners];
+    handleDisconnect?.();
+
+    expect(accountsChangedListeners.size).toBe(0);
+    expect(destroyedRpcProviders).toHaveLength(1);
+    expect(await browserProviders[0]?.walletProvider.request({ method: "eth_accounts" })).toEqual([]);
+
+    await (addChainCalls[0]?.disconnect as () => Promise<void>)();
+
+    expect(providerDisconnectCalls).toEqual([]);
+  });
+
+  test("treats an empty account list as lost access", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([
+      Chain.Ethereum,
+    ]);
+
+    const [handleAccountsChanged] = [...accountsChangedListeners];
+    handleAccountsChanged?.([]);
+
+    expect(accountsChangedListeners.size).toBe(0);
+    expect(destroyedRpcProviders).toHaveLength(1);
+    expect(await browserProviders[0]?.walletProvider.request({ method: "eth_requestAccounts" })).toEqual([]);
   });
 
   test("throws when the device returns no account", async () => {

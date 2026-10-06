@@ -21,6 +21,8 @@ export function discoverLedgerWalletProvider({
 
   return new Promise((resolve) => {
     let settled = false;
+    let collecting = true;
+    let newest: LedgerWalletProviderEip1193 | undefined;
 
     function settle(provider: LedgerWalletProviderEip1193 | undefined) {
       if (settled) return;
@@ -34,13 +36,17 @@ export function discoverLedgerWalletProvider({
       const { detail } = event as CustomEvent<LedgerWalletProviderDetail>;
       if (detail?.info?.rdns !== LEDGER_WALLET_PROVIDER_RDNS) return;
 
-      settle(detail.provider);
+      if (collecting) newest = detail.provider;
+      else settle(detail.provider);
     }
 
     const timer = setTimeout(() => settle(undefined), timeout);
 
     window.addEventListener("eip6963:announceProvider", onAnnounce);
     window.dispatchEvent(new Event("eip6963:requestProvider"));
+    collecting = false;
+
+    if (newest) settle(newest);
   });
 }
 
@@ -143,7 +149,7 @@ export async function createLedgerEip1193Adapter({
   provider,
 }: {
   chain: EVMChain;
-  getAddress: () => string;
+  getAddress: () => string | undefined;
   provider: LedgerWalletProviderEip1193;
 }) {
   const { JsonRpcProvider } = await import("ethers");
@@ -154,8 +160,10 @@ export async function createLedgerEip1193Adapter({
     request: ({ method, params }) => {
       switch (method) {
         case "eth_accounts":
-        case "eth_requestAccounts":
-          return Promise.resolve([getAddress()]);
+        case "eth_requestAccounts": {
+          const address = getAddress();
+          return Promise.resolve(address ? [address] : []);
+        }
         case "wallet_addEthereumChain":
           return Promise.resolve(null);
         default:
