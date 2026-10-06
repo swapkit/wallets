@@ -171,7 +171,7 @@
         "@cosmjs/amino": "~0.37.0",
         "@cosmjs/proto-signing": "~0.37.0",
         "@ledgerhq/ledger-wallet-provider": "~1.4.3",
-        "@metamask/connect-multichain": "~1.1.0",
+        "@metamask/connect-multichain": "~1.2.0",
         "@near-js/transactions": "~2.5.0",
         "@near-wallet-selector/bitget-wallet": "~10.1.4",
         "@near-wallet-selector/core": "~10.1.4",
@@ -205,7 +205,7 @@
         "@cosmjs/amino": "0.37.0",
         "@cosmjs/proto-signing": "0.37.0",
         "@ledgerhq/ledger-wallet-provider": "1.4.3",
-        "@metamask/connect-multichain": "1.1.0",
+        "@metamask/connect-multichain": "1.2.0",
         "@near-js/transactions": "2.5.0",
         "@near-wallet-selector/bitget-wallet": "10.1.4",
         "@near-wallet-selector/core": "10.1.4",
@@ -596,7 +596,7 @@
 
     "@ledgerhq/logs": ["@ledgerhq/logs@6.17.0", "", {}, "sha512-yra33g5q/AU7+PwAws+GaVpQGUuxnDREjVBnviJjcaJLVKuLzI4pnj8Bd3nY3fypM5k1yZEYKEXfUuGFUjP2+w=="],
 
-    "@ledgerhq/lumen-design-core": ["@ledgerhq/lumen-design-core@0.1.30", "", { "dependencies": { "tailwindcss": "^4.1.17", "tslib": "^2.3.0" } }, "sha512-kPkJ7aKwg4AmD6z2uBJ7rv9I78BVHZxBSu+yJW3S13JROT8qICfuKoAAgrZ+Pr7S5PPxzp7hH61qynCkvpWXqQ=="],
+    "@ledgerhq/lumen-design-core": ["@ledgerhq/lumen-design-core@0.1.31", "", { "dependencies": { "tailwindcss": "^4.1.17", "tslib": "^2.3.0" } }, "sha512-a/Ux//TdJ82OMdUzeFJfX+xEFaFf8ajeImPIqvl4odWy2B/FVVWXa6BLSt4SbjXJpJI8ZS/ZpIYlU+YfO/KbuA=="],
 
     "@ledgerhq/psbtv2": ["@ledgerhq/psbtv2@0.5.0", "", { "dependencies": { "bitcoinjs-lib": "^6.1.7", "varuint-bitcoin": "1.1.2" } }, "sha512-hKp6iIIvFX1KUZA6Uf7rvjBIjEqHBdqSsFzWGLNc9+F0qy+C5C0xLlPbw/lKR+x8Xuau1dhvmw52BvPMQQz41A=="],
 
@@ -604,7 +604,7 @@
 
     "@ledgerhq/types-cryptoassets": ["@ledgerhq/types-cryptoassets@7.39.0", "", {}, "sha512-yeWmparwjcid24ayjC4Q8xOyAOZx+M5Z30Norh/AdUz0qSyjUGB1XpNKN/0P6PUSr4kPWRfXRpk0aW+pvko1Qw=="],
 
-    "@ledgerhq/types-live": ["@ledgerhq/types-live@6.125.0", "", { "dependencies": { "bignumber.js": "^9.1.2", "rxjs": "7.8.2" } }, "sha512-hufNu0R3Ulq4/U8NB2gnoeLruAX42ZlRsfEdtOi8k1FP25/VUn8PfxUZpfSnhYbQSi1JRjoo6PFQgsdFRLDaJQ=="],
+    "@ledgerhq/types-live": ["@ledgerhq/types-live@6.126.0", "", { "dependencies": { "bignumber.js": "^9.1.2", "rxjs": "7.8.2" } }, "sha512-IFtlthwuZrB48zA18F2Jbkl1F7Wr4Jz5kT8tm/T7yhOSjdgjB2VTBlrkJnzBDz/TZ7neJyq0+fF1ef07Mj57fA=="],
 
     "@lit-labs/ssr-dom-shim": ["@lit-labs/ssr-dom-shim@1.6.0", "", {}, "sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ=="],
 
@@ -618,7 +618,7 @@
 
     "@metamask/analytics": ["@metamask/analytics@0.6.0", "", { "dependencies": { "openapi-fetch": "^0.13.5" } }, "sha512-L250lV3PANTcKqhZkmRV1Obkyddm6JDQvDBuUVAi+7TmPdOVdpavWNXyEh7ErscjwG0z2wiF9Ne0ihK/nCdX0w=="],
 
-    "@metamask/connect-multichain": ["@metamask/connect-multichain@1.1.0", "", { "dependencies": { "@metamask/analytics": "^0.6.0", "@metamask/mobile-wallet-protocol-core": "^0.4.0", "@metamask/mobile-wallet-protocol-dapp-client": "^0.3.0", "@metamask/multichain-api-client": "^0.10.1", "@metamask/multichain-ui": "^0.4.1", "@metamask/onboarding": "^1.0.1", "@metamask/rpc-errors": "^7.0.3", "@metamask/utils": "^11.8.1", "@paulmillr/qr": "^0.2.1", "bowser": "^2.11.0", "buffer": "^6.0.3", "cross-fetch": "^4.1.0", "eciesjs": "0.4.17", "eventemitter3": "^5.0.1", "pako": "^2.1.0", "uuid": "^11.1.0", "ws": "^8.18.3" }, "peerDependencies": { "@react-native-async-storage/async-storage": "^1.23" }, "optionalPeers": ["@react-native-async-storage/async-storage"] }, "sha512-PywCTfcSkLHTkEYhnrQbQPv/6laXTPKLmVlJnCAkqFon0jxX6ETCthZcA30fwUQhiOONmG5/MZano3imH+K5dA=="],
+    "@metamask/connect-multichain": ["@metamask/connect-multichain@1.2.0", "", { "dependencies": { "@metamask/analytics": "^0.6.0", "@metamask/mobile-wallet-protocol-core": "^0.4.0", "@metamask/mobile-wallet-protocol-dapp-client": "^0.3.0", "@metamask/multichain-api-client": "^0.10.1", "@metamask/multichain-ui": "^0.4.1", "@metamask/onboarding": "^1.0.1", "@metamask/rpc-errors": "^7.0.3", "@metamask/utils": "^11.8.1", "@paulmillr/qr": "^0.2.1", "bowser": "^2.11.0", "buffer": "^6.0.3", "cross-fetch": "^4.1.0", "eciesjs": "0.4.17", "eventemitter3": "^5.0.1", "pako": "^2.1.0", "uuid": "^11.1.0", "ws": "^8.18.3" }, "peerDependencies": { "@react-native-async-storage/async-storage": "^1.23" }, "optionalPeers": ["@react-native-async-storage/async-storage"] }, "sha512-EoRXtP8cpLhY/YRlQ8rSjzYrc+ykJjMYPL6sF2U9b8Ron9yAVjZCPfSftBjee/tXxQDJ8BupmZbkv4af/vVuSQ=="],
 
     "@metamask/mobile-wallet-protocol-core": ["@metamask/mobile-wallet-protocol-core@0.4.0", "", { "dependencies": { "async-mutex": "^0.5.0", "centrifuge": "^5.3.5", "eventemitter3": "^5.0.1", "uuid": "^11.1.0" } }, "sha512-rB1wMogvSUsFaxyH/eVUCczIkTxVaPPETlD/wgm+gw7EbWP0LlZPY7Bh+DICSfUCJ0zqnoFuwr77WNJvZ6ZiWw=="],
 
@@ -3012,7 +3012,7 @@
 
     "@radixdlt/radix-dapp-toolkit/uuid": ["uuid@10.0.0", "", { "bin": { "uuid": "dist/bin/uuid" } }, "sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ=="],
 
-    "@reduxjs/toolkit/immer": ["immer@11.1.18", "", {}, "sha512-EQyQtLiYW029lyoczMl/Hh4Xu7cDecSc58JRYpHyL4tIAu3eqd1yJzQX04d2BZHDkzFFvm6qJEJWOtfDSWAXbQ=="],
+    "@reduxjs/toolkit/immer": ["immer@11.1.21", "", {}, "sha512-bZSadeCPGdaY5/qRLgr6mDSH1ra21rD3rqpiWk7+QTr4ayYPTE9qZYdLh/NdPhMe0wSrTvHD/Lk8q5EwhUs0aw=="],
 
     "@scure/starknet/@noble/curves": ["@noble/curves@1.7.0", "", { "dependencies": { "@noble/hashes": "1.6.0" } }, "sha512-UTMhXK9SeDhFJVrHeUJ5uZlI6ajXg10O6Ddocf9S6GjbSBVZsJo88HzKwXznNfGpMTRDyJkqMjNDPYgf0qFWnw=="],
 
