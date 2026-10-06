@@ -170,7 +170,7 @@
         "@coinbase/wallet-sdk": "~4.3.7",
         "@cosmjs/amino": "~0.37.0",
         "@cosmjs/proto-signing": "~0.37.0",
-        "@metamask/connect-multichain": "~1.1.0",
+        "@metamask/connect-multichain": "~1.2.0",
         "@near-js/transactions": "~2.5.0",
         "@near-wallet-selector/bitget-wallet": "~10.1.4",
         "@near-wallet-selector/core": "~10.1.4",
@@ -203,7 +203,7 @@
         "@coinbase/wallet-sdk": "4.3.7",
         "@cosmjs/amino": "0.37.0",
         "@cosmjs/proto-signing": "0.37.0",
-        "@metamask/connect-multichain": "1.1.0",
+        "@metamask/connect-multichain": "1.2.0",
         "@near-js/transactions": "2.5.0",
         "@near-wallet-selector/bitget-wallet": "10.1.4",
         "@near-wallet-selector/core": "10.1.4",
@@ -590,7 +590,7 @@
 
     "@metamask/analytics": ["@metamask/analytics@0.6.0", "", { "dependencies": { "openapi-fetch": "^0.13.5" } }, "sha512-L250lV3PANTcKqhZkmRV1Obkyddm6JDQvDBuUVAi+7TmPdOVdpavWNXyEh7ErscjwG0z2wiF9Ne0ihK/nCdX0w=="],
 
-    "@metamask/connect-multichain": ["@metamask/connect-multichain@1.1.0", "", { "dependencies": { "@metamask/analytics": "^0.6.0", "@metamask/mobile-wallet-protocol-core": "^0.4.0", "@metamask/mobile-wallet-protocol-dapp-client": "^0.3.0", "@metamask/multichain-api-client": "^0.10.1", "@metamask/multichain-ui": "^0.4.1", "@metamask/onboarding": "^1.0.1", "@metamask/rpc-errors": "^7.0.3", "@metamask/utils": "^11.8.1", "@paulmillr/qr": "^0.2.1", "bowser": "^2.11.0", "buffer": "^6.0.3", "cross-fetch": "^4.1.0", "eciesjs": "0.4.17", "eventemitter3": "^5.0.1", "pako": "^2.1.0", "uuid": "^11.1.0", "ws": "^8.18.3" }, "peerDependencies": { "@react-native-async-storage/async-storage": "^1.23" }, "optionalPeers": ["@react-native-async-storage/async-storage"] }, "sha512-PywCTfcSkLHTkEYhnrQbQPv/6laXTPKLmVlJnCAkqFon0jxX6ETCthZcA30fwUQhiOONmG5/MZano3imH+K5dA=="],
+    "@metamask/connect-multichain": ["@metamask/connect-multichain@1.2.0", "", { "dependencies": { "@metamask/analytics": "^0.6.0", "@metamask/mobile-wallet-protocol-core": "^0.4.0", "@metamask/mobile-wallet-protocol-dapp-client": "^0.3.0", "@metamask/multichain-api-client": "^0.10.1", "@metamask/multichain-ui": "^0.4.1", "@metamask/onboarding": "^1.0.1", "@metamask/rpc-errors": "^7.0.3", "@metamask/utils": "^11.8.1", "@paulmillr/qr": "^0.2.1", "bowser": "^2.11.0", "buffer": "^6.0.3", "cross-fetch": "^4.1.0", "eciesjs": "0.4.17", "eventemitter3": "^5.0.1", "pako": "^2.1.0", "uuid": "^11.1.0", "ws": "^8.18.3" }, "peerDependencies": { "@react-native-async-storage/async-storage": "^1.23" }, "optionalPeers": ["@react-native-async-storage/async-storage"] }, "sha512-EoRXtP8cpLhY/YRlQ8rSjzYrc+ykJjMYPL6sF2U9b8Ron9yAVjZCPfSftBjee/tXxQDJ8BupmZbkv4af/vVuSQ=="],
 
     "@metamask/mobile-wallet-protocol-core": ["@metamask/mobile-wallet-protocol-core@0.4.0", "", { "dependencies": { "async-mutex": "^0.5.0", "centrifuge": "^5.3.5", "eventemitter3": "^5.0.1", "uuid": "^11.1.0" } }, "sha512-rB1wMogvSUsFaxyH/eVUCczIkTxVaPPETlD/wgm+gw7EbWP0LlZPY7Bh+DICSfUCJ0zqnoFuwr77WNJvZ6ZiWw=="],
 
