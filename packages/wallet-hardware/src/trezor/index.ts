@@ -517,9 +517,11 @@ async function getTrezorWallet<T extends Chain>({
     case Chain.BinanceSmartChain:
     case Chain.Ethereum:
     case Chain.Gnosis:
+    case Chain.Hyperevm:
     case Chain.Monad:
     case Chain.Optimism:
     case Chain.Polygon:
+    case Chain.Robinhood:
     case Chain.XLayer: {
       const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
       const { getEVMSigner } = await import("./evmSigner");
@@ -1404,11 +1406,13 @@ export const trezorWallet = createWallet({
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
     [Chain.Dogecoin]: true,
+    [Chain.Hyperevm]: true,
     [Chain.Litecoin]: true,
     [Chain.Monad]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
+    [Chain.Robinhood]: true,
     [Chain.XLayer]: true,
     [Chain.Zcash]: true,
   },
@@ -1428,11 +1432,13 @@ export const trezorWallet = createWallet({
     Chain.Dogecoin,
     Chain.Ethereum,
     Chain.Gnosis,
+    Chain.Hyperevm,
     Chain.Litecoin,
     Chain.Monad,
     Chain.Optimism,
     Chain.Polygon,
     Chain.Ripple,
+    Chain.Robinhood,
     Chain.XLayer,
     Chain.Zcash,
   ],
