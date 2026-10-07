@@ -39,7 +39,7 @@ const { trezorWallet } = await import("../src/trezor");
 
 type ConnectedWallet = {
   signAndBroadcastTransaction: (tx: ZcashTransaction) => Promise<string>;
-  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  signTransaction: (tx: Transaction, inputs?: unknown[]) => Promise<unknown>;
 };
 
 async function connect(chain: Chain, derivationPath: number[], address: string) {
@@ -135,5 +135,39 @@ describe("the memo a Trezor signs on a Bitcoin transaction", () => {
     await wallet.signTransaction(txWithOpReturn(opReturnOf(memo))).catch(() => undefined);
 
     expect(memoSentToTrezor()).toBe(memo);
+  });
+
+  it("forwards an empty OP_RETURN", async () => {
+    const wallet = await connectBitcoin();
+
+    signTransaction.mockClear();
+    await wallet.signTransaction(txWithOpReturn(new Uint8Array([0x6a, 0x00]))).catch(() => undefined);
+
+    expect(memoSentToTrezor()).toBe("");
+  });
+});
+
+describe("the memo a Trezor signs on a Dogecoin transaction", () => {
+  const sender = p2pkh(new Uint8Array(33).fill(2), getNetworkForChain(Chain.Dogecoin));
+
+  it("refuses to sign an OP_RETURN Trezor cannot rebuild", async () => {
+    const wallet = await connect(Chain.Dogecoin, [44, 3, 0, 0, 0], sender.address as string);
+    const tx = new Transaction({ allowLegacyWitnessUtxo: true, allowUnknownOutputs: true });
+    const multiPushOpReturn = Script.encode(["RETURN", Buffer.from("=:e"), Buffer.from(":0x1c7b")]);
+
+    tx.addInput({
+      index: 0,
+      txid: new Uint8Array(32).fill(1),
+      witnessUtxo: { amount: 100_000n, script: sender.script },
+    });
+    tx.addOutput({ amount: 90_000n, script: sender.script });
+    tx.addOutput({ amount: 0n, script: multiPushOpReturn });
+
+    signTransaction.mockClear();
+
+    await expect(wallet.signTransaction(tx, [{ hash: "01".repeat(32), index: 0, value: 100_000 }])).rejects.toThrow(
+      /OP_RETURN/,
+    );
+    expect(signTransaction).not.toHaveBeenCalled();
   });
 });

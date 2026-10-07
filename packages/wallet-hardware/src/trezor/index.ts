@@ -203,11 +203,35 @@ async function decodeOpReturnData(script: Uint8Array) {
   const { Script } = await import("@swapkit/utxo-signer");
 
   try {
-    const [opcode, data, ...rest] = Script.decode(script);
-    return opcode === "RETURN" && data instanceof Uint8Array && rest.length === 0 ? hex.encode(data) : null;
+    const [opcode, data] = Script.decode(script);
+    const bytes = data === 0 ? new Uint8Array() : data;
+    if (opcode !== "RETURN" || !(bytes instanceof Uint8Array)) return null;
+
+    // Trezor rebuilds the script from the data, so only accept scripts it reproduces byte for byte
+    return hex.encode(Script.encode(["RETURN", bytes])) === hex.encode(script) ? hex.encode(bytes) : null;
   } catch {
     return null;
   }
+}
+
+async function toTrezorOpReturnOutput(script: Uint8Array, amount: bigint | undefined, chain: Chain) {
+  if (amount !== 0n) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain, error: "OP_RETURN output carrying value cannot be signed" },
+    });
+  }
+
+  const opReturnData = await decodeOpReturnData(script);
+
+  if (opReturnData === null) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
+    });
+  }
+
+  return { amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const };
 }
 
 function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
@@ -331,16 +355,9 @@ async function buildPCZTOutputsForTrezor(pczt: PCZT, address_n: number[], myAddr
     const output = pczt.getOutput(i);
     const script = output.scriptPubkey;
 
-    if (output.value === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = await decodeOpReturnData(script);
-      if (opReturnData) {
-        outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
-        continue;
-      }
-      throw new SwapKitError({
-        errorKey: "wallet_trezor_failed_to_sign_transaction",
-        info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
-      });
+    if (script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(script, output.value, chain));
+      continue;
     }
 
     const outputAddress = await decodeOutputAddress(script);
@@ -434,16 +451,9 @@ async function buildZcashTxOutputsForTrezor({
     const outputAddress = tx.getOutputAddress(i, network);
     const script = output.script;
 
-    if (output.amount === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = await decodeOpReturnData(script);
-      if (opReturnData) {
-        outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
-        continue;
-      }
-      throw new SwapKitError({
-        errorKey: "wallet_trezor_failed_to_sign_transaction",
-        info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
-      });
+    if (script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(script, output.amount, chain));
+      continue;
     }
 
     if (!outputAddress && (output.amount ?? 0n) > 0n) {
@@ -465,7 +475,6 @@ async function buildUtxoOutputsForTrezor(
   network: BTCNetwork,
   address_n: number[],
   myAddress: string,
-  memo: string,
   chain: Chain,
   scriptType: { input: string; output: string },
   toCashAddress: (addr: string) => string,
@@ -476,17 +485,12 @@ async function buildUtxoOutputsForTrezor(
     const output = tx.getOutput(i);
     const outputAddress = tx.getOutputAddress(i, network);
 
-    if (!outputAddress) {
-      const opReturnData = output.script ? await decodeOpReturnData(output.script) : null;
-      if (opReturnData !== null || memo) {
-        outputs.push({
-          amount: "0",
-          op_return_data: opReturnData ?? Buffer.from(memo).toString("hex"),
-          script_type: "PAYTOOPRETURN",
-        });
-        continue;
-      }
+    if (output.script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(output.script, output.amount, chain));
+      continue;
+    }
 
+    if (!outputAddress) {
       throw new SwapKitError({
         errorKey: "wallet_trezor_failed_to_sign_transaction",
         info: { chain, error: "Unable to decode output address from scriptPubkey" },
@@ -785,7 +789,7 @@ async function getTrezorWallet<T extends Chain>({
       const address = providedAddress ?? (await getAddress());
       const baseToolbox = getUtxoToolbox(chain, toolboxParams);
 
-      const signTransaction = async (tx: Transaction, inputs: UTXOType[], memo = "") => {
+      const signTransaction = async (tx: Transaction, inputs: UTXOType[]) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const address_n = hardenDerivationPath(derivationPath);
         const network = getNetworkForChain(chain as UTXOChain);
@@ -795,7 +799,6 @@ async function getTrezorWallet<T extends Chain>({
           network,
           address_n,
           address,
-          memo,
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -914,7 +917,6 @@ async function getTrezorWallet<T extends Chain>({
           network,
           address_n,
           address,
-          "",
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -989,7 +991,6 @@ async function getTrezorWallet<T extends Chain>({
           network,
           address_n,
           address,
-          "",
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -1025,7 +1026,6 @@ async function getTrezorWallet<T extends Chain>({
           txHex?: string;
           value: number;
         }>,
-        memo = "",
       ) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const network = getNetworkForChain(chain as UTXOChain);
@@ -1036,7 +1036,6 @@ async function getTrezorWallet<T extends Chain>({
           network,
           baseAddressN,
           address,
-          memo,
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -1117,7 +1116,7 @@ async function getTrezorWallet<T extends Chain>({
           };
         });
 
-        const signedTxHex = await signTransactionWithMultipleInputs(tx as Transaction, inputsWithDerivation, memo);
+        const signedTxHex = await signTransactionWithMultipleInputs(tx as Transaction, inputsWithDerivation);
         return toolbox.broadcastTx(signedTxHex);
       };
 
@@ -1150,7 +1149,7 @@ async function getTrezorWallet<T extends Chain>({
           sender: address,
         });
 
-        const signedTxHex = await signTransaction(tx, inputs, memo);
+        const signedTxHex = await signTransaction(tx, inputs);
         const txHash = await toolbox.broadcastTx(signedTxHex);
 
         return txHash;
