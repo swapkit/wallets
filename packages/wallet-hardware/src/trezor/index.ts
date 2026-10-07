@@ -234,6 +234,22 @@ async function toTrezorOpReturnOutput(script: Uint8Array, amount: bigint | undef
   return { amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const };
 }
 
+async function assertTransactionCarriesMemo(tx: Transaction, memo: string, chain: Chain) {
+  if (!memo) return;
+
+  const expected = hex.encode(new TextEncoder().encode(memo));
+
+  for (let i = 0; i < tx.outputsLength; i++) {
+    const script = tx.getOutput(i).script;
+    if (script?.[0] === 0x6a && (await decodeOpReturnData(script)) === expected) return;
+  }
+
+  throw new SwapKitError({
+    errorKey: "wallet_trezor_failed_to_sign_transaction",
+    info: { chain, error: "Transaction does not carry the provided memo" },
+  });
+}
+
 function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
   switch (derivationPath[0]) {
     case 86:
@@ -789,8 +805,9 @@ async function getTrezorWallet<T extends Chain>({
       const address = providedAddress ?? (await getAddress());
       const baseToolbox = getUtxoToolbox(chain, toolboxParams);
 
-      // The memo is read from the transaction's OP_RETURN; the parameter stays for API compatibility
-      const signTransaction = async (tx: Transaction, inputs: UTXOType[], _memo = "") => {
+      const signTransaction = async (tx: Transaction, inputs: UTXOType[], memo = "") => {
+        await assertTransactionCarriesMemo(tx, memo, chain);
+
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const address_n = hardenDerivationPath(derivationPath);
         const network = getNetworkForChain(chain as UTXOChain);
@@ -1027,8 +1044,10 @@ async function getTrezorWallet<T extends Chain>({
           txHex?: string;
           value: number;
         }>,
-        _memo = "",
+        memo = "",
       ) => {
+        await assertTransactionCarriesMemo(tx, memo, chain);
+
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const network = getNetworkForChain(chain as UTXOChain);
         const baseAddressN = hardenDerivationPath(derivationPath.slice(0, 3) as unknown as DerivationPathArray);

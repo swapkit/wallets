@@ -39,7 +39,7 @@ const { trezorWallet } = await import("../src/trezor");
 
 type ConnectedWallet = {
   signAndBroadcastTransaction: (tx: ZcashTransaction) => Promise<string>;
-  signTransaction: (tx: Transaction, inputs?: unknown[]) => Promise<unknown>;
+  signTransaction: (tx: Transaction, inputs?: unknown[], memo?: string) => Promise<unknown>;
 };
 
 async function connect(chain: Chain, derivationPath: number[], address: string) {
@@ -149,11 +149,11 @@ describe("the memo a Trezor signs on a Bitcoin transaction", () => {
 
 describe("the memo a Trezor signs on a Dogecoin transaction", () => {
   const sender = p2pkh(new Uint8Array(33).fill(2), getNetworkForChain(Chain.Dogecoin));
+  const inputs = [{ hash: "01".repeat(32), index: 0, value: 100_000 }];
+  const connectDogecoin = () => connect(Chain.Dogecoin, [44, 3, 0, 0, 0], sender.address as string);
 
-  it("refuses to sign an OP_RETURN Trezor cannot rebuild", async () => {
-    const wallet = await connect(Chain.Dogecoin, [44, 3, 0, 0, 0], sender.address as string);
+  function txWithOpReturn(opReturnScript?: Uint8Array) {
     const tx = new Transaction({ allowLegacyWitnessUtxo: true, allowUnknownOutputs: true });
-    const multiPushOpReturn = Script.encode(["RETURN", Buffer.from("=:e"), Buffer.from(":0x1c7b")]);
 
     tx.addInput({
       index: 0,
@@ -161,13 +161,31 @@ describe("the memo a Trezor signs on a Dogecoin transaction", () => {
       witnessUtxo: { amount: 100_000n, script: sender.script },
     });
     tx.addOutput({ amount: 90_000n, script: sender.script });
-    tx.addOutput({ amount: 0n, script: multiPushOpReturn });
+    if (opReturnScript) tx.addOutput({ amount: 0n, script: opReturnScript });
+
+    return tx;
+  }
+
+  it("refuses to sign an OP_RETURN Trezor cannot rebuild", async () => {
+    const wallet = await connectDogecoin();
+    const multiPushOpReturn = Script.encode(["RETURN", Buffer.from("=:e"), Buffer.from(":0x1c7b")]);
 
     signTransaction.mockClear();
 
-    await expect(wallet.signTransaction(tx, [{ hash: "01".repeat(32), index: 0, value: 100_000 }])).rejects.toThrow(
-      /OP_RETURN/,
-    );
+    await expect(wallet.signTransaction(txWithOpReturn(multiPushOpReturn), inputs)).rejects.toThrow(/OP_RETURN/);
+    expect(signTransaction).not.toHaveBeenCalled();
+  });
+
+  it("only signs when the transaction carries the memo it was given", async () => {
+    const memo = memoOfLength(60);
+    const wallet = await connectDogecoin();
+
+    signTransaction.mockClear();
+    await wallet.signTransaction(txWithOpReturn(opReturnOf(memo)), inputs, memo).catch(() => undefined);
+    expect(memoSentToTrezor()).toBe(memo);
+
+    signTransaction.mockClear();
+    await expect(wallet.signTransaction(txWithOpReturn(), inputs, memo)).rejects.toThrow(/memo/);
     expect(signTransaction).not.toHaveBeenCalled();
   });
 });
