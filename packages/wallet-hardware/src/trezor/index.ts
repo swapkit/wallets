@@ -789,7 +789,8 @@ async function getTrezorWallet<T extends Chain>({
       const address = providedAddress ?? (await getAddress());
       const baseToolbox = getUtxoToolbox(chain, toolboxParams);
 
-      const signTransaction = async (tx: Transaction, inputs: UTXOType[]) => {
+      // The memo is read from the transaction's OP_RETURN; the parameter stays for API compatibility
+      const signTransaction = async (tx: Transaction, inputs: UTXOType[], _memo = "") => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const address_n = hardenDerivationPath(derivationPath);
         const network = getNetworkForChain(chain as UTXOChain);
@@ -1026,6 +1027,7 @@ async function getTrezorWallet<T extends Chain>({
           txHex?: string;
           value: number;
         }>,
+        _memo = "",
       ) => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const network = getNetworkForChain(chain as UTXOChain);
@@ -1116,7 +1118,7 @@ async function getTrezorWallet<T extends Chain>({
           };
         });
 
-        const signedTxHex = await signTransactionWithMultipleInputs(tx as Transaction, inputsWithDerivation);
+        const signedTxHex = await signTransactionWithMultipleInputs(tx as Transaction, inputsWithDerivation, memo);
         return toolbox.broadcastTx(signedTxHex);
       };
 
@@ -1149,7 +1151,7 @@ async function getTrezorWallet<T extends Chain>({
           sender: address,
         });
 
-        const signedTxHex = await signTransaction(tx, inputs);
+        const signedTxHex = await signTransaction(tx, inputs, memo);
         const txHash = await toolbox.broadcastTx(signedTxHex);
 
         return txHash;
