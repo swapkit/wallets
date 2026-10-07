@@ -11,7 +11,7 @@ import {
 } from "@swapkit/utxo-signer";
 
 const signTransaction = mock((_params: { outputs: Record<string, unknown>[] }) =>
-  Promise.resolve({ payload: { error: "captured" }, success: false }),
+  Promise.resolve({ payload: { error: "device declined" }, success: false }),
 );
 
 mock.module("@trezor/connect-web", () => ({
@@ -88,7 +88,7 @@ describe("the memo a Trezor signs on a transparent Zcash transaction", () => {
     signTransaction.mockClear();
     const wallet = await connect();
 
-    await expect(wallet.signAndBroadcastTransaction(txWithOpReturn(truncated))).rejects.toThrow();
+    await expect(wallet.signAndBroadcastTransaction(txWithOpReturn(truncated))).rejects.toThrow(/OP_RETURN/);
     expect(signTransaction).not.toHaveBeenCalled();
   });
 });
