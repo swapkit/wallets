@@ -1,5 +1,11 @@
 # @swapkit-dev/wallets
 
+## 5.1.1
+
+### Patch Changes
+
+- [#177](https://github.com/swapkit/wallets/pull/177) [`b1ade19`](https://github.com/swapkit/wallets/commit/b1ade19247a2e0661ad4b4f165d2880914c0a5c7) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Fix Trezor signing of UTXO memos longer than 75 bytes and stop Zcash transactions from dropping an unreadable memo (via @swapkit/wallet-hardware@6.0.1)
+
 ## 5.1.0
 
 ### Minor Changes
