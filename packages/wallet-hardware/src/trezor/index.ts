@@ -199,22 +199,15 @@ function tryNormalizeTrezorExtendedPublicKey(xpub: string | undefined, chain: UT
   }
 }
 
-// Memos over 75 bytes are pushed with OP_PUSHDATA1/2, so the length is not always the second byte
-function decodeOpReturnData(script: Uint8Array): string | null {
-  if (script.length < 2 || script[0] !== 0x6a) return null;
+async function decodeOpReturnData(script: Uint8Array) {
+  const { Script } = await import("@swapkit/utxo-signer");
 
-  const opcode = script[1] as number;
-  const header =
-    opcode <= 0x4b
-      ? { dataLen: opcode, offset: 2 }
-      : opcode === 0x4c && script.length >= 3
-        ? { dataLen: script[2] as number, offset: 3 }
-        : opcode === 0x4d && script.length >= 4
-          ? { dataLen: (script[2] as number) | ((script[3] as number) << 8), offset: 4 }
-          : null;
-
-  if (!header || script.length !== header.offset + header.dataLen) return null;
-  return hex.encode(script.slice(header.offset));
+  try {
+    const [opcode, data, ...rest] = Script.decode(script);
+    return opcode === "RETURN" && data instanceof Uint8Array && rest.length === 0 ? hex.encode(data) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
@@ -339,7 +332,7 @@ async function buildPCZTOutputsForTrezor(pczt: PCZT, address_n: number[], myAddr
     const script = output.scriptPubkey;
 
     if (output.value === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = decodeOpReturnData(script);
+      const opReturnData = await decodeOpReturnData(script);
       if (opReturnData) {
         outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
         continue;
@@ -422,7 +415,7 @@ function buildZcashTxInputsForTrezor(
   return inputs;
 }
 
-function buildZcashTxOutputsForTrezor({
+async function buildZcashTxOutputsForTrezor({
   addressN,
   chain,
   myAddress,
@@ -442,7 +435,7 @@ function buildZcashTxOutputsForTrezor({
     const script = output.script;
 
     if (output.amount === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = decodeOpReturnData(script);
+      const opReturnData = await decodeOpReturnData(script);
       if (opReturnData) {
         outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
         continue;
@@ -467,7 +460,7 @@ function buildZcashTxOutputsForTrezor({
   return outputs;
 }
 
-function buildUtxoOutputsForTrezor(
+async function buildUtxoOutputsForTrezor(
   tx: Transaction,
   network: BTCNetwork,
   address_n: number[],
@@ -484,7 +477,7 @@ function buildUtxoOutputsForTrezor(
     const outputAddress = tx.getOutputAddress(i, network);
 
     if (!outputAddress) {
-      const opReturnData = output.script ? decodeOpReturnData(output.script) : null;
+      const opReturnData = output.script ? await decodeOpReturnData(output.script) : null;
       if (opReturnData !== null || memo) {
         outputs.push({
           amount: "0",
@@ -651,7 +644,7 @@ async function getTrezorWallet<T extends Chain>({
         const address_n = hardenDerivationPath(derivationPath);
 
         const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
-        const outputs = buildZcashTxOutputsForTrezor({
+        const outputs = await buildZcashTxOutputsForTrezor({
           addressN: address_n,
           chain,
           myAddress: address,
@@ -797,7 +790,7 @@ async function getTrezorWallet<T extends Chain>({
         const address_n = hardenDerivationPath(derivationPath);
         const network = getNetworkForChain(chain as UTXOChain);
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
@@ -916,7 +909,7 @@ async function getTrezorWallet<T extends Chain>({
           });
         }
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
@@ -991,7 +984,7 @@ async function getTrezorWallet<T extends Chain>({
           });
         }
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
@@ -1038,7 +1031,7 @@ async function getTrezorWallet<T extends Chain>({
         const network = getNetworkForChain(chain as UTXOChain);
         const baseAddressN = hardenDerivationPath(derivationPath.slice(0, 3) as unknown as DerivationPathArray);
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           baseAddressN,
