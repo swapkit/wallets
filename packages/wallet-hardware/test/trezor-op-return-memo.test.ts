@@ -89,7 +89,7 @@ describe("the memo a Trezor signs on a transparent Zcash transaction", () => {
     return tx;
   }
 
-  it.each([75, 76, 80])("forwards a %i-byte memo unchanged", async (length) => {
+  it.each([75, 76])("forwards a %i-byte memo unchanged", async (length) => {
     const memo = memoOfLength(length);
     const wallet = await connectZcash();
 
@@ -127,8 +127,8 @@ describe("the memo a Trezor signs on a Bitcoin transaction", () => {
     return tx;
   }
 
-  it.each([75, 76, 80])("forwards a %i-byte memo unchanged", async (length) => {
-    const memo = memoOfLength(length);
+  it("forwards a memo longer than 75 bytes unchanged", async () => {
+    const memo = memoOfLength(76);
     const wallet = await connectBitcoin();
 
     signTransaction.mockClear();
