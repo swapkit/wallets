@@ -199,11 +199,22 @@ function tryNormalizeTrezorExtendedPublicKey(xpub: string | undefined, chain: UT
   }
 }
 
+// Memos over 75 bytes are pushed with OP_PUSHDATA1/2, so the length is not always the second byte
 function decodeOpReturnData(script: Uint8Array): string | null {
   if (script.length < 2 || script[0] !== 0x6a) return null;
-  const dataLen = script[1];
-  if (dataLen === undefined || script.length < 2 + dataLen) return null;
-  return Buffer.from(script.slice(2, 2 + dataLen)).toString("hex");
+
+  const opcode = script[1] as number;
+  const header =
+    opcode <= 0x4b
+      ? { dataLen: opcode, offset: 2 }
+      : opcode === 0x4c && script.length >= 3
+        ? { dataLen: script[2] as number, offset: 3 }
+        : opcode === 0x4d && script.length >= 4
+          ? { dataLen: (script[2] as number) | ((script[3] as number) << 8), offset: 4 }
+          : null;
+
+  if (!header || script.length !== header.offset + header.dataLen) return null;
+  return hex.encode(script.slice(header.offset));
 }
 
 function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
@@ -436,7 +447,10 @@ function buildZcashTxOutputsForTrezor({
         outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
         continue;
       }
-      continue;
+      throw new SwapKitError({
+        errorKey: "wallet_trezor_failed_to_sign_transaction",
+        info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
+      });
     }
 
     if (!outputAddress && (output.amount ?? 0n) > 0n) {
