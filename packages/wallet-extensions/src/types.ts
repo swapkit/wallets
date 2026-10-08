@@ -22,6 +22,12 @@ type StarknetAccount = StarknetToolboxParams extends infer Params
 
 export type OkxStarknetProvider = { account: StarknetAccount; enable: () => Promise<string[]> };
 
+export type OkxCardanoApi = {
+  getChangeAddress: () => Promise<string>;
+  getNetworkId: () => Promise<number>;
+  signTx: (transaction: string, partialSign?: boolean) => Promise<string>;
+};
+
 type UnisatToSignInputs = { index: number; sighashTypes?: number[]; disableTweakSigner?: boolean } & (
   | { address: string }
   | { publicKey: string }
@@ -142,6 +148,7 @@ declare global {
           };
           solana: SolanaProvider;
           starknet: OkxStarknetProvider;
+          cardano: { enable: () => Promise<OkxCardanoApi> };
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
               contractId?: string;
