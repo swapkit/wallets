@@ -160,6 +160,10 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...toolbox, address: account.address };
       })
+      .with(Chain.Cardano, async () => {
+        const { getOkxCardanoWallet } = await import("./cardano");
+        return getOkxCardanoWallet();
+      })
       .with(Chain.Cosmos, async () => {
         if (!(window.okxwallet && "keplr" in window.okxwallet)) {
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });
