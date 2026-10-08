@@ -1,5 +1,13 @@
 # @swapkit-dev/wallet-hardware
 
+## 6.1.0
+
+### Minor Changes
+
+- [#173](https://github.com/swapkit/wallets/pull/173) [`93e7b81`](https://github.com/swapkit/wallets/commit/93e7b81fb8a364819c9e39653a086dc9abe321b1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Tron support to the Trezor wallet for TRX and TRC20 transfers.
+
+- [#174](https://github.com/swapkit/wallets/pull/174) [`a2f67a1`](https://github.com/swapkit/wallets/commit/a2f67a180c7f04b83670130281d74db72a792e33) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add XRP support to the Trezor wallet for native XRP payments.
+
 ## 6.0.1
 
 ### Patch Changes

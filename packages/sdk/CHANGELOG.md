@@ -1,5 +1,13 @@
 # @swapkit/sdk
 
+## 5.1.2
+
+### Patch Changes
+
+- [#168](https://github.com/swapkit/wallets/pull/168) [`b79b38d`](https://github.com/swapkit/wallets/commit/b79b38d80fa5fdd51549c2ce0afd5ac7364965d6) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - TON Connect now reads its manifest URL from `SKConfig.integrations.tonConnect.manifestUrl` when none is passed to `connectTonConnect`, matching how other wallets read their configuration. An explicitly passed `manifestUrl` still takes precedence. (via @swapkit/wallets@5.1.2)
+- [#173](https://github.com/swapkit/wallets/pull/173) [`93e7b81`](https://github.com/swapkit/wallets/commit/93e7b81fb8a364819c9e39653a086dc9abe321b1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Tron support to the Trezor wallet for TRX and TRC20 transfers. (via @swapkit/wallets@5.1.2)
+- [#174](https://github.com/swapkit/wallets/pull/174) [`a2f67a1`](https://github.com/swapkit/wallets/commit/a2f67a180c7f04b83670130281d74db72a792e33) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add XRP support to the Trezor wallet for native XRP payments. (via @swapkit/wallets@5.1.2)
+
 ## 5.1.1
 
 ### Patch Changes
