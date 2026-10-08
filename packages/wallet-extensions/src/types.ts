@@ -129,6 +129,7 @@ declare global {
             ) => Promise<boolean>;
             getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
           };
+          solana: SolanaProvider;
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
               contractId?: string;
