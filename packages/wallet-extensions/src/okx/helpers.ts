@@ -131,6 +131,39 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...toolbox, address };
       })
+      .with(Chain.Solana, async () => {
+        if (!(window.okxwallet && "solana" in window.okxwallet)) {
+          throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Solana });
+        }
+
+        const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
+        const provider = window.okxwallet.solana;
+        const { publicKey } = await provider.connect();
+        const toolbox = getSolanaToolbox({ signer: provider });
+
+        return { ...toolbox, address: publicKey.toString() };
+      })
+      .with(Chain.Starknet, async () => {
+        if (!(window.okxwallet && "starknet" in window.okxwallet)) {
+          throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Starknet });
+        }
+
+        const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
+        const { account, enable } = window.okxwallet.starknet;
+        const [address] = await enable();
+
+        if (!address) {
+          throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Starknet });
+        }
+
+        const toolbox = getStarknetToolbox({ signer: account });
+
+        return { ...toolbox, address: account.address };
+      })
+      .with(Chain.Cardano, async () => {
+        const { getOkxCardanoWallet } = await import("./cardano");
+        return getOkxCardanoWallet();
+      })
       .with(Chain.Cosmos, async () => {
         if (!(window.okxwallet && "keplr" in window.okxwallet)) {
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });

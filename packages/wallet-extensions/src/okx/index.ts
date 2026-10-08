@@ -8,12 +8,23 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     async function connectOkx(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
 
-      await Promise.all(
+      const results = await Promise.allSettled(
         filteredChains.map(async (chain) => {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
         }),
       );
+
+      // OKX Mobile does not expose every chain the extension does, so one missing chain should not block the rest
+      const failed = results.flatMap((result, index) =>
+        result.status === "rejected" ? [{ chain: filteredChains[index], reason: result.reason }] : [],
+      );
+
+      if (failed.length > 0 && failed.length === results.length) throw failed[0]?.reason;
+
+      for (const { chain, reason } of failed) {
+        console.error(`connectOkx: skipping ${chain}, failed to connect`, reason);
+      }
 
       return true;
     },
@@ -25,12 +36,15 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     [Chain.Berachain]: true,
     [Chain.BinanceSmartChain]: true,
     [Chain.Bitcoin]: true,
+    [Chain.Cardano]: true,
     [Chain.Cosmos]: true,
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
     [Chain.Monad]: true,
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
+    [Chain.Solana]: true,
+    [Chain.Starknet]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     // [Chain.Aptos]: blocked on toolbox
@@ -44,6 +58,7 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     Chain.Berachain,
     Chain.BinanceSmartChain,
     Chain.Bitcoin,
+    Chain.Cardano,
     Chain.Cosmos,
     Chain.Ethereum,
     Chain.Gnosis,
@@ -52,6 +67,8 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     // Chain.Near,
     Chain.Optimism,
     Chain.Polygon,
+    Chain.Solana,
+    Chain.Starknet,
     Chain.XLayer,
     Chain.Tron,
   ],
