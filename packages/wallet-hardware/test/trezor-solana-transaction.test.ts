@@ -13,11 +13,15 @@ import {
 const device = generateKeyPairSync("ed25519");
 const deviceKey = new PublicKey(device.publicKey.export({ format: "der", type: "spki" }).subarray(-32));
 const signedMessages: string[] = [];
+const addressRequests: { showOnTrezor?: boolean }[] = [];
 let deviceResponse: { payload: { error?: string; signature?: string }; success: boolean } | undefined;
 
 mock.module("@trezor/connect-web", () => ({
   default: {
-    solanaGetAddress: () => Promise.resolve({ payload: { address: deviceKey.toBase58() }, success: true }),
+    solanaGetAddress: (params: { showOnTrezor?: boolean }) => {
+      addressRequests.push(params);
+      return Promise.resolve({ payload: { address: deviceKey.toBase58() }, success: true });
+    },
     solanaSignTransaction: ({ serializedTx }: { serializedTx: string }) => {
       signedMessages.push(serializedTx);
       if (deviceResponse) return Promise.resolve(deviceResponse);
@@ -70,17 +74,60 @@ describe("trezor solana transaction", () => {
     expect(verify(null, messageBytes, device.publicKey, signed.signatures[1] as Uint8Array)).toBe(true);
   });
 
-  it("rejects transactions it cannot fully sign", async () => {
+  it("rejects transactions where the Trezor account is not a required signer", async () => {
     const signer = getSolanaSigner({ derivationPath: [44, 501, 0, 0] });
     const signedCount = signedMessages.length;
 
     const notOurs = buildTransaction(Keypair.generate().publicKey);
     await expect(signer.signTransaction(notOurs)).rejects.toThrow("not a required signer");
 
-    const missingFeePayer = buildTransaction(deviceKey);
-    await expect(signer.signTransaction(missingFeePayer)).rejects.toThrow("also needs signatures");
-
     expect(signedMessages).toHaveLength(signedCount);
+  });
+
+  it("signs a versioned transaction before the fee payer has signed", async () => {
+    const transaction = buildTransaction(deviceKey);
+    const messageBytes = transaction.message.serialize();
+
+    const signer = getSolanaSigner({ derivationPath: [44, 501, 0, 0] });
+    const signed = await signer.signTransaction(transaction);
+
+    expect(signedMessages.at(-1)).toBe(Buffer.from(messageBytes).toString("hex"));
+    expect(verify(null, messageBytes, device.publicKey, signed.signatures[1] as Uint8Array)).toBe(true);
+    expect(signed.signatures[0]?.every((byte) => byte === 0)).toBe(true);
+  });
+
+  it("signs a legacy transaction before the fee payer has signed", async () => {
+    const transaction = new Transaction({
+      blockhash: Keypair.generate().publicKey.toBase58(),
+      feePayer: feePayer.publicKey,
+      lastValidBlockHeight: 0,
+    }).add(SystemProgram.transfer({ fromPubkey: deviceKey, lamports: 1000, toPubkey: recipient }));
+    const messageBytes = transaction.serializeMessage();
+
+    const signer = getSolanaSigner({ derivationPath: [44, 501, 0, 0] });
+    const signed = Transaction.from(
+      (await signer.signTransaction(transaction)).serialize({ requireAllSignatures: false }),
+    );
+
+    expect(signedMessages.at(-1)).toBe(messageBytes.toString("hex"));
+    expect(signed.signatures[0]?.signature).toBeNull();
+    expect(verify(null, messageBytes, device.publicKey, signed.signatures[1]?.signature as Buffer)).toBe(true);
+  });
+
+  it("exposes the restored address without asking the device to show it", async () => {
+    const requestCount = addressRequests.length;
+    const signer = getSolanaSigner({ address: deviceKey.toBase58(), derivationPath: [44, 501, 0, 0] });
+
+    expect(signer.publicKey?.equals(deviceKey)).toBe(true);
+    expect(addressRequests).toHaveLength(requestCount);
+
+    const transaction = buildTransaction(deviceKey);
+    transaction.sign([feePayer]);
+    const messageBytes = transaction.message.serialize();
+    const signed = await signer.signTransaction(transaction);
+
+    expect(verify(null, messageBytes, device.publicKey, signed.signatures[1] as Uint8Array)).toBe(true);
+    expect(addressRequests.slice(requestCount).some(({ showOnTrezor }) => showOnTrezor)).toBe(false);
   });
 
   it("signs a legacy transaction without touching the other signatures", async () => {
