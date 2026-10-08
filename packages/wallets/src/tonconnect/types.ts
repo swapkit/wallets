@@ -9,7 +9,8 @@ export type TonConnectConfig = {
   instance?: TonConnectUI;
   /**
    * URL of the dApp's publicly hosted tonconnect-manifest.json.
-   * Required when no `instance` is provided.
+   * Falls back to `SKConfig.integrations.tonConnect.manifestUrl`; one of them is
+   * required when no `instance` is provided.
    * @see https://docs.ton.org/applications/ton-connect/get-started
    */
   manifestUrl?: string;
