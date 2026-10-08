@@ -108,6 +108,7 @@ describe("trezor solana transaction", () => {
     for (const response of [
       { payload: { error: "Cancelled" }, success: false },
       { payload: { signature: "ab".repeat(63) }, success: true },
+      { payload: { signature: "ab".repeat(64) }, success: true },
     ]) {
       const transaction = buildTransaction(deviceKey);
       transaction.sign([feePayer]);

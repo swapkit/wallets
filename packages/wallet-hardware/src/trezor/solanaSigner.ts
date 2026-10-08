@@ -1,3 +1,4 @@
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { hex } from "@scure/base";
 import { PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
 import { Chain, type DerivationPathArray, derivationPathToString, SwapKitError } from "@swapkit/helpers";
@@ -45,12 +46,19 @@ export function getSolanaSigningPayload(transaction: SolanaTransaction, address:
 
 export function addSolanaSignature<T extends SolanaTransaction>(
   transaction: T,
-  { signature, signerKey }: { signature: Uint8Array; signerKey: PublicKey },
+  { message, signature, signerKey }: { message: Uint8Array; signature: Uint8Array; signerKey: PublicKey },
 ) {
   if (signature.length !== 64) {
     throw new SwapKitError({
       errorKey: "wallet_trezor_failed_to_sign_transaction",
       info: { chain: Chain.Solana, error: `Invalid signature length: ${signature.length}` },
+    });
+  }
+
+  if (!ed25519.verify(signature, message, signerKey.toBytes())) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain: Chain.Solana, error: "Signature does not match the Trezor account" },
     });
   }
 
@@ -102,7 +110,7 @@ export function getSolanaSigner({ derivationPath }: { derivationPath: Derivation
     }
 
     const signature = hex.decode(result.payload.signature.replace(/^0x/, ""));
-    return addSolanaSignature(transaction, { signature, signerKey });
+    return addSolanaSignature(transaction, { message, signature, signerKey });
   }
 
   return {
