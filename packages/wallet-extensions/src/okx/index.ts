@@ -34,6 +34,7 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     [Chain.Polygon]: true,
     [Chain.Solana]: true,
     [Chain.Starknet]: true,
+    [Chain.Ton]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     // [Chain.Aptos]: blocked on toolbox
@@ -59,6 +60,7 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     Chain.Solana,
     Chain.Starknet,
     Chain.XLayer,
+    Chain.Ton,
     Chain.Tron,
   ],
   walletType: WalletOption.OKX,
