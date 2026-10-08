@@ -1,114 +1,78 @@
 import { Chain, type DerivationPathArray, derivationPathToString, SwapKitError } from "@swapkit/helpers";
 import type { TypedDataDomain, TypedDataField } from "ethers";
 
-type HyperCoreTypedDataTypes = Record<string, TypedDataField[]>;
+type TypedDataTypes = Record<string, TypedDataField[]>;
+type TypedDataValue = Record<string, unknown>;
 
-const USER_SIGNED_DOMAIN = {
-  name: "HyperliquidSignTransaction",
-  verifyingContract: "0x0000000000000000000000000000000000000000",
-  version: "1",
-} as const;
-const DOMAIN_FIELDS = new Set(["chainId", "name", "verifyingContract", "version"]);
-const EIP712_DOMAIN_TYPE: TypedDataField[] = [
+// EIP-712 domain fields Trezor can show; any other key would be left out of what the device signs
+const DOMAIN_TYPE: TypedDataField[] = [
   { name: "name", type: "string" },
   { name: "version", type: "string" },
   { name: "chainId", type: "uint256" },
   { name: "verifyingContract", type: "address" },
+  { name: "salt", type: "bytes32" },
 ];
-// User-signed actions Trezor shows field by field; L1 `Agent` actions carry an opaque hash and are refused
-const USER_SIGNED_ACTION_TYPES: HyperCoreTypedDataTypes = {
-  "HyperliquidTransaction:ApproveAgent": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "agentAddress", type: "address" },
-    { name: "agentName", type: "string" },
-    { name: "nonce", type: "uint64" },
-  ],
-  "HyperliquidTransaction:ApproveBuilderFee": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "maxFeeRate", type: "string" },
-    { name: "builder", type: "address" },
-    { name: "nonce", type: "uint64" },
-  ],
-  "HyperliquidTransaction:SendAsset": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "destination", type: "string" },
-    { name: "sourceDex", type: "string" },
-    { name: "destinationDex", type: "string" },
-    { name: "token", type: "string" },
-    { name: "amount", type: "string" },
-    { name: "fromSubAccount", type: "string" },
-    { name: "nonce", type: "uint64" },
-  ],
-  "HyperliquidTransaction:SpotSend": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "destination", type: "string" },
-    { name: "token", type: "string" },
-    { name: "amount", type: "string" },
-    { name: "time", type: "uint64" },
-  ],
-  "HyperliquidTransaction:TokenDelegate": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "validator", type: "address" },
-    { name: "wei", type: "uint64" },
-    { name: "isUndelegate", type: "bool" },
-    { name: "nonce", type: "uint64" },
-  ],
-  "HyperliquidTransaction:UsdClassTransfer": [
-    { name: "hyperliquidChain", type: "string" },
-    { name: "amount", type: "string" },
-    { name: "toPerp", type: "bool" },
-    { name: "nonce", type: "uint64" },
-  ],
-};
-const MESSAGE_VALUE_TYPES = new Set(["bigint", "boolean", "number", "string"]);
+const ARRAY_TYPE = /^(.*)\[(\d*)\]$/;
+const PRIMITIVE_VALUE_TYPES = new Set(["bigint", "boolean", "number", "string"]);
 
 function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Hype, reason } });
 }
 
-function assertUserSignedDomain(domain: TypedDataDomain) {
-  const domainFields = domain as Record<string, unknown>;
-  const unknown = Object.keys(domainFields).filter((field) => !DOMAIN_FIELDS.has(field) && domainFields[field] != null);
-  if (unknown.length > 0) throw notSupported(`Trezor cannot sign HyperCore actions with domain ${unknown.join(", ")}`);
+function toDomainType(domain: TypedDataDomain) {
+  const domainFields = domain as TypedDataValue;
+  const unknown = Object.keys(domainFields).filter(
+    (key) => domainFields[key] != null && !DOMAIN_TYPE.some(({ name }) => name === key),
+  );
+  if (unknown.length > 0) throw notSupported(`Trezor cannot sign a HyperCore domain with ${unknown.join(", ")}`);
 
-  for (const [field, expected] of Object.entries(USER_SIGNED_DOMAIN)) {
-    if (domainFields[field] !== expected) throw notSupported(`Unsupported HyperCore signing domain: ${field}`);
-  }
-  if (domain.chainId == null) throw notSupported("Missing chainId in HyperCore signing domain");
+  return DOMAIN_TYPE.filter(({ name }) => domainFields[name] != null);
 }
 
-export function toTrezorHyperCoreTypedData(
-  domain: TypedDataDomain,
-  types: HyperCoreTypedDataTypes,
-  message: Record<string, unknown>,
-) {
-  const { EIP712Domain: _, ...actionTypes } = types;
-  const [primaryType, ...otherTypes] = Object.keys(actionTypes);
-  if (!primaryType || otherTypes.length > 0) throw notSupported("Trezor signs HyperCore actions with exactly one type");
-
-  const expectedFields = USER_SIGNED_ACTION_TYPES[primaryType];
-  if (!expectedFields) throw notSupported(`Unsupported HyperCore action type: ${primaryType}`);
-
-  const fields = actionTypes[primaryType] ?? [];
-  const sameStruct =
-    fields.length === expectedFields.length &&
-    fields.every(
-      (field, index) => field.name === expectedFields[index]?.name && field.type === expectedFields[index]?.type,
-    );
-  if (!sameStruct) throw notSupported(`Unexpected struct for HyperCore ${primaryType}`);
-
-  assertUserSignedDomain(domain);
-
-  const fieldNames = expectedFields.map(({ name }) => name);
-  const unknown = Object.keys(message).filter((field) => !fieldNames.includes(field));
-  if (unknown.length > 0) throw notSupported(`Trezor cannot sign HyperCore ${primaryType} with ${unknown.join(", ")}`);
-
-  for (const name of fieldNames) {
-    if (!MESSAGE_VALUE_TYPES.has(typeof message[name]))
-      throw notSupported(`Invalid ${name} in HyperCore ${primaryType}`);
+// Trezor asks for each value by the names in `types`, so anything not declared there would be signed away unseen
+function assertStructValue(types: TypedDataTypes, typeName: string, value: unknown, path: string) {
+  const arrayMatch = ARRAY_TYPE.exec(typeName);
+  if (arrayMatch) {
+    const [, entryType = "", size] = arrayMatch;
+    if (!Array.isArray(value) || (size && value.length !== Number(size))) throw notSupported(`Invalid ${path}`);
+    for (const [index, entry] of value.entries()) assertStructValue(types, entryType, entry, `${path}[${index}]`);
+    return;
   }
 
-  return { domain, message, primaryType, types: { EIP712Domain: EIP712_DOMAIN_TYPE, [primaryType]: fields } };
+  const fields = types[typeName];
+  if (!fields) {
+    if (!PRIMITIVE_VALUE_TYPES.has(typeof value)) throw notSupported(`Invalid ${path}`);
+    return;
+  }
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw notSupported(`Invalid ${path}`);
+  const struct = value as TypedDataValue;
+  const unknown = Object.keys(struct).filter((key) => struct[key] != null && !fields.some(({ name }) => name === key));
+  if (unknown.length > 0) throw notSupported(`Trezor cannot sign HyperCore ${typeName} with ${unknown.join(", ")}`);
+
+  for (const field of fields) assertStructValue(types, field.type, struct[field.name], `${path}.${field.name}`);
+}
+
+export async function toTrezorHyperCoreTypedData(
+  domain: TypedDataDomain,
+  types: TypedDataTypes,
+  message: TypedDataValue,
+) {
+  const { TypedDataEncoder } = await import("ethers");
+  const { EIP712Domain: _, ...structTypes } = types;
+  const domainType = toDomainType(domain);
+
+  let primaryType: string;
+  try {
+    primaryType = TypedDataEncoder.from(structTypes).primaryType;
+  } catch (error) {
+    throw notSupported(`Invalid HyperCore typed data: ${(error as Error).message}`);
+  }
+
+  assertStructValue({ EIP712Domain: domainType }, "EIP712Domain", domain, "domain");
+  assertStructValue(structTypes, primaryType, message, "message");
+
+  return { domain, message, primaryType, types: { EIP712Domain: domainType, ...structTypes } };
 }
 
 export function getHyperCoreSigner({
@@ -142,12 +106,8 @@ export function getHyperCoreSigner({
     // HyperCore has no transactions: every action goes through signTypedData
     signTransaction: () => Promise.reject(notSupported("HyperCore actions are signed with signTypedData")),
 
-    signTypedData: async (
-      domain: TypedDataDomain,
-      types: HyperCoreTypedDataTypes,
-      message: Record<string, unknown>,
-    ) => {
-      const data = toTrezorHyperCoreTypedData(domain, types, message);
+    signTypedData: async (domain: TypedDataDomain, types: TypedDataTypes, message: TypedDataValue) => {
+      const data = await toTrezorHyperCoreTypedData(domain, types, message);
       const TrezorConnect = (await import("@trezor/connect-web")).default;
 
       const result = await TrezorConnect.ethereumSignTypedData({

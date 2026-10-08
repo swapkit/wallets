@@ -27,6 +27,12 @@ const domain = {
   verifyingContract: "0x0000000000000000000000000000000000000000",
   version: "1",
 };
+const domainType = [
+  { name: "name", type: "string" },
+  { name: "version", type: "string" },
+  { name: "chainId", type: "uint256" },
+  { name: "verifyingContract", type: "address" },
+];
 const sendAssetTypes = {
   "HyperliquidTransaction:SendAsset": [
     { name: "hyperliquidChain", type: "string" },
@@ -49,12 +55,16 @@ const sendAsset = {
   sourceDex: "spot",
   token: "USDC:0x6d1e7cde53ba9467b783cb7c530ce054",
 };
+const agentTypes = {
+  Agent: [
+    { name: "source", type: "string" },
+    { name: "connectionId", type: "bytes32" },
+  ],
+};
+const agent = { connectionId: `0x${"11".repeat(32)}`, source: "a" };
+const l1Domain = { chainId: 1337, name: "Exchange", verifyingContract: domain.verifyingContract, version: "1" };
 
-function signWith(
-  typedDomain: typeof domain,
-  types: Record<string, { name: string; type: string }[]>,
-  message: object,
-) {
+function signWith(typedDomain: object, types: Record<string, { name: string; type: string }[]>, message: object) {
   const signer = getHyperCoreSigner({ address: ADDRESS, derivationPath: [44, 60, 0, 0, 0] });
   return signer.signTypedData(typedDomain, types, message as Record<string, unknown>);
 }
@@ -65,50 +75,33 @@ describe("trezor hypercore typed data", () => {
     calls.sign.length = 0;
   });
 
-  it("signs a sendAsset action with the domain, struct and message untouched", async () => {
+  it("signs user and L1 actions with the domain, struct and message untouched", async () => {
     expect(await signWith(domain, sendAssetTypes, sendAsset)).toBe(SIGNATURE);
+    await signWith(l1Domain, agentTypes, agent);
 
-    expect(calls.sign).toHaveLength(1);
-    expect(calls.sign[0]).toEqual({
-      domain,
-      message: sendAsset,
-      primaryType: "HyperliquidTransaction:SendAsset",
-      types: {
-        EIP712Domain: [
-          { name: "name", type: "string" },
-          { name: "version", type: "string" },
-          { name: "chainId", type: "uint256" },
-          { name: "verifyingContract", type: "address" },
-        ],
-        ...sendAssetTypes,
+    expect(calls.sign).toEqual([
+      {
+        domain,
+        message: sendAsset,
+        primaryType: "HyperliquidTransaction:SendAsset",
+        types: { EIP712Domain: domainType, ...sendAssetTypes },
       },
-    });
+      { domain: l1Domain, message: agent, primaryType: "Agent", types: { EIP712Domain: domainType, ...agentTypes } },
+    ]);
     expect(calls.getAddress).toBe(0);
   });
 
-  it("refuses L1 actions, unknown types and extra fields before reaching the device", async () => {
-    const l1Domain = { chainId: 1337, name: "Exchange", verifyingContract: domain.verifyingContract, version: "1" };
-    const agentTypes = {
-      Agent: [
-        { name: "source", type: "string" },
-        { name: "connectionId", type: "bytes32" },
-      ],
-    };
+  it("refuses anything the device would sign without showing it", async () => {
     const unsupported = [
-      signWith(l1Domain, agentTypes, { connectionId: `0x${"11".repeat(32)}`, source: "a" }),
-      signWith(domain, agentTypes, { connectionId: `0x${"11".repeat(32)}`, source: "a" }),
-      signWith(
-        domain,
-        { "HyperliquidTransaction:Withdraw": sendAssetTypes["HyperliquidTransaction:SendAsset"] },
-        sendAsset,
-      ),
-      signWith(domain, sendAssetTypes, { ...sendAsset, vaultAddress: ADDRESS }),
-      signWith(domain, sendAssetTypes, { ...sendAsset, amount: undefined }),
-      signWith({ ...domain, salt: `0x${"22".repeat(32)}` } as typeof domain, sendAssetTypes, sendAsset),
+      () => signWith(domain, sendAssetTypes, { ...sendAsset, vaultAddress: ADDRESS }),
+      () => signWith(domain, sendAssetTypes, { ...sendAsset, amount: undefined }),
+      () => signWith(domain, sendAssetTypes, { ...sendAsset, amount: { value: "25.5" } }),
+      () => signWith({ ...domain, hyperliquidChain: "Mainnet" }, sendAssetTypes, sendAsset),
+      () => signWith(domain, { ...sendAssetTypes, ...agentTypes }, sendAsset),
     ];
 
     for (const attempt of unsupported) {
-      await expect(attempt).rejects.toMatchObject({ errorKey: "wallet_trezor_method_not_supported" });
+      await expect(attempt()).rejects.toMatchObject({ errorKey: "wallet_trezor_method_not_supported" });
     }
     expect(calls.sign).toHaveLength(0);
   });
