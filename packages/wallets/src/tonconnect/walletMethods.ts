@@ -1,4 +1,4 @@
-import { SwapKitError } from "@swapkit/helpers";
+import { SKConfig, SwapKitError } from "@swapkit/helpers";
 import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 // Type-only: @tonconnect/ui's module init requires localStorage/DOM, so every
 // value import from it must stay behind a dynamic import (SSR/node consumers
@@ -16,6 +16,10 @@ const TON_MAINNET = "-239" as CHAIN.MAINNET;
 
 let sharedInstance: TonConnectUI | undefined;
 
+export function resolveManifestUrl(config: TonConnectConfig = {}) {
+  return config.manifestUrl || SKConfig.get("integrations").tonConnect?.manifestUrl;
+}
+
 export async function getTonConnectInstance(config: TonConnectConfig = {}): Promise<TonConnectUI> {
   if (config.instance) {
     // Remember injected instances (e.g. from @tonconnect/ui-react) so later
@@ -25,12 +29,13 @@ export async function getTonConnectInstance(config: TonConnectConfig = {}): Prom
   }
   if (sharedInstance) return sharedInstance;
 
-  if (!config.manifestUrl) {
+  const manifestUrl = resolveManifestUrl(config);
+  if (!manifestUrl) {
     throw new SwapKitError("wallet_missing_params", { param: "manifestUrl", wallet: "TON Connect" });
   }
 
   const { TonConnectUI } = await import("@tonconnect/ui");
-  const tonConnectUI = new TonConnectUI({ manifestUrl: config.manifestUrl, ...config.uiOptions });
+  const tonConnectUI = new TonConnectUI({ manifestUrl, ...config.uiOptions });
 
   try {
     // Abort connections coming from a non-mainnet wallet early. Only possible

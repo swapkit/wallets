@@ -199,11 +199,55 @@ function tryNormalizeTrezorExtendedPublicKey(xpub: string | undefined, chain: UT
   }
 }
 
-function decodeOpReturnData(script: Uint8Array): string | null {
-  if (script.length < 2 || script[0] !== 0x6a) return null;
-  const dataLen = script[1];
-  if (dataLen === undefined || script.length < 2 + dataLen) return null;
-  return Buffer.from(script.slice(2, 2 + dataLen)).toString("hex");
+async function decodeOpReturnData(script: Uint8Array) {
+  const { Script } = await import("@swapkit/utxo-signer");
+
+  try {
+    const [opcode, data] = Script.decode(script);
+    const bytes = data === 0 ? new Uint8Array() : data;
+    if (opcode !== "RETURN" || !(bytes instanceof Uint8Array)) return null;
+
+    // Trezor rebuilds the script from the data, so only accept scripts it reproduces byte for byte
+    return hex.encode(Script.encode(["RETURN", bytes])) === hex.encode(script) ? hex.encode(bytes) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function toTrezorOpReturnOutput(script: Uint8Array, amount: bigint | undefined, chain: Chain) {
+  if (amount !== 0n) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain, error: "OP_RETURN output carrying value cannot be signed" },
+    });
+  }
+
+  const opReturnData = await decodeOpReturnData(script);
+
+  if (opReturnData === null) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+      info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
+    });
+  }
+
+  return { amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const };
+}
+
+async function assertTransactionCarriesMemo(tx: Transaction, memo: string, chain: Chain) {
+  if (!memo) return;
+
+  const expected = hex.encode(new TextEncoder().encode(memo));
+
+  for (let i = 0; i < tx.outputsLength; i++) {
+    const script = tx.getOutput(i).script;
+    if (script?.[0] === 0x6a && (await decodeOpReturnData(script)) === expected) return;
+  }
+
+  throw new SwapKitError({
+    errorKey: "wallet_trezor_failed_to_sign_transaction",
+    info: { chain, error: "Transaction does not carry the provided memo" },
+  });
 }
 
 function getScriptType(chain: Chain, derivationPath: DerivationPathArray) {
@@ -327,16 +371,9 @@ async function buildPCZTOutputsForTrezor(pczt: PCZT, address_n: number[], myAddr
     const output = pczt.getOutput(i);
     const script = output.scriptPubkey;
 
-    if (output.value === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = decodeOpReturnData(script);
-      if (opReturnData) {
-        outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
-        continue;
-      }
-      throw new SwapKitError({
-        errorKey: "wallet_trezor_failed_to_sign_transaction",
-        info: { chain, error: "Malformed OP_RETURN output cannot be signed" },
-      });
+    if (script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(script, output.value, chain));
+      continue;
     }
 
     const outputAddress = await decodeOutputAddress(script);
@@ -411,7 +448,7 @@ function buildZcashTxInputsForTrezor(
   return inputs;
 }
 
-function buildZcashTxOutputsForTrezor({
+async function buildZcashTxOutputsForTrezor({
   addressN,
   chain,
   myAddress,
@@ -430,12 +467,8 @@ function buildZcashTxOutputsForTrezor({
     const outputAddress = tx.getOutputAddress(i, network);
     const script = output.script;
 
-    if (output.amount === 0n && script?.length > 0 && script[0] === 0x6a) {
-      const opReturnData = decodeOpReturnData(script);
-      if (opReturnData) {
-        outputs.push({ amount: "0", op_return_data: opReturnData, script_type: "PAYTOOPRETURN" as const });
-        continue;
-      }
+    if (script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(script, output.amount, chain));
       continue;
     }
 
@@ -453,12 +486,11 @@ function buildZcashTxOutputsForTrezor({
   return outputs;
 }
 
-function buildUtxoOutputsForTrezor(
+async function buildUtxoOutputsForTrezor(
   tx: Transaction,
   network: BTCNetwork,
   address_n: number[],
   myAddress: string,
-  memo: string,
   chain: Chain,
   scriptType: { input: string; output: string },
   toCashAddress: (addr: string) => string,
@@ -469,17 +501,12 @@ function buildUtxoOutputsForTrezor(
     const output = tx.getOutput(i);
     const outputAddress = tx.getOutputAddress(i, network);
 
-    if (!outputAddress) {
-      const opReturnData = output.script ? decodeOpReturnData(output.script) : null;
-      if (opReturnData !== null || memo) {
-        outputs.push({
-          amount: "0",
-          op_return_data: opReturnData ?? Buffer.from(memo).toString("hex"),
-          script_type: "PAYTOOPRETURN",
-        });
-        continue;
-      }
+    if (output.script?.[0] === 0x6a) {
+      outputs.push(await toTrezorOpReturnOutput(output.script, output.amount, chain));
+      continue;
+    }
 
+    if (!outputAddress) {
       throw new SwapKitError({
         errorKey: "wallet_trezor_failed_to_sign_transaction",
         info: { chain, error: "Unable to decode output address from scriptPubkey" },
@@ -582,6 +609,17 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Tron: {
+      const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
+      const { getTronSigner } = await import("./tronSigner");
+
+      const signer = getTronSigner({ address: providedAddress, derivationPath });
+      const address = await signer.getAddress();
+      const toolbox = getTronToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Zcash: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
 
@@ -648,7 +686,7 @@ async function getTrezorWallet<T extends Chain>({
         const address_n = hardenDerivationPath(derivationPath);
 
         const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
-        const outputs = buildZcashTxOutputsForTrezor({
+        const outputs = await buildZcashTxOutputsForTrezor({
           addressN: address_n,
           chain,
           myAddress: address,
@@ -790,16 +828,17 @@ async function getTrezorWallet<T extends Chain>({
       const baseToolbox = getUtxoToolbox(chain, toolboxParams);
 
       const signTransaction = async (tx: Transaction, inputs: UTXOType[], memo = "") => {
+        await assertTransactionCarriesMemo(tx, memo, chain);
+
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const address_n = hardenDerivationPath(derivationPath);
         const network = getNetworkForChain(chain as UTXOChain);
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
           address,
-          memo,
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -913,12 +952,11 @@ async function getTrezorWallet<T extends Chain>({
           });
         }
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
           address,
-          "",
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -988,12 +1026,11 @@ async function getTrezorWallet<T extends Chain>({
           });
         }
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           address_n,
           address,
-          "",
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -1031,16 +1068,17 @@ async function getTrezorWallet<T extends Chain>({
         }>,
         memo = "",
       ) => {
+        await assertTransactionCarriesMemo(tx, memo, chain);
+
         const TrezorConnect = (await import("@trezor/connect-web")).default;
         const network = getNetworkForChain(chain as UTXOChain);
         const baseAddressN = hardenDerivationPath(derivationPath.slice(0, 3) as unknown as DerivationPathArray);
 
-        const outputs = buildUtxoOutputsForTrezor(
+        const outputs = await buildUtxoOutputsForTrezor(
           tx,
           network,
           baseAddressN,
           address,
-          memo,
           chain,
           resolvedScriptType,
           toCashAddress,
@@ -1480,6 +1518,7 @@ export const trezorWallet = createWallet({
     [Chain.Polygon]: true,
     [Chain.Robinhood]: true,
     [Chain.Solana]: true,
+    [Chain.Tron]: true,
     [Chain.XLayer]: true,
     [Chain.Zcash]: true,
   },
@@ -1506,6 +1545,7 @@ export const trezorWallet = createWallet({
     Chain.Polygon,
     Chain.Robinhood,
     Chain.Solana,
+    Chain.Tron,
     Chain.XLayer,
     Chain.Zcash,
   ],
