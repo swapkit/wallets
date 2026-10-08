@@ -31,7 +31,6 @@ function notSupported(reason: string) {
 }
 
 function assertKnownFields(fields: TronFields, allowed: Set<string>, scope: string) {
-  // Protobuf defaults are not serialized, so they do not change what Trezor signs
   const unknown = Object.keys(fields).filter(
     (field) => !allowed.has(field) && !PROTOBUF_DEFAULTS.includes(fields[field]),
   );
