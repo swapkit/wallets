@@ -143,6 +143,23 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...toolbox, address: publicKey.toString() };
       })
+      .with(Chain.Starknet, async () => {
+        if (!(window.okxwallet && "starknet" in window.okxwallet)) {
+          throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Starknet });
+        }
+
+        const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
+        const { account, enable } = window.okxwallet.starknet;
+        const [address] = await enable();
+
+        if (!address) {
+          throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Starknet });
+        }
+
+        const toolbox = getStarknetToolbox({ signer: account });
+
+        return { ...toolbox, address: account.address };
+      })
       .with(Chain.Cosmos, async () => {
         if (!(window.okxwallet && "keplr" in window.okxwallet)) {
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });
