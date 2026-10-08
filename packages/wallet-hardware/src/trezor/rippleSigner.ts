@@ -1,5 +1,6 @@
 import { Chain, type DerivationPathArray, derivationPathToString, SwapKitError } from "@swapkit/helpers";
 import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
+import { GlobalFlags, hashes, isValidClassicAddress } from "xrpl";
 
 // Fields Trezor serializes itself; anything else would be dropped from the signed transaction
 const TREZOR_RIPPLE_FIELDS = new Set([
@@ -19,7 +20,7 @@ function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Ripple, reason } });
 }
 
-export function toTrezorRippleTransaction(transaction: RippleTransaction, address: string) {
+export function toTrezorRippleTransaction(transaction: RippleTransaction) {
   const tx = transaction as unknown as Record<string, unknown>;
 
   if (tx.TransactionType !== "Payment") {
@@ -33,13 +34,16 @@ export function toTrezorRippleTransaction(transaction: RippleTransaction, addres
     throw notSupported(`Trezor cannot sign XRP payments with ${unsupportedFields.join(", ")}`);
   }
 
-  const { Account, Amount, Destination, DestinationTag, Fee, Flags, LastLedgerSequence, Sequence } = tx;
+  const { Amount, Destination, DestinationTag, Fee, Flags, LastLedgerSequence, Sequence } = tx;
 
-  if (Account !== address) throw notSupported("Transaction account does not match the Trezor address");
   if (typeof Amount !== "string" || !/^\d+$/.test(Amount)) throw notSupported("Trezor only signs native XRP amounts");
   if (typeof Destination !== "string") throw notSupported("Missing destination");
+  if (!isValidClassicAddress(Destination)) throw notSupported("Destination must be a classic XRP address");
   if (typeof Fee !== "string" || typeof Sequence !== "number") throw notSupported("Transaction is not autofilled");
   if (Flags !== undefined && typeof Flags !== "number") throw notSupported("Flags must be numeric");
+  if (((Flags ?? 0) & GlobalFlags.tfInnerBatchTxn) !== 0) {
+    throw notSupported("Trezor cannot sign Batch inner XRP transactions");
+  }
 
   return {
     fee: Fee,
@@ -72,11 +76,12 @@ export function getRippleSigner({ derivationPath }: { derivationPath: Derivation
   }
 
   async function signTransaction(transaction: RippleTransaction) {
-    const trezorTransaction = toTrezorRippleTransaction(transaction, await getAddress());
-    const [TrezorConnect, { hashes }] = await Promise.all([
-      import("@trezor/connect-web").then((module) => module.default),
-      import("xrpl"),
-    ]);
+    const trezorTransaction = toTrezorRippleTransaction(transaction);
+    if (transaction.Account !== (await getAddress())) {
+      throw notSupported("Transaction account does not match the Trezor address");
+    }
+
+    const TrezorConnect = (await import("@trezor/connect-web")).default;
 
     const result = await TrezorConnect.rippleSignTransaction({ path, transaction: trezorTransaction });
 
