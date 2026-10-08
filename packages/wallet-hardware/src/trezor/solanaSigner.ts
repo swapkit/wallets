@@ -59,6 +59,15 @@ export function addSolanaSignature<T extends SolanaTransaction>(
 }
 
 export function getSolanaSigner({ derivationPath }: { derivationPath: DerivationPathArray }) {
+  // Trezor firmware only accepts m/44'/501' plus up to two more levels.
+  const [purpose, coinType] = derivationPath;
+  if (purpose !== 44 || coinType !== 501 || derivationPath.length > 4) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_derivation_path_not_supported",
+      info: { chain: Chain.Solana, derivationPath },
+    });
+  }
+
   const path = derivationPathToString(derivationPath, { allHardened: true });
   let publicKey: PublicKey | null = null;
 

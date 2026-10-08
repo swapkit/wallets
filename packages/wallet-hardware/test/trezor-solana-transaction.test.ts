@@ -79,4 +79,13 @@ describe("trezor solana transaction", () => {
 
     expect(signedMessages).toHaveLength(signedCount);
   });
+
+  it("rejects derivation paths the Trezor firmware does not accept", () => {
+    expect(() => getSolanaSigner({ derivationPath: [44, 501, 0, 0, 0] })).toThrow(
+      "wallet_trezor_derivation_path_not_supported",
+    );
+    expect(() => getSolanaSigner({ derivationPath: [44, 60, 0, 0] })).toThrow(
+      "wallet_trezor_derivation_path_not_supported",
+    );
+  });
 });
