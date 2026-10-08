@@ -129,15 +129,9 @@ export function toTrezorStellarTransaction(transaction: StellarTransaction, addr
   };
 }
 
-export function getStellarSigner({
-  address: knownAddress,
-  derivationPath,
-}: {
-  address?: string;
-  derivationPath: DerivationPathArray;
-}): StellarSigner {
+export function getStellarSigner({ derivationPath }: { derivationPath: DerivationPathArray }): StellarSigner {
   const path = derivationPathToString(derivationPath.slice(0, 3) as [number, number, number]);
-  let address = knownAddress ?? "";
+  let address = "";
 
   async function getAddress() {
     if (address) return address;

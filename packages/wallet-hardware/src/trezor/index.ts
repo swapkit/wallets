@@ -613,8 +613,8 @@ async function getTrezorWallet<T extends Chain>({
       const { getStellarToolbox } = await import("@swapkit/toolboxes/stellar");
       const { getStellarSigner } = await import("./stellarSigner");
 
-      const signer = getStellarSigner({ address: providedAddress, derivationPath });
-      const address = await signer.getAddress();
+      const signer = getStellarSigner({ derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
       const toolbox = getStellarToolbox({ signer });
 
       return { ...toolbox, address };
