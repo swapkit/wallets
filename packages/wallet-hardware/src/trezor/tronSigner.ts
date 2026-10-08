@@ -8,6 +8,8 @@ import {
 
 type TronContractValue = Record<string, unknown>;
 
+const TRON_HEX_ADDRESS = /^41[0-9a-f]{40}$/i;
+
 function getStringField(value: TronContractValue, field: string) {
   const fieldValue = value[field];
   if (typeof fieldValue !== "string" || !fieldValue) {
@@ -29,18 +31,25 @@ export function toTrezorTronContract(transaction: TronTransaction) {
   }
 
   const value = contract.parameter.value;
-  const owner_address = tronAddressToHex(getStringField(value, "owner_address"));
+
+  // `visible: false` means the node already returned the addresses in hex
+  const toHexAddress = (field: string) => {
+    const address = getStringField(value, field);
+    if (transaction.visible !== false) return tronAddressToHex(address);
+    if (TRON_HEX_ADDRESS.test(address)) return address.toLowerCase();
+
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_method_not_supported",
+      info: { chain: Chain.Tron, reason: `Invalid hex ${field} in Tron contract` },
+    });
+  };
+
+  const owner_address = toHexAddress("owner_address");
 
   switch (contract.type) {
     case "TransferContract":
       return {
-        parameter: {
-          value: {
-            amount: String(value.amount),
-            owner_address,
-            to_address: tronAddressToHex(getStringField(value, "to_address")),
-          },
-        },
+        parameter: { value: { amount: String(value.amount), owner_address, to_address: toHexAddress("to_address") } },
         type: "TransferContract" as const,
       };
 
@@ -56,7 +65,7 @@ export function toTrezorTronContract(transaction: TronTransaction) {
       return {
         parameter: {
           value: {
-            contract_address: tronAddressToHex(getStringField(value, "contract_address")),
+            contract_address: toHexAddress("contract_address"),
             data: getStringField(value, "data"),
             owner_address,
           },
