@@ -15,9 +15,6 @@ const TREZOR_RIPPLE_FIELDS = new Set([
   "TransactionType",
 ]);
 
-// Read by SwapKit core to discard routes before signing; the field checks below still guard the signer
-export const TREZOR_RIPPLE_SIGNING_CAPABILITIES = { memoBytes: 0, tokenTransfer: false };
-
 function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Ripple, reason } });
 }

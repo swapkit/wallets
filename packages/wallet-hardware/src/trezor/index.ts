@@ -536,13 +536,13 @@ async function getTrezorWallet<T extends Chain>({
 
     case Chain.Ripple: {
       const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
-      const { getRippleSigner, TREZOR_RIPPLE_SIGNING_CAPABILITIES } = await import("./rippleSigner");
+      const { getRippleSigner } = await import("./rippleSigner");
 
       const signer = getRippleSigner({ derivationPath });
       const address = providedAddress ?? (await signer.getAddress());
       const toolbox = getRippleToolbox({ signer });
 
-      return { ...toolbox, address, signingCapabilities: TREZOR_RIPPLE_SIGNING_CAPABILITIES };
+      return { ...toolbox, address };
     }
 
     case Chain.Zcash: {
