@@ -1,22 +1,9 @@
 import { Chain, type DerivationPathArray, derivationPathToString, SwapKitError } from "@swapkit/helpers";
 import type { StellarSigner, StellarTransaction } from "@swapkit/toolboxes/stellar";
 
-type StellarAssetLike = { getAssetType: () => string; getCode: () => string; getIssuer: () => string };
-type StellarOperationLike = Record<string, unknown> & { type: string; source?: string };
-type StellarTransactionLike = {
-  extraSigners?: unknown[];
-  fee: string;
-  ledgerBounds?: unknown;
-  memo: { type: string; value: unknown };
-  minAccountSequence?: string;
-  minAccountSequenceAge?: unknown;
-  minAccountSequenceLedgerGap?: number;
-  networkPassphrase: string;
-  operations: StellarOperationLike[];
-  sequence: string;
-  source: string;
-  timeBounds?: { maxTime: string; minTime: string };
-};
+type StellarClassicTransaction = Exclude<StellarTransaction, { innerTransaction: unknown }>;
+type StellarOperation = StellarClassicTransaction["operations"][number];
+type StellarAsset = Extract<StellarOperation, { type: "changeTrust" }>["line"];
 
 const STELLAR_DECIMALS = 7;
 const ASSET_TYPES: Record<string, "NATIVE" | "ALPHANUM4" | "ALPHANUM12"> = {
@@ -30,23 +17,22 @@ function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Stellar, reason } });
 }
 
-function toStroops(amount: unknown) {
-  const match = typeof amount === "string" ? /^(\d+)(?:\.(\d{1,7}))?$/.exec(amount) : null;
-  if (!match) throw notSupported(`Invalid Stellar amount: ${String(amount)}`);
+function toStroops(amount: string) {
+  const match = /^(\d+)(?:\.(\d{1,7}))?$/.exec(amount);
+  if (!match) throw notSupported(`Invalid Stellar amount: ${amount}`);
 
   const [, whole = "0", fraction = ""] = match;
   return BigInt(`${whole}${fraction.padEnd(STELLAR_DECIMALS, "0")}`).toString();
 }
 
-function toTrezorAsset(value: unknown) {
-  const asset = value as StellarAssetLike;
+function toTrezorAsset(asset: StellarAsset) {
   const type = ASSET_TYPES[asset.getAssetType()];
-  if (!type) throw notSupported("Trezor does not support liquidity pool assets");
+  if (!type || !("getCode" in asset)) throw notSupported("Trezor does not support liquidity pool assets");
 
   return type === "NATIVE" ? { type } : { code: asset.getCode(), issuer: asset.getIssuer(), type };
 }
 
-function toTrezorOperation({ source, ...operation }: StellarOperationLike) {
+function toTrezorOperation({ source, ...operation }: StellarOperation) {
   const withSource = source ? { source } : {};
 
   switch (operation.type) {
@@ -55,13 +41,13 @@ function toTrezorOperation({ source, ...operation }: StellarOperationLike) {
         ...withSource,
         amount: toStroops(operation.amount),
         asset: toTrezorAsset(operation.asset),
-        destination: operation.destination as string,
+        destination: operation.destination,
         type: "payment" as const,
       };
     case "createAccount":
       return {
         ...withSource,
-        destination: operation.destination as string,
+        destination: operation.destination,
         startingBalance: toStroops(operation.startingBalance),
         type: "createAccount" as const,
       };
@@ -77,17 +63,17 @@ function toTrezorOperation({ source, ...operation }: StellarOperationLike) {
   }
 }
 
-function decodeTextMemo(value: unknown) {
+function decodeTextMemo(value: StellarClassicTransaction["memo"]["value"]) {
   if (typeof value === "string") return value;
 
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(value as Uint8Array);
+    return new TextDecoder("utf-8", { fatal: true }).decode(value ?? undefined);
   } catch {
     throw notSupported("Trezor only signs UTF-8 text memos");
   }
 }
 
-function toTrezorMemo({ type, value }: StellarTransactionLike["memo"]) {
+function toTrezorMemo({ type, value }: StellarClassicTransaction["memo"]) {
   switch (type) {
     case "none":
       return undefined;
@@ -97,7 +83,7 @@ function toTrezorMemo({ type, value }: StellarTransactionLike["memo"]) {
       return { id: String(value), type: MEMO_TYPES.id };
     case "hash":
     case "return":
-      return { hash: Buffer.from(value as Uint8Array).toString("hex"), type: MEMO_TYPES[type] };
+      return { hash: Buffer.from(value ?? "").toString("hex"), type: MEMO_TYPES[type] };
     default:
       throw notSupported(`Unsupported Stellar memo type: ${type}`);
   }
@@ -106,25 +92,26 @@ function toTrezorMemo({ type, value }: StellarTransactionLike["memo"]) {
 export function toTrezorStellarTransaction(transaction: StellarTransaction, address: string) {
   if ("innerTransaction" in transaction) throw notSupported("Trezor cannot sign fee bump transactions");
 
-  const tx = transaction as unknown as StellarTransactionLike;
-
-  if (tx.source !== address) throw notSupported("Transaction source does not match the Trezor address");
-  if (!tx.timeBounds) throw notSupported("Trezor requires transaction time bounds");
+  if (transaction.source !== address) throw notSupported("Transaction source does not match the Trezor address");
+  if (!transaction.timeBounds) throw notSupported("Trezor requires transaction time bounds");
   const hasPreconditions =
-    tx.ledgerBounds || tx.minAccountSequence || tx.minAccountSequenceAge || tx.minAccountSequenceLedgerGap;
-  if (hasPreconditions || tx.extraSigners?.length) {
+    transaction.ledgerBounds ||
+    transaction.minAccountSequence ||
+    transaction.minAccountSequenceAge ||
+    transaction.minAccountSequenceLedgerGap;
+  if (hasPreconditions || transaction.extraSigners?.length) {
     throw notSupported("Trezor cannot sign Stellar transactions with extra preconditions");
   }
 
   return {
-    networkPassphrase: tx.networkPassphrase,
+    networkPassphrase: transaction.networkPassphrase,
     transaction: {
-      fee: Number(tx.fee),
-      memo: toTrezorMemo(tx.memo),
-      operations: tx.operations.map(toTrezorOperation),
-      sequence: tx.sequence,
-      source: tx.source,
-      timebounds: { maxTime: Number(tx.timeBounds.maxTime), minTime: Number(tx.timeBounds.minTime) },
+      fee: Number(transaction.fee),
+      memo: toTrezorMemo(transaction.memo),
+      operations: transaction.operations.map(toTrezorOperation),
+      sequence: transaction.sequence,
+      source: transaction.source,
+      timebounds: { maxTime: Number(transaction.timeBounds.maxTime), minTime: Number(transaction.timeBounds.minTime) },
     },
   };
 }
