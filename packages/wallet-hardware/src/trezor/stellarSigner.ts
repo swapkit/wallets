@@ -129,9 +129,15 @@ export function toTrezorStellarTransaction(transaction: StellarTransaction, addr
   };
 }
 
-export function getStellarSigner({ derivationPath }: { derivationPath: DerivationPathArray }): StellarSigner {
+export function getStellarSigner({
+  address: knownAddress,
+  derivationPath,
+}: {
+  address?: string;
+  derivationPath: DerivationPathArray;
+}): StellarSigner {
   const path = derivationPathToString(derivationPath.slice(0, 3) as [number, number, number]);
-  let address = "";
+  let address = knownAddress ?? "";
 
   async function getAddress() {
     if (address) return address;
@@ -162,7 +168,15 @@ export function getStellarSigner({ derivationPath }: { derivationPath: Derivatio
       });
     }
 
-    transaction.addSignature(address, Buffer.from(result.payload.signature, "hex").toString("base64"));
+    try {
+      transaction.addSignature(address, Buffer.from(result.payload.signature, "hex").toString("base64"));
+    } catch (error) {
+      throw new SwapKitError({
+        errorKey: "wallet_trezor_failed_to_sign_transaction",
+        info: { chain: Chain.Stellar, error },
+      });
+    }
+
     return transaction;
   }
 

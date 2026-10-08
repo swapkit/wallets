@@ -58,13 +58,55 @@ describe("trezor stellar transaction", () => {
     });
   });
 
-  it("rejects what Trezor would sign differently", () => {
-    const unsupportedOperation = buildTransaction({ operations: [{ type: "manageData" }] });
-    const otherSource = buildTransaction({ source: DESTINATION });
-    const noTimeBounds = buildTransaction({ timeBounds: undefined });
+  it("maps account creation, trustlines, operation sources and every memo type", () => {
+    const hash = Buffer.alloc(32, 0xab);
+    const transaction = buildTransaction({
+      memo: { type: "hash", value: hash },
+      operations: [
+        { destination: DESTINATION, source: SOURCE, startingBalance: "1", type: "createAccount" },
+        { limit: "922337203685.4775807", line: asset("credit_alphanum12", "LONGCODE", ISSUER), type: "changeTrust" },
+      ],
+    });
 
-    expect(() => toTrezorStellarTransaction(unsupportedOperation, SOURCE)).toThrow();
-    expect(() => toTrezorStellarTransaction(otherSource, SOURCE)).toThrow();
-    expect(() => toTrezorStellarTransaction(noTimeBounds, SOURCE)).toThrow();
+    expect(toTrezorStellarTransaction(transaction, SOURCE).transaction).toMatchObject({
+      memo: { hash: hash.toString("hex"), type: 3 },
+      operations: [
+        { destination: DESTINATION, source: SOURCE, startingBalance: "10000000", type: "createAccount" },
+        {
+          limit: "9223372036854775807",
+          line: { code: "LONGCODE", issuer: ISSUER, type: "ALPHANUM12" },
+          type: "changeTrust",
+        },
+      ],
+    });
+
+    const memoOf = (memo: unknown) => toTrezorStellarTransaction(buildTransaction({ memo }), SOURCE).transaction.memo;
+    expect(memoOf({ type: "id", value: "18446744073709551615" })).toEqual({ id: "18446744073709551615", type: 2 });
+    expect(memoOf({ type: "return", value: hash })).toEqual({ hash: hash.toString("hex"), type: 4 });
+    expect(memoOf({ type: "none", value: null })).toBeUndefined();
+  });
+
+  const payment = (overrides: Record<string, unknown>) => [
+    { amount: "1", asset: asset("native"), destination: DESTINATION, type: "payment", ...overrides },
+  ];
+
+  it.each([
+    ["fee bump transactions", { innerTransaction: {} }],
+    ["another source account", { source: DESTINATION }],
+    ["missing time bounds", { timeBounds: undefined }],
+    ["ledger bounds", { ledgerBounds: { maxLedger: 10, minLedger: 1 } }],
+    ["minimum account sequence", { minAccountSequence: "1" }],
+    ["minimum account sequence age", { minAccountSequenceAge: 1n }],
+    ["minimum account sequence ledger gap", { minAccountSequenceLedgerGap: 1 }],
+    ["extra signers", { extraSigners: [SOURCE] }],
+    ["unsupported operations", { operations: [{ type: "manageData" }] }],
+    ["liquidity pool assets", { operations: payment({ asset: asset("liquidity_pool_shares") }) }],
+    ["amounts with more than 7 decimals", { operations: payment({ amount: "1.00000001" }) }],
+    ["non numeric amounts", { operations: payment({ amount: "-1" }) }],
+    ["text memos that are not UTF-8", { memo: { type: "text", value: Buffer.from([0xff, 0xfe]) } }],
+  ])("rejects %s before reaching the device", (_, overrides) => {
+    expect(() => toTrezorStellarTransaction(buildTransaction(overrides), SOURCE)).toThrow(
+      "wallet_trezor_method_not_supported",
+    );
   });
 });
