@@ -106,6 +106,14 @@ export function getHyperCoreSigner({
         });
       }
 
+      // Hyperliquid takes the account from the signature, so a stale known address would act from another account
+      if (result.payload.address.toLowerCase() !== address.toLowerCase()) {
+        throw new SwapKitError({
+          errorKey: "wallet_trezor_failed_to_sign_transaction",
+          info: { chain: Chain.Hype, error: "Trezor signed with a different address", signer: result.payload.address },
+        });
+      }
+
       return result.payload.signature.startsWith("0x") ? result.payload.signature : `0x${result.payload.signature}`;
     },
   };

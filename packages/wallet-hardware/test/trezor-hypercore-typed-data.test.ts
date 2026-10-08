@@ -5,6 +5,7 @@ const SIGNATURE = "0x".padEnd(132, "ab");
 
 type SignedTypedData = { domain: unknown; message: unknown; primaryType: string; types: Record<string, unknown> };
 const calls = { getAddress: 0, sign: [] as SignedTypedData[] };
+const device = { address: ADDRESS };
 
 mock.module("@trezor/connect-web", () => ({
   default: {
@@ -14,7 +15,7 @@ mock.module("@trezor/connect-web", () => ({
     },
     ethereumSignTypedData: ({ data }: { data: SignedTypedData }) => {
       calls.sign.push(data);
-      return Promise.resolve({ payload: { address: ADDRESS, signature: SIGNATURE }, success: true });
+      return Promise.resolve({ payload: { address: device.address, signature: SIGNATURE }, success: true });
     },
   },
 }));
@@ -73,6 +74,7 @@ describe("trezor hypercore typed data", () => {
   beforeEach(() => {
     calls.getAddress = 0;
     calls.sign.length = 0;
+    device.address = ADDRESS;
   });
 
   it("signs user and L1 actions with the domain, struct and message untouched", async () => {
@@ -104,5 +106,13 @@ describe("trezor hypercore typed data", () => {
       await expect(attempt()).rejects.toMatchObject({ errorKey: "wallet_trezor_method_not_supported" });
     }
     expect(calls.sign).toHaveLength(0);
+  });
+
+  it("refuses a signature from an account other than the one it was given", async () => {
+    device.address = "0x000000000000000000000000000000000000dead";
+
+    await expect(signWith(domain, sendAssetTypes, sendAsset)).rejects.toMatchObject({
+      errorKey: "wallet_trezor_failed_to_sign_transaction",
+    });
   });
 });
