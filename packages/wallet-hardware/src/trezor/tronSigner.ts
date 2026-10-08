@@ -6,31 +6,65 @@ import {
   tronAddressToHex,
 } from "@swapkit/toolboxes/tron";
 
-type TronContractValue = Record<string, unknown>;
+type TronFields = Record<string, unknown>;
 
 const TRON_HEX_ADDRESS = /^41[0-9a-f]{40}$/i;
+// Fields Trezor rebuilds itself; anything else would change the bytes it signs
+const RAW_DATA_FIELDS = new Set([
+  "contract",
+  "data",
+  "expiration",
+  "fee_limit",
+  "ref_block_bytes",
+  "ref_block_hash",
+  "timestamp",
+]);
+const CONTRACT_FIELDS = new Set(["parameter", "type"]);
+const CONTRACT_VALUE_FIELDS: Record<string, Set<string>> = {
+  TransferContract: new Set(["amount", "owner_address", "to_address"]),
+  TriggerSmartContract: new Set(["contract_address", "data", "owner_address"]),
+};
+const PROTOBUF_DEFAULTS: unknown[] = [undefined, null, 0, "", false];
 
-function getStringField(value: TronContractValue, field: string) {
+function notSupported(reason: string) {
+  return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Tron, reason } });
+}
+
+function assertKnownFields(fields: TronFields, allowed: Set<string>, scope: string) {
+  // Protobuf defaults are not serialized, so they do not change what Trezor signs
+  const unknown = Object.keys(fields).filter(
+    (field) => !allowed.has(field) && !PROTOBUF_DEFAULTS.includes(fields[field]),
+  );
+  if (unknown.length > 0) throw notSupported(`Trezor cannot sign Tron ${scope} with ${unknown.join(", ")}`);
+}
+
+function getStringField(value: TronFields, field: string) {
   const fieldValue = value[field];
-  if (typeof fieldValue !== "string" || !fieldValue) {
-    throw new SwapKitError({
-      errorKey: "wallet_trezor_method_not_supported",
-      info: { chain: Chain.Tron, reason: `Missing ${field} in Tron contract` },
-    });
-  }
+  if (typeof fieldValue !== "string" || !fieldValue) throw notSupported(`Missing ${field} in Tron contract`);
   return fieldValue;
+}
+
+function getAmount(value: TronFields) {
+  const { amount } = value;
+  const isValid =
+    (typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0) ||
+    (typeof amount === "string" && /^[1-9]\d*$/.test(amount));
+
+  if (!isValid) throw notSupported("Invalid amount in Tron contract");
+  return String(amount);
 }
 
 export function toTrezorTronContract(transaction: TronTransaction) {
   const [contract, ...rest] = transaction.raw_data.contract;
-  if (!contract || rest.length > 0) {
-    throw new SwapKitError({
-      errorKey: "wallet_trezor_method_not_supported",
-      info: { chain: Chain.Tron, reason: "Trezor signs Tron transactions with exactly one contract" },
-    });
-  }
+  if (!contract || rest.length > 0) throw notSupported("Trezor signs Tron transactions with exactly one contract");
 
   const value = contract.parameter.value;
+  const allowedValueFields = CONTRACT_VALUE_FIELDS[contract.type];
+  if (!allowedValueFields) throw notSupported(`Unsupported Tron contract type: ${contract.type}`);
+
+  assertKnownFields(transaction.raw_data as unknown as TronFields, RAW_DATA_FIELDS, "transactions");
+  assertKnownFields(contract as unknown as TronFields, CONTRACT_FIELDS, "contracts");
+  assertKnownFields(value, allowedValueFields, contract.type);
 
   // `visible: false` means the node already returned the addresses in hex
   const toHexAddress = (field: string) => {
@@ -38,53 +72,35 @@ export function toTrezorTronContract(transaction: TronTransaction) {
     if (transaction.visible !== false) return tronAddressToHex(address);
     if (TRON_HEX_ADDRESS.test(address)) return address.toLowerCase();
 
-    throw new SwapKitError({
-      errorKey: "wallet_trezor_method_not_supported",
-      info: { chain: Chain.Tron, reason: `Invalid hex ${field} in Tron contract` },
-    });
+    throw notSupported(`Invalid hex ${field} in Tron contract`);
   };
 
   const owner_address = toHexAddress("owner_address");
 
-  switch (contract.type) {
-    case "TransferContract":
-      return {
-        parameter: { value: { amount: String(value.amount), owner_address, to_address: toHexAddress("to_address") } },
-        type: "TransferContract" as const,
-      };
-
-    case "TriggerSmartContract": {
-      // Trezor cannot sign TRX attached to a contract call, the signature would not match the tx
-      if (value.call_value || value.call_token_value) {
-        throw new SwapKitError({
-          errorKey: "wallet_trezor_method_not_supported",
-          info: { chain: Chain.Tron, reason: "Trezor does not support call_value on Tron contract calls" },
-        });
-      }
-
-      return {
-        parameter: {
-          value: {
-            contract_address: toHexAddress("contract_address"),
-            data: getStringField(value, "data"),
-            owner_address,
-          },
-        },
-        type: "TriggerSmartContract" as const,
-      };
-    }
-
-    default:
-      throw new SwapKitError({
-        errorKey: "wallet_trezor_method_not_supported",
-        info: { chain: Chain.Tron, reason: `Unsupported Tron contract type: ${contract.type}` },
-      });
+  if (contract.type === "TransferContract") {
+    return {
+      parameter: { value: { amount: getAmount(value), owner_address, to_address: toHexAddress("to_address") } },
+      type: "TransferContract" as const,
+    };
   }
+
+  return {
+    parameter: {
+      value: { contract_address: toHexAddress("contract_address"), data: getStringField(value, "data"), owner_address },
+    },
+    type: "TriggerSmartContract" as const,
+  };
 }
 
-export function getTronSigner({ derivationPath }: { derivationPath: DerivationPathArray }): TronSigner {
+export function getTronSigner({
+  address: knownAddress,
+  derivationPath,
+}: {
+  address?: string;
+  derivationPath: DerivationPathArray;
+}): TronSigner {
   const path = derivationPathToString(derivationPath);
-  let address = "";
+  let address = knownAddress ?? "";
 
   return {
     getAddress: async () => {
@@ -105,11 +121,12 @@ export function getTronSigner({ derivationPath }: { derivationPath: DerivationPa
     },
 
     signTransaction: async (transaction: TronTransaction): Promise<TronSignedTransaction> => {
+      const contract = toTrezorTronContract(transaction);
       const TrezorConnect = (await import("@trezor/connect-web")).default;
       const { data, expiration, fee_limit, ref_block_bytes, ref_block_hash, timestamp } = transaction.raw_data;
 
       const result = await TrezorConnect.tronSignTransaction({
-        contract: [toTrezorTronContract(transaction)],
+        contract: [contract],
         data,
         expiration,
         fee_limit,

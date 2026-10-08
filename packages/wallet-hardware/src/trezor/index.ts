@@ -602,8 +602,8 @@ async function getTrezorWallet<T extends Chain>({
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
       const { getTronSigner } = await import("./tronSigner");
 
-      const signer = getTronSigner({ derivationPath });
-      const address = providedAddress ?? (await signer.getAddress());
+      const signer = getTronSigner({ address: providedAddress, derivationPath });
+      const address = await signer.getAddress();
       const toolbox = getTronToolbox({ signer });
 
       return { ...toolbox, address };

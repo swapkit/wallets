@@ -5,11 +5,16 @@ import { toTrezorTronContract } from "../src/trezor/tronSigner";
 
 const USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const USDT_HEX = "41a614f803b6fd780986a42c78ec9c7f77e6ded13c";
+const RECIPIENT = "TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7";
+const RECIPIENT_HEX = "4174472e7d35395a6b5add427eecb7f4b62ad2b071";
 
-function buildTx(contract: { type: string; value: Record<string, unknown> }, visible = true): TronTransaction {
+function buildTx(
+  contract: { type: string; value: Record<string, unknown>; extra?: Record<string, unknown> },
+  visible = true,
+): TronTransaction {
   return {
     raw_data: {
-      contract: [{ parameter: { type_url: "", value: contract.value }, type: contract.type }],
+      contract: [{ parameter: { type_url: "", value: contract.value }, type: contract.type, ...contract.extra }],
       expiration: 1,
       ref_block_bytes: "00",
       ref_block_hash: "00",
@@ -56,12 +61,38 @@ describe("trezor tron contract", () => {
     expect(() => toTrezorTronContract(base58InHexTx)).toThrow();
   });
 
-  it("rejects contract calls that attach TRX", () => {
-    const tx = buildTx({
-      type: "TriggerSmartContract",
-      value: { call_value: 10, contract_address: USDT, data: "a9059cbb", owner_address: USDT },
+  it("keeps TRX transfer amounts and addresses in both address formats", () => {
+    const base58Tx = buildTx({
+      type: "TransferContract",
+      value: { amount: 15_000_000, owner_address: USDT, to_address: RECIPIENT },
     });
+    const hexTx = buildTx(
+      { type: "TransferContract", value: { amount: "15000000", owner_address: USDT_HEX, to_address: RECIPIENT_HEX } },
+      false,
+    );
+    const expected = { amount: "15000000", owner_address: USDT_HEX, to_address: RECIPIENT_HEX };
 
-    expect(() => toTrezorTronContract(tx)).toThrow();
+    expect(toTrezorTronContract(base58Tx).parameter.value).toEqual(expected);
+    expect(toTrezorTronContract(hexTx).parameter.value).toEqual(expected);
+  });
+
+  it("rejects fields Trezor would drop instead of signing without them", () => {
+    const trigger = { contract_address: USDT, data: "a9059cbb", owner_address: USDT };
+    const transfer = { amount: 1, owner_address: USDT, to_address: RECIPIENT };
+
+    const unsupported = [
+      buildTx({ extra: { Permission_id: 2 }, type: "TransferContract", value: transfer }),
+      buildTx({ extra: { Permission_id: 2 }, type: "TriggerSmartContract", value: trigger }),
+      buildTx({ type: "TriggerSmartContract", value: { ...trigger, call_token_value: 0, token_id: 1000001 } }),
+      buildTx({ type: "TriggerSmartContract", value: { ...trigger, call_value: 10 } }),
+      buildTx({ type: "TransferContract", value: { owner_address: USDT, to_address: RECIPIENT } }),
+    ];
+
+    for (const tx of unsupported) {
+      expect(() => toTrezorTronContract(tx)).toThrow();
+    }
+    expect(() =>
+      toTrezorTronContract(buildTx({ extra: { Permission_id: 0 }, type: "TransferContract", value: transfer })),
+    ).not.toThrow();
   });
 });
