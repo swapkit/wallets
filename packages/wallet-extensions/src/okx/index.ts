@@ -8,12 +8,23 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     async function connectOkx(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
 
-      await Promise.all(
+      const results = await Promise.allSettled(
         filteredChains.map(async (chain) => {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
         }),
       );
+
+      // OKX Mobile does not expose every chain the extension does, so one missing chain should not block the rest
+      const failed = results.flatMap((result, index) =>
+        result.status === "rejected" ? [{ chain: filteredChains[index], reason: result.reason }] : [],
+      );
+
+      if (failed.length > 0 && failed.length === results.length) throw failed[0]?.reason;
+
+      for (const { chain, reason } of failed) {
+        console.error(`connectOkx: skipping ${chain}, failed to connect`, reason);
+      }
 
       return true;
     },
