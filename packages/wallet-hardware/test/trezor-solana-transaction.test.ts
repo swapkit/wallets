@@ -5,6 +5,7 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
+  Transaction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
@@ -12,12 +13,14 @@ import {
 const device = generateKeyPairSync("ed25519");
 const deviceKey = new PublicKey(device.publicKey.export({ format: "der", type: "spki" }).subarray(-32));
 const signedMessages: string[] = [];
+let deviceResponse: { payload: { error?: string; signature?: string }; success: boolean } | undefined;
 
 mock.module("@trezor/connect-web", () => ({
   default: {
     solanaGetAddress: () => Promise.resolve({ payload: { address: deviceKey.toBase58() }, success: true }),
     solanaSignTransaction: ({ serializedTx }: { serializedTx: string }) => {
       signedMessages.push(serializedTx);
+      if (deviceResponse) return Promise.resolve(deviceResponse);
       const signature = sign(null, Buffer.from(serializedTx, "hex"), device.privateKey).toString("hex");
       return Promise.resolve({ payload: { signature }, success: true });
     },
@@ -78,6 +81,43 @@ describe("trezor solana transaction", () => {
     await expect(signer.signTransaction(missingFeePayer)).rejects.toThrow("also needs signatures");
 
     expect(signedMessages).toHaveLength(signedCount);
+  });
+
+  it("signs a legacy transaction without touching the other signatures", async () => {
+    const transaction = new Transaction({
+      blockhash: Keypair.generate().publicKey.toBase58(),
+      feePayer: feePayer.publicKey,
+      lastValidBlockHeight: 0,
+    }).add(SystemProgram.transfer({ fromPubkey: deviceKey, lamports: 1000, toPubkey: recipient }));
+    transaction.partialSign(feePayer);
+    const messageBytes = transaction.serializeMessage();
+    const feePayerSignature = transaction.signatures[0]?.signature?.slice();
+
+    const signer = getSolanaSigner({ derivationPath: [44, 501, 0, 0] });
+    const signed = Transaction.from((await signer.signTransaction(transaction)).serialize());
+
+    expect(signedMessages.at(-1)).toBe(messageBytes.toString("hex"));
+    expect(signed.serializeMessage()).toEqual(messageBytes);
+    expect(signed.signatures[0]?.signature).toEqual(feePayerSignature);
+    expect(verify(null, messageBytes, device.publicKey, signed.signatures[1]?.signature as Buffer)).toBe(true);
+  });
+
+  it("fails without adding a signature when the device refuses or returns a malformed one", async () => {
+    const signer = getSolanaSigner({ derivationPath: [44, 501, 0, 0] });
+
+    for (const response of [
+      { payload: { error: "Cancelled" }, success: false },
+      { payload: { signature: "ab".repeat(63) }, success: true },
+    ]) {
+      const transaction = buildTransaction(deviceKey);
+      transaction.sign([feePayer]);
+      deviceResponse = response;
+
+      await expect(signer.signTransaction(transaction)).rejects.toThrow("wallet_trezor_failed_to_sign_transaction");
+      expect(transaction.signatures[1]?.every((byte) => byte === 0)).toBe(true);
+    }
+
+    deviceResponse = undefined;
   });
 
   it("rejects derivation paths the Trezor firmware does not accept", () => {
