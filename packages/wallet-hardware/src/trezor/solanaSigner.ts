@@ -14,32 +14,21 @@ function getSigners(transaction: SolanaTransaction) {
     const { header, staticAccountKeys } = transaction.message;
     return {
       message: transaction.message.serialize(),
-      signatures: transaction.signatures as (Uint8Array | null)[],
       signerKeys: staticAccountKeys.slice(0, header.numRequiredSignatures),
     };
   }
 
-  const message = transaction.serializeMessage();
   return {
-    message,
-    signatures: transaction.signatures.map(({ signature }) => signature),
+    message: transaction.serializeMessage(),
     signerKeys: transaction.signatures.map(({ publicKey }) => publicKey),
   };
 }
 
 export function getSolanaSigningPayload(transaction: SolanaTransaction, address: string) {
-  const { message, signatures, signerKeys } = getSigners(transaction);
+  const { message, signerKeys } = getSigners(transaction);
   const signerIndex = signerKeys.findIndex((key) => key.toBase58() === address);
 
   if (signerIndex === -1) throw notSupported("Trezor account is not a required signer of this transaction");
-
-  const missingSigners = signerKeys.filter(
-    (_, index) => index !== signerIndex && !signatures[index]?.some((byte) => byte !== 0),
-  );
-  if (missingSigners.length > 0) {
-    const missing = missingSigners.map((key) => key.toBase58()).join(", ");
-    throw notSupported(`Transaction also needs signatures from ${missing}`);
-  }
 
   return { message, signerKey: signerKeys[signerIndex] as PublicKey };
 }
@@ -66,7 +55,13 @@ export function addSolanaSignature<T extends SolanaTransaction>(
   return transaction;
 }
 
-export function getSolanaSigner({ derivationPath }: { derivationPath: DerivationPathArray }) {
+export function getSolanaSigner({
+  address,
+  derivationPath,
+}: {
+  address?: string;
+  derivationPath: DerivationPathArray;
+}) {
   // Trezor firmware only accepts m/44'/501' plus up to two more levels.
   const [purpose, coinType] = derivationPath;
   if (purpose !== 44 || coinType !== 501 || derivationPath.length > 4) {
@@ -77,6 +72,7 @@ export function getSolanaSigner({ derivationPath }: { derivationPath: Derivation
   }
 
   const path = derivationPathToString(derivationPath, { allHardened: true });
+  const knownKey = address ? new PublicKey(address) : null;
   let publicKey: PublicKey | null = null;
 
   async function loadAddress(showOnTrezor: boolean) {
@@ -118,7 +114,7 @@ export function getSolanaSigner({ derivationPath }: { derivationPath: Derivation
     disconnect: () => Promise.resolve(),
     getAddress: () => loadAddress(true),
     get publicKey() {
-      return publicKey;
+      return publicKey ?? knownKey;
     },
     signTransaction,
   };

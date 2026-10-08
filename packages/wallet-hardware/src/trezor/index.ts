@@ -602,7 +602,7 @@ async function getTrezorWallet<T extends Chain>({
       const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
       const { getSolanaSigner } = await import("./solanaSigner");
 
-      const signer = getSolanaSigner({ derivationPath });
+      const signer = getSolanaSigner({ address: providedAddress, derivationPath });
       const address = providedAddress ?? (await signer.getAddress());
       const toolbox = getSolanaToolbox({ signer });
 
