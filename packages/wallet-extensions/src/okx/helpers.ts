@@ -164,6 +164,10 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
         const { getOkxCardanoWallet } = await import("./cardano");
         return getOkxCardanoWallet();
       })
+      .with(Chain.Sui, async () => {
+        const { getOkxSuiWallet } = await import("./sui");
+        return getOkxSuiWallet();
+      })
       .with(Chain.Ton, async () => {
         const { getOkxTonWallet } = await import("./ton");
         return getOkxTonWallet();
