@@ -20,14 +20,13 @@ export type TrezorConnectModule = typeof import("@trezor/connect-web");
 
 function getConnectParams({ CARDANO, PROTO: proto }: TrezorConnectModule) {
   return {
-    // Default derivation of Trezor Suite accounts, same as the SwapKit keystore
+    // Trezor Suite default, same as the SwapKit keystore
     derivationType: proto.CardanoDerivationType.ICARUS,
     mainnet: { networkId: CARDANO.NETWORK_IDS.mainnet, protocolMagic: CARDANO.PROTOCOL_MAGICS.mainnet },
     proto,
   };
 }
 
-// Transaction body keys from the Cardano ledger CDDL that Trezor can sign as they are
 const BODY = { AUXILIARY_DATA_HASH: 7, FEE: 2, INPUTS: 0, OUTPUTS: 1, TTL: 3, VALIDITY_INTERVAL_START: 8 } as const;
 const SET_TAG = 258;
 
@@ -50,7 +49,6 @@ function isBytes(value: unknown, length?: number): value is Uint8Array {
   return value instanceof Uint8Array && (length === undefined || value.length === length);
 }
 
-// Integers above 2^53 are decoded as BigNumber
 function toUint(value: unknown, field: string) {
   const isBigNumber = typeof value === "object" && value !== null && "toFixed" in value;
   const text = isBigNumber || Number.isSafeInteger(value) ? String((value as number).toFixed()) : "";
@@ -100,7 +98,6 @@ async function toTrezorOutput(
   }
 
   if (!isBytes(address) || address.length === 0) throw notSupported("Invalid Cardano output address");
-  // Header types 14 and 15 are reward addresses, which can only receive withdrawals
   if ((address[0] ?? 0) >> 4 >= 14) throw notSupported("Trezor cannot send Cardano outputs to reward addresses");
 
   const [coin, multiAsset] = Array.isArray(value) ? value : [value];
@@ -234,7 +231,7 @@ export async function getCardanoSigner({
     });
   }
 
-  // The xpub is the 32 byte public key followed by the chain code
+  // The xpub is the public key followed by the chain code
   const publicKeyHex = publicKeyResult.payload.publicKey.slice(0, 64).toLowerCase();
   const publicKey = Buffer.from(publicKeyHex, "hex");
   const publicKeyHash = await getCardanoPublicKeyHash(publicKey);

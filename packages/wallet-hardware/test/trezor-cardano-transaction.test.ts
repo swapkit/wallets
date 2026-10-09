@@ -3,8 +3,6 @@ import { CborTag, Decoder, Encoder } from "@stricahq/cbors";
 
 import { getCardanoSigner, type TrezorConnectModule, toTrezorCardanoTransaction } from "../src/trezor/cardanoSigner";
 
-// Built with @stricahq/typhonjs 3.1.0 like the SDK toolbox: two inputs, 6 ADA to the recipient,
-// change with 42 native tokens back to the sender and a CIP-20 memo
 const TX =
   "84a500828258203b40265111d8bb3c3c608d95b3a0bf83461ace32d79336579a1939b3aad1c0b700825820fa6f0b48a3a1d4c7ee6d1b9e16c2d8a1d7d4b6a8b2a35e1f6c2b9d0e4f1a2b3c010182a2005839015b1ac02842acd257d33ab3e3142d6e980fe9aaccd06d864a7cb77e614faf8806d4d3bfb9ae5241aade08a6c6162c1bd5689899ddff9eb503011a005b8d80a2005839019493315cd92eb5d8c4304e67b7e16ae36d61d34502694657811a2c8e337b62cfff6403a06a3acbc34f8c46003c69fe79a3628cefa9c4725101821a001bdba3a1581c29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6a1434d494e182a021a0002a8dd031a0a037a00075820b5876c72e8bea78ff57e82306a5c1b83eb86f52a127bd81087b9821e70fd3ef8a0f5d90103a100a11902a2a1636d73678167737761706b6974";
 const BODY_HASH = "7d463516ff44682612fa8d24b620764ea59cb2016aed1aec14866df8fa9d977d";
@@ -20,7 +18,6 @@ const SIGNATURE = "9a".repeat(64);
 const signCalls: unknown[] = [];
 let signPayload: { hash: string; witnesses: { type: number; pubKey: string; signature: string }[] };
 
-// Cardano enums of Connect with their protobuf values
 const connect = {
   CARDANO: { NETWORK_IDS: { mainnet: 1 }, PROTOCOL_MAGICS: { mainnet: 764824073 } },
   default: {
