@@ -16,8 +16,8 @@ type CborMap = Map<unknown, unknown> & WithByteSpan;
 type CardanoAddressParams = { address: string; path: string; stakingPath: string };
 
 const MAINNET = { networkId: 1, protocolMagic: 764824073 };
-// Trezor Suite derivation; equals the SwapKit keystore (CIP-3 Icarus) for 12 and 18 word seeds
-const ICARUS_TREZOR = 2 as PROTO.CardanoDerivationType;
+// Default derivation of Trezor Suite accounts, same as the SwapKit keystore (CIP-3 Icarus)
+const ICARUS = 1 as PROTO.CardanoDerivationType;
 const ORDINARY_TRANSACTION = 0 as PROTO.CardanoTxSigningMode;
 const BASE_ADDRESS = 0 as PROTO.CardanoAddressType;
 const SHELLEY_WITNESS = 1 as PROTO.CardanoTxWitnessType;
@@ -194,7 +194,7 @@ export function toTrezorCardanoTransaction(txHex: string, own: CardanoAddressPar
   return {
     ...toTrezorInputs(body.get(BODY.INPUTS), own.path),
     ...MAINNET,
-    derivationType: ICARUS_TREZOR,
+    derivationType: ICARUS,
     fee: toUint(body.get(BODY.FEE), "fee"),
     outputs: outputs.map((output) => toTrezorOutput(output, { ...own, addressHex })),
     signingMode: ORDINARY_TRANSACTION,
@@ -251,7 +251,7 @@ export async function getCardanoSigner({
   const stakingPath = derivationPathToString([purpose, coinType, account, 2, 0] as DerivationPathArray);
   const TrezorConnect = (await import("@trezor/connect-web")).default;
 
-  const publicKeyResult = await TrezorConnect.cardanoGetPublicKey({ derivationType: ICARUS_TREZOR, path });
+  const publicKeyResult = await TrezorConnect.cardanoGetPublicKey({ derivationType: ICARUS, path });
   if (!publicKeyResult.success || !/^[0-9a-f]{128}$/i.test(publicKeyResult.payload.publicKey)) {
     throw new SwapKitError({
       errorKey: "wallet_trezor_failed_to_get_address",
@@ -274,7 +274,7 @@ export async function getCardanoSigner({
     const result = await TrezorConnect.cardanoGetAddress({
       ...MAINNET,
       addressParameters: { addressType: BASE_ADDRESS, path, stakingPath },
-      derivationType: ICARUS_TREZOR,
+      derivationType: ICARUS,
       showOnTrezor: true,
     });
 

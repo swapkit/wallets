@@ -61,7 +61,7 @@ describe("trezor cardano transaction", () => {
   it("maps an ADA transfer with token change keeping amounts, addresses and inputs", () => {
     expect(toTrezorCardanoTransaction(TX, own)).toEqual({
       auxiliaryData: { hash: "b5876c72e8bea78ff57e82306a5c1b83eb86f52a127bd81087b9821e70fd3ef8" },
-      derivationType: 2,
+      derivationType: 1,
       fee: "174301",
       inputs: [
         { path: PATH, prev_hash: "3b40265111d8bb3c3c608d95b3a0bf83461ace32d79336579a1939b3aad1c0b7", prev_index: 0 },
