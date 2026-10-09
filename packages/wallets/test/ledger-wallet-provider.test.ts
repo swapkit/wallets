@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { Keypair, type PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import * as realHelpers from "@swapkit/helpers";
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
+import * as realSolanaToolbox from "@swapkit/toolboxes/solana";
 import * as realEvmExtensions from "@swapkit/wallet-extensions/evm-extensions";
 import * as realEthers from "ethers";
 
@@ -31,6 +33,94 @@ let web3WalletMethodsGate: Promise<void> | undefined;
 let web3WalletMethodsError: Error | undefined;
 let resolveRpcUrl: ((chain: string) => Promise<string>) | undefined;
 let announcesStaleProvider = false;
+let registersSolanaOnInit = false;
+
+type SolanaSignInput = { account: { address: string }; transaction: Uint8Array; chain?: string };
+
+const solanaKeypair = Keypair.generate();
+const NEXT_SOLANA_KEYPAIR = Keypair.generate();
+const solanaConnectCalls: number[] = [];
+const solanaDisconnectCalls: number[] = [];
+const solanaSignInputs: SolanaSignInput[] = [];
+const solanaChangeListeners = new Set<(properties: { accounts?: readonly unknown[] }) => void>();
+const solanaToolboxSigners: { publicKey: PublicKey; signTransaction: (tx: Transaction) => Promise<Transaction> }[] = [];
+
+let signSolanaTransaction: (transaction: Uint8Array) => Uint8Array = (transaction) => transaction;
+
+function createSolanaAccount(keypair: Keypair) {
+  return {
+    address: keypair.publicKey.toBase58(),
+    chains: ["solana:mainnet"] as const,
+    features: ["solana:signMessage"] as const,
+    publicKey: keypair.publicKey.toBytes(),
+  };
+}
+
+const ledgerSolanaWallet = {
+  accounts: [],
+  chains: ["solana:mainnet", "solana:devnet", "solana:testnet"],
+  features: {
+    "solana:signTransaction": {
+      signTransaction: (...inputs: SolanaSignInput[]) => {
+        solanaSignInputs.push(...inputs);
+        return Promise.resolve(
+          inputs.map(({ transaction }) => ({ signedTransaction: signSolanaTransaction(transaction) })),
+        );
+      },
+      supportedTransactionVersions: ["legacy", 0],
+      version: "1.0.0",
+    },
+    "standard:connect": {
+      connect: () => {
+        solanaConnectCalls.push(1);
+        return Promise.resolve({ accounts: [createSolanaAccount(solanaKeypair)] });
+      },
+      version: "1.0.0",
+    },
+    "standard:disconnect": {
+      disconnect: () => {
+        solanaDisconnectCalls.push(1);
+        return Promise.resolve();
+      },
+      version: "1.0.0",
+    },
+    "standard:events": {
+      on: (_event: string, listener: (properties: { accounts?: readonly unknown[] }) => void) => {
+        solanaChangeListeners.add(listener);
+        return () => solanaChangeListeners.delete(listener);
+      },
+      version: "1.0.0",
+    },
+  },
+  icon: "data:image/svg+xml;base64,PHN2Zy8+",
+  name: "Ledger",
+  version: "1.0.0",
+};
+
+type WalletStandardApi = { register: (...wallets: unknown[]) => () => void };
+
+function registerLedgerSolanaWallet() {
+  const register = ({ register }: WalletStandardApi) => register(ledgerSolanaWallet);
+
+  window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: register }));
+  window.addEventListener("wallet-standard:app-ready", (event) =>
+    register((event as CustomEvent<WalletStandardApi>).detail),
+  );
+}
+
+function buildSolanaTransaction() {
+  return new Transaction({
+    blockhash: "11111111111111111111111111111111",
+    feePayer: solanaKeypair.publicKey,
+    lastValidBlockHeight: 1,
+  }).add(
+    SystemProgram.transfer({
+      fromPubkey: solanaKeypair.publicKey,
+      lamports: 1,
+      toPubkey: NEXT_SOLANA_KEYPAIR.publicKey,
+    }),
+  );
+}
 
 class MockBrowserProvider {
   constructor(
@@ -107,6 +197,7 @@ const originalGlobals = { document: globalThis.document, window: globalThis.wind
 const realHelpersSnapshot = { ...realHelpers };
 const realEthersSnapshot = { ...realEthers };
 const realEvmExtensionsSnapshot = { ...realEvmExtensions };
+const realSolanaToolboxSnapshot = { ...realSolanaToolbox };
 
 mock.module("@swapkit/helpers", () => ({
   ...realHelpers,
@@ -124,10 +215,18 @@ mock.module("@swapkit/wallet-extensions/evm-extensions", () => ({
   },
 }));
 
+mock.module("@swapkit/toolboxes/solana", () => ({
+  getSolanaToolbox: ({ signer }: { signer: (typeof solanaToolboxSigners)[number] }) => {
+    solanaToolboxSigners.push(signer);
+    return { signTransaction: signer.signTransaction };
+  },
+}));
+
 mock.module("@ledgerhq/ledger-wallet-provider", () => ({
   initializeLedgerProvider: (options: unknown) => {
     initializeCalls.push(options);
     announcesProvider = true;
+    if (registersSolanaOnInit) registerLedgerSolanaWallet();
 
     return () => teardownCalls.push(1);
   },
@@ -151,6 +250,13 @@ describe("ledger wallet provider connector", () => {
     ledgerAccounts = [ADDRESS];
     announcesProvider = true;
     announcesStaleProvider = false;
+    registersSolanaOnInit = false;
+    solanaConnectCalls.length = 0;
+    solanaDisconnectCalls.length = 0;
+    solanaSignInputs.length = 0;
+    solanaToolboxSigners.length = 0;
+    solanaChangeListeners.clear();
+    signSolanaTransaction = (transaction) => transaction;
     web3WalletMethodsGate = undefined;
     web3WalletMethodsError = undefined;
     resolveRpcUrl = undefined;
@@ -176,6 +282,7 @@ describe("ledger wallet provider connector", () => {
     mock.module("@swapkit/helpers", () => realHelpersSnapshot);
     mock.module("ethers", () => realEthersSnapshot);
     mock.module("@swapkit/wallet-extensions/evm-extensions", () => realEvmExtensionsSnapshot);
+    mock.module("@swapkit/toolboxes/solana", () => realSolanaToolboxSnapshot);
   });
 
   test("registers LEDGER_WALLET_PROVIDER in the extensible WalletOption registry", async () => {
@@ -527,30 +634,140 @@ describe("ledger wallet provider connector", () => {
     ).rejects.toThrow("wallet_chain_not_supported");
   });
 
-  test("connects every supported chain from a single device approval", async () => {
+  test("connects every supported chain from a single approval per chain family", async () => {
     const { ledgerWalletProviderWallet, LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import(
       "../src/ledger-wallet-provider"
     );
     const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
 
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
       addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
     })([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
 
-    expect(addChainCalls.map(({ chain }) => chain)).toEqual([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
+    expect(addChainCalls.map(({ chain }) => chain).sort()).toEqual([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS].sort());
     expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
+    expect(solanaConnectCalls).toEqual([1]);
   });
 
   test("supports exactly the SwapKit chains on Ledger Wallet's network list", async () => {
     const { LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import("../src/ledger-wallet-provider");
     const ledgerChainIds = ["1", "10", "56", "137", "146", "324", "4663", "5042", "8453", "42161", "43114", "59144"];
 
-    const connectorChainIds = LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS.map(
+    const connectorChainIds = LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS.filter((chain) => chain !== Chain.Solana).map(
       (chain) => realHelpers.getChainConfig(chain).chainId as string,
     );
 
     expect(connectorChainIds.filter((chainId) => !ledgerChainIds.includes(chainId))).toEqual([]);
     expect(connectorChainIds).toHaveLength(ledgerChainIds.length - 1);
+  });
+
+  test("connects Solana through the Wallet Standard wallet without touching the EVM provider", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Solana]);
+
+    expect(initializeCalls).toEqual([]);
+    expect(ledgerRequests).toEqual([]);
+    expect(solanaConnectCalls).toEqual([1]);
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+    expect(addChainCalls[0]?.address).toBe(solanaKeypair.publicKey.toBase58());
+    expect(addChainCalls[0]?.walletType).toBe(WalletOption.LEDGER_WALLET_PROVIDER);
+    expect(solanaToolboxSigners[0]?.publicKey.equals(solanaKeypair.publicKey)).toBe(true);
+  });
+
+  test("initializes the SDK when the Solana wallet is not registered yet", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    registersSolanaOnInit = true;
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana], {
+      apiKey: "test-key",
+      dAppIdentifier: "swapkit-test",
+    });
+
+    expect(initializeCalls).toEqual([{ apiKey: "test-key", dAppIdentifier: "swapkit-test" }]);
+    expect(solanaConnectCalls).toEqual([1]);
+  });
+
+  test("throws when the Solana wallet never registers", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+
+    await expect(
+      ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana], {
+        discoveryTimeout: 10,
+      }),
+    ).rejects.toThrow("wallet_ledger_wallet_provider_not_announced");
+  });
+
+  test("signs Solana transactions on the device", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    registerLedgerSolanaWallet();
+    signSolanaTransaction = (bytes) => {
+      const transaction = Transaction.from(bytes);
+      transaction.partialSign(solanaKeypair);
+      return transaction.serialize();
+    };
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
+
+    const signed = await solanaToolboxSigners[0]?.signTransaction(buildSolanaTransaction());
+
+    expect(solanaSignInputs.map(({ account, chain }) => [account.address, chain])).toEqual([
+      [solanaKeypair.publicKey.toBase58(), "solana:mainnet"],
+    ]);
+    expect(signed?.verifySignatures()).toBe(true);
+  });
+
+  test("rejects a Solana transaction the SDK returns unsigned", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
+
+    await expect(solanaToolboxSigners[0]?.signTransaction(buildSolanaTransaction())).rejects.toThrow(
+      "wallet_ledger_wallet_provider_signing_unsupported",
+    );
+  });
+
+  test("re-adds Solana when the Ledger account changes", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Solana]);
+
+    const [handleChange] = [...solanaChangeListeners];
+    handleChange?.({ accounts: [] });
+    handleChange?.({ accounts: [createSolanaAccount(NEXT_SOLANA_KEYPAIR)] });
+    while (addChainCalls.length < 2) await Bun.sleep(0);
+
+    expect(addChainCalls.map(({ address }) => address)).toEqual([
+      solanaKeypair.publicKey.toBase58(),
+      NEXT_SOLANA_KEYPAIR.publicKey.toBase58(),
+    ]);
+  });
+
+  test("disconnect tears down both the EVM provider and the Solana wallet", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum, Chain.Solana]);
+
+    await (addChainCalls.find(({ chain }) => chain === Chain.Ethereum)?.disconnect as () => Promise<void>)();
+
+    expect(solanaChangeListeners.size).toBe(0);
+    expect(solanaDisconnectCalls).toEqual([1]);
+    expect(accountsChangedListeners.size).toBe(0);
+    expect(providerDisconnectCalls).toEqual([1]);
   });
 
   test("loadWallet returns the Ledger Wallet Provider connector", async () => {

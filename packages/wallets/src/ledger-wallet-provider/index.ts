@@ -5,6 +5,7 @@ import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import { getWeb3WalletMethods } from "@swapkit/wallet-extensions/evm-extensions";
 
 import { createLedgerEip1193Adapter, resolveLedgerWalletProvider } from "./helpers";
+import { connectLedgerSolana } from "./solana";
 import type { ConnectLedgerWalletProviderOptions } from "./types";
 
 export { initializeLedgerWalletProvider, resolveLedgerWalletProvider, teardownLedgerWalletProvider } from "./helpers";
@@ -15,7 +16,7 @@ export type {
   LedgerWalletProviderEip1193,
 } from "./types";
 
-const LEDGER_WALLET_PROVIDER_CHAINS = [
+const LEDGER_WALLET_PROVIDER_EVM_CHAINS = [
   Chain.Arbitrum,
   Chain.Arc,
   Chain.Avalanche,
@@ -29,10 +30,30 @@ const LEDGER_WALLET_PROVIDER_CHAINS = [
   Chain.Sonic,
 ] as EVMChain[];
 
+const LEDGER_WALLET_PROVIDER_CHAINS = [...LEDGER_WALLET_PROVIDER_EVM_CHAINS, Chain.Solana];
+
 export const ledgerWalletProviderWallet = createWallet({
   connect: ({ addChain, supportedChains, walletType }) =>
     async function connectLedgerWalletProvider(chains: Chain[], options: ConnectLedgerWalletProviderOptions = {}) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
+      const evmChains = filteredChains.filter((chain): chain is EVMChain => chain !== Chain.Solana);
+      const { provider: _evmProvider, ...solanaOptions } = options;
+      const disconnectSolana = filteredChains.includes(Chain.Solana)
+        ? await connectLedgerSolana({
+            onAccount: ({ address, toolbox }) =>
+              addChain({
+                ...toolbox,
+                address,
+                chain: Chain.Solana,
+                disconnect: () => disconnectSolana?.(),
+                walletType,
+              }),
+            options: solanaOptions,
+          })
+        : undefined;
+
+      if (evmChains.length === 0) return true;
+
       const provider = await resolveLedgerWalletProvider(options);
       const { BrowserProvider } = await import("ethers");
 
@@ -101,6 +122,7 @@ export const ledgerWalletProviderWallet = createWallet({
 
       async function disconnect() {
         releaseConnection();
+        await disconnectSolana?.();
         if (!providerClosed) await provider.disconnect?.();
       }
 
@@ -109,7 +131,7 @@ export const ledgerWalletProviderWallet = createWallet({
 
       try {
         await Promise.all(
-          filteredChains.map(async (chain, index) => {
+          evmChains.map(async (chain, index) => {
             const adapter = await createLedgerEip1193Adapter({
               chain,
               getAddress: () => (disconnected ? undefined : connectedAddress),

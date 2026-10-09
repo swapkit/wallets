@@ -84,7 +84,7 @@ Rules:
   convention, not enforced at runtime; first-party codes live outside it and
   collisions throw only when two keys claim the same number. Grep this repo's
   registers for the next free block (noir-wallet holds 80101–80103,
-  ledger-wallet-provider 80201–80203).
+  ledger-wallet-provider 80201–80204).
 - Registration is idempotent for identical values and throws
   `helpers_invalid_params` on conflicting re-registration, so the module may
   safely load through multiple import paths.

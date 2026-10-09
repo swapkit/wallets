@@ -48,3 +48,32 @@ export type ConnectLedgerWalletProviderOptions = InitializeLedgerWalletProviderO
   initialize?: boolean;
   discoveryTimeout?: number;
 };
+
+export type LedgerSolanaWalletAccount = {
+  readonly address: string;
+  readonly publicKey: Uint8Array;
+  readonly chains: readonly string[];
+  readonly features: readonly string[];
+};
+
+export type LedgerSolanaWalletFeatures = {
+  "standard:connect": { connect: () => Promise<{ accounts: readonly LedgerSolanaWalletAccount[] }> };
+  "standard:disconnect"?: { disconnect: () => Promise<void> };
+  "standard:events"?: {
+    on: (
+      event: "change",
+      listener: (properties: { accounts?: readonly LedgerSolanaWalletAccount[] }) => void,
+    ) => () => void;
+  };
+  "solana:signTransaction": {
+    signTransaction: (
+      ...inputs: { account: LedgerSolanaWalletAccount; transaction: Uint8Array; chain?: string }[]
+    ) => Promise<readonly { signedTransaction: Uint8Array }[]>;
+  };
+};
+
+export type LedgerSolanaWallet = {
+  readonly name: string;
+  readonly chains: readonly string[];
+  readonly features: LedgerSolanaWalletFeatures;
+};
