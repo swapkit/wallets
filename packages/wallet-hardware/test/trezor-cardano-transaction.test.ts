@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { CborTag, Decoder, Encoder } from "@stricahq/cbors";
+
+import { getCardanoSigner, type TrezorConnectModule, toTrezorCardanoTransaction } from "../src/trezor/cardanoSigner";
 
 // Built with @stricahq/typhonjs 3.1.0 like the SDK toolbox: two inputs, 6 ADA to the recipient,
 // change with 42 native tokens back to the sender and a CIP-20 memo
@@ -18,7 +20,9 @@ const SIGNATURE = "9a".repeat(64);
 const signCalls: unknown[] = [];
 let signPayload: { hash: string; witnesses: { type: number; pubKey: string; signature: string }[] };
 
-mock.module("@trezor/connect-web", () => ({
+// Cardano enums of Connect with their protobuf values
+const connect = {
+  CARDANO: { NETWORK_IDS: { mainnet: 1 }, PROTOCOL_MAGICS: { mainnet: 764824073 } },
   default: {
     cardanoGetPublicKey: () =>
       Promise.resolve({ payload: { publicKey: `${PUBLIC_KEY}${"00".repeat(32)}` }, success: true }),
@@ -27,9 +31,14 @@ mock.module("@trezor/connect-web", () => ({
       return Promise.resolve({ payload: signPayload, success: true });
     },
   },
-}));
-
-const { getCardanoSigner, toTrezorCardanoTransaction } = await import("../src/trezor/cardanoSigner");
+  PROTO: {
+    CardanoAddressType: { BASE: 0 },
+    CardanoDerivationType: { ICARUS: 1 },
+    CardanoTxOutputSerializationFormat: { ARRAY_LEGACY: 0, MAP_BABBAGE: 1 },
+    CardanoTxSigningMode: { ORDINARY_TRANSACTION: 0 },
+    CardanoTxWitnessType: { SHELLEY_WITNESS: 1 },
+  },
+} as unknown as TrezorConnectModule;
 
 const own = { address: SENDER, path: PATH, stakingPath: STAKING_PATH };
 
@@ -47,7 +56,7 @@ function withFirstOutput(update: (output: Map<unknown, unknown>) => unknown) {
 }
 
 function signWith(tx: string) {
-  return getCardanoSigner({ address: SENDER, derivationPath: [1852, 1815, 0, 0, 0] }).then((signer) =>
+  return getCardanoSigner({ address: SENDER, connect, derivationPath: [1852, 1815, 0, 0, 0] }).then((signer) =>
     signer.signTransaction(tx),
   );
 }
@@ -58,8 +67,8 @@ beforeEach(() => {
 });
 
 describe("trezor cardano transaction", () => {
-  it("maps an ADA transfer with token change keeping amounts, addresses and inputs", () => {
-    expect(toTrezorCardanoTransaction(TX, own)).toEqual({
+  it("maps an ADA transfer with token change keeping amounts, addresses and inputs", async () => {
+    expect(await toTrezorCardanoTransaction(TX, own, connect)).toEqual({
       auxiliaryData: { hash: "b5876c72e8bea78ff57e82306a5c1b83eb86f52a127bd81087b9821e70fd3ef8" },
       derivationType: 1,
       fee: "174301",
@@ -89,14 +98,14 @@ describe("trezor cardano transaction", () => {
     });
   });
 
-  it("keeps the legacy output format and tagged input sets", () => {
+  it("keeps the legacy output format and tagged input sets", async () => {
     const tx = withBody((body) => {
       const [output] = body.get(1) as Map<number, unknown>[];
       (body.get(1) as unknown[])[0] = [output?.get(0), output?.get(1)];
       body.set(0, new CborTag(body.get(0), 258));
     });
 
-    const params = toTrezorCardanoTransaction(tx, own);
+    const params = await toTrezorCardanoTransaction(tx, own, connect);
     expect(params.tagCborSets).toBe(true);
     expect(params.outputs[0]).toEqual({ address: RECIPIENT, amount: "6000000", format: 0 });
   });
@@ -115,7 +124,7 @@ describe("trezor cardano transaction", () => {
         witnessSet +
         original.subarray(witnessStart + 1).toString("hex"),
     );
-    expect(signCalls).toEqual([toTrezorCardanoTransaction(TX, own)]);
+    expect(signCalls).toEqual([await toTrezorCardanoTransaction(TX, own, connect)]);
   });
 
   it("refuses to return a signature for a body the device did not hash", async () => {
