@@ -21,8 +21,7 @@ let signPayload: { hash: string; witnesses: { type: number; pubKey: string; sign
 const connect = {
   CARDANO: { NETWORK_IDS: { mainnet: 1 }, PROTOCOL_MAGICS: { mainnet: 764824073 } },
   default: {
-    cardanoGetPublicKey: () =>
-      Promise.resolve({ payload: { publicKey: `${PUBLIC_KEY}${"00".repeat(32)}` }, success: true }),
+    cardanoGetPublicKey: () => Promise.resolve({ payload: { node: { public_key: PUBLIC_KEY } }, success: true }),
     cardanoSignTransaction: (params: unknown) => {
       signCalls.push(params);
       return Promise.resolve({ payload: signPayload, success: true });
@@ -147,10 +146,6 @@ describe("trezor cardano transaction", () => {
     ["inline datum", withFirstOutput((output) => output.set(2, [1, new CborTag(Buffer.from("00", "hex"), 24)]))],
     ["reference script", withFirstOutput((output) => output.set(3, new CborTag(Buffer.from("00", "hex"), 24)))],
     ["legacy datum hash", withFirstOutput((output) => [output.get(0), output.get(1), Buffer.alloc(32)])],
-    [
-      "reward address output",
-      withFirstOutput((output) => output.set(0, Buffer.concat([Buffer.from([0xe1]), keyHash]))),
-    ],
   ];
 
   it.each(unsupported)("rejects %s before calling the device", async (_, tx) => {

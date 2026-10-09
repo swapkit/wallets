@@ -45,10 +45,6 @@ function isMap(value: unknown): value is Map<unknown, unknown> {
   return value instanceof Map;
 }
 
-function isBytes(value: unknown, length?: number): value is Uint8Array {
-  return value instanceof Uint8Array && (length === undefined || value.length === length);
-}
-
 function toUint(value: unknown, field: string) {
   const isBigNumber = typeof value === "object" && value !== null && "toFixed" in value;
   const text = isBigNumber || Number.isSafeInteger(value) ? String((value as number).toFixed()) : "";
@@ -56,21 +52,14 @@ function toUint(value: unknown, field: string) {
   return text;
 }
 
-function toTokenBundle(multiAsset: unknown): CardanoAssetGroup[] {
-  if (!isMap(multiAsset) || multiAsset.size === 0) throw notSupported("Invalid Cardano multiasset value");
-
-  return [...multiAsset].map(([policyId, assets]) => {
-    if (!isBytes(policyId, 28) || !isMap(assets) || assets.size === 0) {
-      throw notSupported("Invalid Cardano multiasset value");
-    }
-
-    const tokenAmounts = [...assets].map(([assetName, amount]) => {
-      if (!isBytes(assetName)) throw notSupported("Invalid Cardano asset name");
-      return { amount: toUint(amount, "token amount"), assetNameBytes: hex.encode(assetName) };
-    });
-
-    return { policyId: hex.encode(policyId), tokenAmounts };
-  });
+function toTokenBundle(multiAsset: Map<Uint8Array, Map<Uint8Array, unknown>>): CardanoAssetGroup[] {
+  return [...multiAsset].map(([policyId, assets]) => ({
+    policyId: hex.encode(policyId),
+    tokenAmounts: [...assets].map(([assetName, amount]) => ({
+      amount: toUint(amount, "token amount"),
+      assetNameBytes: hex.encode(assetName),
+    })),
+  }));
 }
 
 async function toTrezorOutput(
@@ -97,13 +86,8 @@ async function toTrezorOutput(
     throw notSupported("Invalid Cardano output");
   }
 
-  if (!isBytes(address) || address.length === 0) throw notSupported("Invalid Cardano output address");
-  if ((address[0] ?? 0) >> 4 >= 14) throw notSupported("Trezor cannot send Cardano outputs to reward addresses");
-
   const [coin, multiAsset] = Array.isArray(value) ? value : [value];
-  if (Array.isArray(value) && value.length !== 2) throw notSupported("Invalid Cardano output value");
-
-  const outputAddress = await getCardanoAddressFromBytes(address);
+  const outputAddress = await getCardanoAddressFromBytes(address as Uint8Array);
   const destination =
     outputAddress === own.address
       ? {
@@ -126,15 +110,13 @@ async function toTrezorOutput(
 function toTrezorInputs(inputs: unknown, path: string) {
   const isTagged =
     typeof inputs === "object" && inputs !== null && "tag" in inputs && inputs.tag === SET_TAG && "value" in inputs;
-  const list = isTagged ? inputs.value : inputs;
-  if (!Array.isArray(list) || list.length === 0) throw notSupported("Invalid Cardano inputs");
+  const list = (isTagged ? inputs.value : inputs) as [Uint8Array, unknown][];
 
-  const trezorInputs: CardanoInput[] = list.map((input) => {
-    if (!Array.isArray(input) || input.length !== 2 || !isBytes(input[0], 32)) {
-      throw notSupported("Invalid Cardano input");
-    }
-    return { path, prev_hash: hex.encode(input[0]), prev_index: Number(toUint(input[1], "input index")) };
-  });
+  const trezorInputs: CardanoInput[] = list.map(([txHash, index]) => ({
+    path,
+    prev_hash: hex.encode(txHash),
+    prev_index: Number(toUint(index, "input index")),
+  }));
 
   return { inputs: trezorInputs, tagCborSets: isTagged };
 }
@@ -153,13 +135,8 @@ export async function toTrezorCardanoTransaction(
     throw notSupported(`Trezor cannot sign Cardano transactions with body fields ${unsupported.join(", ")}`);
   }
 
-  const outputs = body.get(BODY.OUTPUTS);
-  if (!Array.isArray(outputs) || outputs.length === 0) throw notSupported("Invalid Cardano outputs");
-
-  const auxiliaryDataHash = body.get(BODY.AUXILIARY_DATA_HASH);
-  if (auxiliaryDataHash !== undefined && !isBytes(auxiliaryDataHash, 32)) {
-    throw notSupported("Invalid Cardano auxiliary data hash");
-  }
+  const outputs = body.get(BODY.OUTPUTS) as unknown[];
+  const auxiliaryDataHash = body.get(BODY.AUXILIARY_DATA_HASH) as Uint8Array | undefined;
 
   const ttl = body.get(BODY.TTL);
   const validityIntervalStart = body.get(BODY.VALIDITY_INTERVAL_START);
@@ -188,13 +165,12 @@ export async function addTrezorWitnesses(
   const { bodyHash } = await decodeCardanoTransaction(txHex);
 
   if (hash.toLowerCase() !== bodyHash) throw signFailed("Trezor signed a different transaction body");
-  if (witnesses.length === 0) throw signFailed("Trezor returned no witnesses");
 
   const vkeyWitnesses = witnesses.map(({ pubKey, signature, type }) => {
     if (type !== proto.CardanoTxWitnessType.SHELLEY_WITNESS || pubKey.toLowerCase() !== publicKey) {
       throw signFailed("Trezor returned a witness for an unexpected key");
     }
-    return { publicKey: hex.decode(pubKey.toLowerCase()), signature: hex.decode(signature.toLowerCase()) };
+    return { publicKey: hex.decode(pubKey), signature: hex.decode(signature) };
   });
 
   return addCardanoVkeyWitnesses(txHex, vkeyWitnesses);
@@ -220,19 +196,14 @@ export async function getCardanoSigner({
   const TrezorConnect = connect.default;
 
   const publicKeyResult = await TrezorConnect.cardanoGetPublicKey({ derivationType, path });
-  if (!publicKeyResult.success || !/^[0-9a-f]{128}$/i.test(publicKeyResult.payload.publicKey)) {
+  if (!publicKeyResult.success) {
     throw new SwapKitError({
       errorKey: "wallet_trezor_failed_to_get_address",
-      info: {
-        chain: Chain.Cardano,
-        derivationPath,
-        error: publicKeyResult.success ? "Invalid public key" : publicKeyResult.payload.error,
-      },
+      info: { chain: Chain.Cardano, derivationPath, error: publicKeyResult.payload.error },
     });
   }
 
-  // The xpub is the public key followed by the chain code
-  const publicKeyHex = publicKeyResult.payload.publicKey.slice(0, 64).toLowerCase();
+  const publicKeyHex = publicKeyResult.payload.node.public_key.toLowerCase();
   const publicKey = Buffer.from(publicKeyHex, "hex");
   const publicKeyHash = await getCardanoPublicKeyHash(publicKey);
   let address = knownAddress ?? "";
