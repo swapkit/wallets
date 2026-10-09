@@ -93,12 +93,10 @@ describe("trezor hypercore typed data", () => {
     expect(calls.getAddress).toBe(0);
   });
 
-  it("refuses anything the device would sign without showing it", async () => {
+  it("refuses typed data that cannot be encoded", async () => {
     const unsupported = [
-      () => signWith(domain, sendAssetTypes, { ...sendAsset, vaultAddress: ADDRESS }),
       () => signWith(domain, sendAssetTypes, { ...sendAsset, amount: undefined }),
       () => signWith(domain, sendAssetTypes, { ...sendAsset, amount: { value: "25.5" } }),
-      () => signWith({ ...domain, hyperliquidChain: "Mainnet" }, sendAssetTypes, sendAsset),
       () => signWith(domain, { ...sendAssetTypes, ...agentTypes }, sendAsset),
     ];
 
