@@ -57,6 +57,7 @@
     "@near-js/transactions": "2.5.0",
     "@scure/base": "2.2.0",
     "@scure/bip32": "2.2.0",
+    "@stricahq/cbors": "1.0.4",
     "@trezor/connect-web": "9.7.3",
     "bitcoinjs-lib": "6.1.7",
     "ethers": "6.16.0",
