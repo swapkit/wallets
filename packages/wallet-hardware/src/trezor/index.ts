@@ -609,6 +609,17 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Stellar: {
+      const { getStellarToolbox } = await import("@swapkit/toolboxes/stellar");
+      const { getStellarSigner } = await import("./stellarSigner");
+
+      const signer = getStellarSigner({ derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
+      const toolbox = getStellarToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Tron: {
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
       const { getTronSigner } = await import("./tronSigner");
@@ -1518,6 +1529,7 @@ export const trezorWallet = createWallet({
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
     [Chain.Robinhood]: true,
+    [Chain.Stellar]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     [Chain.Zcash]: true,
@@ -1545,6 +1557,7 @@ export const trezorWallet = createWallet({
     Chain.Polygon,
     Chain.Ripple,
     Chain.Robinhood,
+    Chain.Stellar,
     Chain.Tron,
     Chain.XLayer,
     Chain.Zcash,
