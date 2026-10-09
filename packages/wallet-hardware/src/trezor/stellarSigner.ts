@@ -117,6 +117,13 @@ export function toTrezorStellarTransaction(transaction: StellarTransaction, addr
 }
 
 export function getStellarSigner({ derivationPath }: { derivationPath: DerivationPathArray }): StellarSigner {
+  if (derivationPath[3] || derivationPath[4]) {
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_derivation_path_not_supported",
+      info: { chain: Chain.Stellar, derivationPath, reason: "Stellar only uses m/44'/148'/x'" },
+    });
+  }
+
   const path = derivationPathToString(derivationPath.slice(0, 3) as [number, number, number]);
   let address = "";
 

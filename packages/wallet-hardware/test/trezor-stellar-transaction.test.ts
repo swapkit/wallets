@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { StellarTransaction } from "@swapkit/toolboxes/stellar";
 
-import { toTrezorStellarTransaction } from "../src/trezor/stellarSigner";
+import { getStellarSigner, toTrezorStellarTransaction } from "../src/trezor/stellarSigner";
 
 const SOURCE = "GB3JDWCQJCWMJ3IILWIGDTQJJC5567PGVEVXSCVPEQOTDN64VJBDQBYX";
 const DESTINATION = "GDKIJJIKXLOM2NRMPNQZUUYK24ZPVFC6426GZAEP3KUK6KEJLACCWNMX";
@@ -108,5 +108,12 @@ describe("trezor stellar transaction", () => {
     expect(() => toTrezorStellarTransaction(buildTransaction(overrides), SOURCE)).toThrow(
       "wallet_trezor_method_not_supported",
     );
+  });
+
+  it("rejects paths that put the account in the last two slots", () => {
+    expect(() => getStellarSigner({ derivationPath: [44, 148, 0, 0, 5] })).toThrow(
+      "wallet_trezor_derivation_path_not_supported",
+    );
+    expect(() => getStellarSigner({ derivationPath: [44, 148, 5, 0, 0] })).not.toThrow();
   });
 });
