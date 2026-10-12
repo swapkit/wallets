@@ -125,7 +125,7 @@ export async function toTrezorCardanoTransaction(
   txHex: string,
   own: CardanoAddressParams,
   connect: TrezorConnectModule,
-) {
+): Promise<CardanoSignTransaction> {
   const { body } = await decodeCardanoTransaction(txHex);
   const { derivationType, mainnet, proto } = getConnectParams(connect);
 
@@ -153,7 +153,7 @@ export async function toTrezorCardanoTransaction(
     ...(validityIntervalStart === undefined
       ? {}
       : { validityIntervalStart: toUint(validityIntervalStart, "validity interval start") }),
-  } satisfies CardanoSignTransaction;
+  };
 }
 
 export async function addTrezorWitnesses(
