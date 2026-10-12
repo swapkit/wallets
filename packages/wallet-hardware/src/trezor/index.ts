@@ -604,7 +604,7 @@ async function getTrezorWallet<T extends Chain>({
 
       const connect = await import("@trezor/connect-web");
       const signer = await getCardanoSigner({ connect, derivationPath });
-      const address = await signer.getAddress();
+      const address = signer.getAddress();
       const toolbox = getCardanoToolbox({ signer });
 
       return { ...toolbox, address };

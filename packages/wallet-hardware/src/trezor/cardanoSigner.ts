@@ -41,10 +41,6 @@ function signFailed(error: string) {
   });
 }
 
-function isMap(value: unknown): value is Map<unknown, unknown> {
-  return value instanceof Map;
-}
-
 function toUint(value: unknown, field: string) {
   const isBigNumber = typeof value === "object" && value !== null && "toFixed" in value;
   const text = isBigNumber || Number.isSafeInteger(value) ? String((value as number).toFixed()) : "";
@@ -75,7 +71,7 @@ async function toTrezorOutput(
     if (output.length !== 2) throw notSupported("Trezor cannot sign Cardano outputs with a datum");
     [address, value] = output;
     format = proto.CardanoTxOutputSerializationFormat.ARRAY_LEGACY;
-  } else if (isMap(output)) {
+  } else if (output instanceof Map) {
     if (output.has(2)) throw notSupported("Trezor cannot sign Cardano outputs with a datum");
     if (output.has(3)) throw notSupported("Trezor cannot sign Cardano outputs with a reference script");
     if (output.size !== 2) throw notSupported("Unsupported field in Cardano output");
@@ -86,6 +82,7 @@ async function toTrezorOutput(
     throw notSupported("Invalid Cardano output");
   }
 
+  if (Array.isArray(value) && value.length !== 2) throw notSupported("Invalid Cardano output value");
   const [coin, multiAsset] = Array.isArray(value) ? value : [value];
   const outputAddress = await getCardanoAddressFromBytes(address as Uint8Array);
   const destination =
@@ -110,13 +107,13 @@ async function toTrezorOutput(
 function toTrezorInputs(inputs: unknown, path: string) {
   const isTagged =
     typeof inputs === "object" && inputs !== null && "tag" in inputs && inputs.tag === SET_TAG && "value" in inputs;
-  const list = (isTagged ? inputs.value : inputs) as [Uint8Array, unknown][];
+  const list = (isTagged ? inputs.value : inputs) as unknown[][];
 
-  const trezorInputs: CardanoInput[] = list.map(([txHash, index]) => ({
-    path,
-    prev_hash: hex.encode(txHash),
-    prev_index: Number(toUint(index, "input index")),
-  }));
+  const trezorInputs: CardanoInput[] = list.map((input) => {
+    if (input.length !== 2) throw notSupported("Invalid Cardano input");
+    const [txHash, index] = input as [Uint8Array, unknown];
+    return { path, prev_hash: hex.encode(txHash), prev_index: Number(toUint(index, "input index")) };
+  });
 
   return { inputs: trezorInputs, tagCborSets: isTagged };
 }

@@ -170,6 +170,8 @@ describe("trezor cardano transaction", () => {
     ["inline datum", withFirstOutput((output) => output.set(2, [1, new CborTag(Buffer.from("00", "hex"), 24)]))],
     ["reference script", withFirstOutput((output) => output.set(3, new CborTag(Buffer.from("00", "hex"), 24)))],
     ["legacy datum hash", withFirstOutput((output) => [output.get(0), output.get(1), Buffer.alloc(32)])],
+    ["extra input element", withBody((body) => (body.get(0) as unknown[][])[0]?.push(0))],
+    ["extra output value element", withBody((body) => (body.get(1) as Map<number, unknown[]>[])[1]?.get(1)?.push(0))],
   ];
 
   it.each(unsupported)("rejects %s before calling the device", async (_, tx) => {
