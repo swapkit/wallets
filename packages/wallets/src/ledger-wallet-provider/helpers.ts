@@ -91,12 +91,18 @@ async function mountLedgerWalletProvider(options: InitializeLedgerWalletProvider
     });
   }
 
-  const [{ initializeLedgerProvider }] = await Promise.all([
-    import("@ledgerhq/ledger-wallet-provider"),
-    import("@ledgerhq/ledger-wallet-provider/styles.css"),
-  ]);
+  const [{ initializeLedgerProvider }, { evmBlockchainProviderFactory }, { solanaBlockchainProviderFactory }] =
+    await Promise.all([
+      import("@ledgerhq/ledger-wallet-provider"),
+      import("@ledgerhq/ledger-wallet-provider-evm"),
+      import("@ledgerhq/ledger-wallet-provider-solana"),
+      import("@ledgerhq/ledger-wallet-provider/styles.css"),
+    ]);
 
-  return initializeLedgerProvider(options);
+  return initializeLedgerProvider({
+    ...options,
+    blockchainProviderFactories: [evmBlockchainProviderFactory, solanaBlockchainProviderFactory],
+  });
 }
 
 export async function resolveLedgerWalletProvider({

@@ -233,6 +233,8 @@ mock.module("@ledgerhq/ledger-wallet-provider", () => ({
 }));
 
 mock.module("@ledgerhq/ledger-wallet-provider/styles.css", () => ({}));
+mock.module("@ledgerhq/ledger-wallet-provider-evm", () => ({ evmBlockchainProviderFactory: "evm-factory" }));
+mock.module("@ledgerhq/ledger-wallet-provider-solana", () => ({ solanaBlockchainProviderFactory: "solana-factory" }));
 
 describe("ledger wallet provider connector", () => {
   beforeEach(() => {
@@ -320,7 +322,14 @@ describe("ledger wallet provider connector", () => {
       { apiKey: "test-key", dAppIdentifier: "swapkit-test", hideButton: true },
     );
 
-    expect(initializeCalls).toEqual([{ apiKey: "test-key", dAppIdentifier: "swapkit-test", hideButton: true }]);
+    expect(initializeCalls).toEqual([
+      {
+        apiKey: "test-key",
+        blockchainProviderFactories: ["evm-factory", "solana-factory"],
+        dAppIdentifier: "swapkit-test",
+        hideButton: true,
+      },
+    ]);
     expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
   });
 
@@ -689,7 +698,13 @@ describe("ledger wallet provider connector", () => {
       dAppIdentifier: "swapkit-test",
     });
 
-    expect(initializeCalls).toEqual([{ apiKey: "test-key", dAppIdentifier: "swapkit-test" }]);
+    expect(initializeCalls).toEqual([
+      {
+        apiKey: "test-key",
+        blockchainProviderFactories: ["evm-factory", "solana-factory"],
+        dAppIdentifier: "swapkit-test",
+      },
+    ]);
     expect(solanaConnectCalls).toEqual([1]);
   });
 
