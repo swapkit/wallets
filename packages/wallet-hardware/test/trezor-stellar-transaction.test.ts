@@ -5,6 +5,7 @@ const SOURCE = "GB3JDWCQJCWMJ3IILWIGDTQJJC5567PGVEVXSCVPEQOTDN64VJBDQBYX";
 const DESTINATION = "GDKIJJIKXLOM2NRMPNQZUUYK24ZPVFC6426GZAEP3KUK6KEJLACCWNMX";
 const ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
 
+const DEVICE_SIGNATURE = "ab".repeat(64);
 const calls = { getAddress: 0, sign: 0 };
 
 mock.module("@trezor/connect-web", () => ({
@@ -15,7 +16,7 @@ mock.module("@trezor/connect-web", () => ({
     },
     stellarSignTransaction: () => {
       calls.sign++;
-      return Promise.resolve({ payload: { signature: "00" }, success: true });
+      return Promise.resolve({ payload: { signature: DEVICE_SIGNATURE }, success: true });
     },
   },
 }));
@@ -157,5 +158,13 @@ describe("trezor stellar transaction", () => {
       "wallet_trezor_method_not_supported",
     );
     expect(calls.sign).toBe(0);
+  });
+
+  it("adds the device signature to the same transaction", async () => {
+    const addSignature = mock(() => {});
+    const transaction = buildTransaction({ addSignature });
+
+    expect(await signWith(transaction)).toBe(transaction);
+    expect(addSignature).toHaveBeenCalledWith(SOURCE, Buffer.from(DEVICE_SIGNATURE, "hex").toString("base64"));
   });
 });
