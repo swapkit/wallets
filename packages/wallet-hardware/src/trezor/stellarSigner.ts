@@ -6,12 +6,13 @@ type StellarOperation = StellarClassicTransaction["operations"][number];
 type StellarAsset = Extract<StellarOperation, { type: "changeTrust" }>["line"];
 
 const STELLAR_DECIMALS = 7;
+const MAX_UINT32 = 4294967295n;
 const ASSET_TYPES: Record<string, "NATIVE" | "ALPHANUM4" | "ALPHANUM12"> = {
   credit_alphanum4: "ALPHANUM4",
   credit_alphanum12: "ALPHANUM12",
   native: "NATIVE",
 };
-const MEMO_TYPES = { hash: 3, id: 2, none: 0, return: 4, text: 1 } as const;
+const MEMO_TYPES = { hash: 3, id: 2, return: 4, text: 1 } as const;
 
 function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Stellar, reason } });
@@ -23,6 +24,13 @@ function toStroops(amount: string) {
 
   const [, whole = "0", fraction = ""] = match;
   return BigInt(`${whole}${fraction.padEnd(STELLAR_DECIMALS, "0")}`).toString();
+}
+
+function toTimeBound(value: string) {
+  if (!/^\d+$/.test(value) || BigInt(value) > MAX_UINT32) {
+    throw notSupported(`Unsupported Stellar time bound: ${value}`);
+  }
+  return Number(value);
 }
 
 function toTrezorAsset(asset: StellarAsset) {
@@ -67,7 +75,7 @@ function decodeTextMemo(value: StellarClassicTransaction["memo"]["value"]) {
   if (typeof value === "string") return value;
 
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(value ?? undefined);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value ?? undefined);
   } catch {
     throw notSupported("Trezor only signs UTF-8 text memos");
   }
@@ -111,7 +119,10 @@ export function toTrezorStellarTransaction(transaction: StellarTransaction, addr
       operations: transaction.operations.map(toTrezorOperation),
       sequence: transaction.sequence,
       source: transaction.source,
-      timebounds: { maxTime: Number(transaction.timeBounds.maxTime), minTime: Number(transaction.timeBounds.minTime) },
+      timebounds: {
+        maxTime: toTimeBound(transaction.timeBounds.maxTime),
+        minTime: toTimeBound(transaction.timeBounds.minTime),
+      },
     },
   };
 }

@@ -84,6 +84,10 @@ describe("trezor stellar transaction", () => {
     expect(memoOf({ type: "id", value: "18446744073709551615" })).toEqual({ id: "18446744073709551615", type: 2 });
     expect(memoOf({ type: "return", value: hash })).toEqual({ hash: hash.toString("hex"), type: 4 });
     expect(memoOf({ type: "none", value: null })).toBeUndefined();
+    expect(memoOf({ type: "text", value: Buffer.from([0xef, 0xbb, 0xbf, 0x41]) })).toEqual({
+      text: "\uFEFFA",
+      type: 1,
+    });
   });
 
   const payment = (overrides: Record<string, unknown>) => [
@@ -94,6 +98,8 @@ describe("trezor stellar transaction", () => {
     ["fee bump transactions", { innerTransaction: {} }],
     ["another source account", { source: DESTINATION }],
     ["missing time bounds", { timeBounds: undefined }],
+    ["time bounds beyond uint32", { timeBounds: { maxTime: "4294967296", minTime: "0" } }],
+    ["unsafe integer time bounds", { timeBounds: { maxTime: "9007199254740993", minTime: "0" } }],
     ["ledger bounds", { ledgerBounds: { maxLedger: 10, minLedger: 1 } }],
     ["minimum account sequence", { minAccountSequence: "1" }],
     ["minimum account sequence age", { minAccountSequenceAge: 1n }],
