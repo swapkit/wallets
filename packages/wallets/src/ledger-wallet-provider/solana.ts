@@ -91,10 +91,6 @@ function isEmptySignature(signature: Uint8Array | null | undefined) {
   return !signature || signature.every((byte) => byte === 0);
 }
 
-function isSameBytes(a: Uint8Array, b: Uint8Array) {
-  return a.length === b.length && a.every((byte, index) => byte === b[index]);
-}
-
 export async function createLedgerSolanaSigner({
   account,
   features,
@@ -129,17 +125,6 @@ export async function createLedgerSolanaSigner({
     });
 
     if (!result) throw new SwapKitError("wallet_ledger_wallet_provider_signing_unsupported");
-
-    const sentMessage = VersionedTransaction.deserialize(serialized).message;
-    const signedMessage = VersionedTransaction.deserialize(result.signedTransaction).message;
-
-    // Ledger may refresh the blockhash before signing; everything else must be what we sent
-    sentMessage.recentBlockhash = signedMessage.recentBlockhash;
-    if (!isSameBytes(sentMessage.serialize(), signedMessage.serialize())) {
-      throw new SwapKitError("wallet_ledger_wallet_provider_transaction_mismatch", {
-        message: "Ledger Wallet returned a different Solana transaction than the one sent for signing.",
-      });
-    }
 
     const signed = (
       transaction instanceof VersionedTransaction

@@ -9,7 +9,6 @@ declare module "@swapkit/helpers" {
     wallet_ledger_wallet_provider_unsupported_platform: 80202;
     wallet_ledger_wallet_provider_no_accounts: 80203;
     wallet_ledger_wallet_provider_signing_unsupported: 80204;
-    wallet_ledger_wallet_provider_transaction_mismatch: 80205;
   }
 }
 
@@ -18,6 +17,5 @@ registerErrorCodes({
   wallet_ledger_wallet_provider_no_accounts: 80203,
   wallet_ledger_wallet_provider_not_announced: 80201,
   wallet_ledger_wallet_provider_signing_unsupported: 80204,
-  wallet_ledger_wallet_provider_transaction_mismatch: 80205,
   wallet_ledger_wallet_provider_unsupported_platform: 80202,
 });
