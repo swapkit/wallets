@@ -24,16 +24,16 @@ function getSigners(transaction: SolanaTransaction) {
   };
 }
 
-export function getSolanaSigningPayload(transaction: SolanaTransaction, address: string) {
+function getSolanaSigningPayload(transaction: SolanaTransaction, address: string) {
   const { message, signerKeys } = getSigners(transaction);
-  const signerIndex = signerKeys.findIndex((key) => key.toBase58() === address);
+  const signerKey = signerKeys.find((key) => key.toBase58() === address);
 
-  if (signerIndex === -1) throw notSupported("Trezor account is not a required signer of this transaction");
+  if (!signerKey) throw notSupported("Trezor account is not a required signer of this transaction");
 
-  return { message, signerKey: signerKeys[signerIndex] as PublicKey };
+  return { message, signerKey };
 }
 
-export function addSolanaSignature<T extends SolanaTransaction>(
+function addSolanaSignature<T extends SolanaTransaction>(
   transaction: T,
   { message, signature, signerKey }: { message: Uint8Array; signature: Uint8Array; signerKey: PublicKey },
 ) {
@@ -88,7 +88,15 @@ export function getSolanaSigner({
       });
     }
 
-    publicKey = new PublicKey(result.payload.address);
+    const deviceKey = new PublicKey(result.payload.address);
+    if (knownKey && !deviceKey.equals(knownKey)) {
+      throw new SwapKitError({
+        errorKey: "wallet_trezor_failed_to_get_address",
+        info: { chain: Chain.Solana, derivationPath, error: "Trezor account does not match the restored address" },
+      });
+    }
+
+    publicKey = deviceKey;
     return result.payload.address;
   }
 

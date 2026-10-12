@@ -168,6 +168,18 @@ describe("trezor solana transaction", () => {
     deviceResponse = undefined;
   });
 
+  it("rejects a restored address that does not match the device account before signing", async () => {
+    const restoredKey = Keypair.generate().publicKey;
+    const signer = getSolanaSigner({ address: restoredKey.toBase58(), derivationPath: [44, 501, 0, 0] });
+    const signedCount = signedMessages.length;
+
+    await expect(signer.signTransaction(buildTransaction(deviceKey))).rejects.toThrow(
+      "wallet_trezor_failed_to_get_address",
+    );
+    expect(signedMessages).toHaveLength(signedCount);
+    expect(signer.publicKey?.equals(restoredKey)).toBe(true);
+  });
+
   it("rejects derivation paths the Trezor firmware does not accept", () => {
     expect(() => getSolanaSigner({ derivationPath: [44, 501, 0, 0, 0] })).toThrow(
       "wallet_trezor_derivation_path_not_supported",
