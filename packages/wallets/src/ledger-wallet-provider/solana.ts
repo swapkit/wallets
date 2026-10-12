@@ -2,7 +2,7 @@ import type { Transaction, VersionedTransaction } from "@solana/web3.js";
 import { SwapKitError } from "@swapkit/helpers";
 import type { SolanaWallet } from "@swapkit/toolboxes/solana";
 
-import { initializeLedgerWalletProvider } from "./helpers";
+import { discoverAfterInitialization } from "./helpers";
 import type {
   ConnectLedgerWalletProviderOptions,
   LedgerSolanaWallet,
@@ -13,8 +13,6 @@ import type {
 
 const LEDGER_SOLANA_WALLET_NAME = "Ledger";
 const SOLANA_MAINNET = "solana:mainnet";
-const DEFAULT_DISCOVERY_TIMEOUT = 10_000;
-const REGISTERED_WALLET_PROBE_TIMEOUT = 250;
 
 function isLedgerSolanaWallet(wallet: StandardWallet): wallet is LedgerSolanaWallet {
   return (
@@ -26,10 +24,10 @@ function isLedgerSolanaWallet(wallet: StandardWallet): wallet is LedgerSolanaWal
 }
 
 export async function discoverLedgerSolanaWallet({
-  timeout = DEFAULT_DISCOVERY_TIMEOUT,
+  timeout,
 }: {
-  timeout?: number;
-} = {}): Promise<LedgerSolanaWallet | undefined> {
+  timeout: number;
+}): Promise<LedgerSolanaWallet | undefined> {
   if (typeof window === "undefined") return undefined;
 
   const { getWallets } = await import("@wallet-standard/app");
@@ -52,33 +50,13 @@ export async function discoverLedgerSolanaWallet({
   });
 }
 
-export async function resolveLedgerSolanaWallet({
-  initialize = true,
-  discoveryTimeout = DEFAULT_DISCOVERY_TIMEOUT,
-  ...initializeOptions
-}: Omit<ConnectLedgerWalletProviderOptions, "provider"> = {}) {
-  const registered = await discoverLedgerSolanaWallet({
-    timeout: initialize ? REGISTERED_WALLET_PROBE_TIMEOUT : discoveryTimeout,
+export function resolveLedgerSolanaWallet(options: Omit<ConnectLedgerWalletProviderOptions, "provider"> = {}) {
+  return discoverAfterInitialization({
+    discover: discoverLedgerSolanaWallet,
+    notAnnouncedMessage: "Ledger Solana wallet did not register; Solana may be disabled for this dApp.",
+    notInitializedMessage: "No Ledger Solana wallet registered; initialize the SDK first.",
+    options,
   });
-  if (registered) return registered;
-
-  if (!initialize) {
-    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message: "No Ledger Solana wallet registered; initialize the SDK first.",
-    });
-  }
-
-  await initializeLedgerWalletProvider(initializeOptions);
-
-  const initialized = await discoverLedgerSolanaWallet({ timeout: discoveryTimeout });
-
-  if (!initialized) {
-    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message: "Ledger Solana wallet did not register; Solana may be disabled for this dApp.",
-    });
-  }
-
-  return initialized;
 }
 
 export function getLedgerSolanaAccount(
