@@ -1,7 +1,9 @@
 import { bech32, hex } from "@scure/base";
 import { Chain, SwapKitError } from "@swapkit/helpers";
+import type { CardanoWallet } from "@swapkit/toolboxes/cardano";
 
-export async function getOkxCardanoWallet() {
+// Explicit type keeps the generated declarations from pointing into the typhonjs internals
+export async function getOkxCardanoWallet(): Promise<CardanoWallet & { address: string }> {
   if (!(window.okxwallet && "cardano" in window.okxwallet)) {
     throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cardano });
   }
