@@ -151,7 +151,7 @@ export async function createLedgerSolanaSigner({
         : Transaction.from(result.signedTransaction)
     ) as T;
 
-    // Ledger's SDK still stubs Solana transaction signing and echoes the unsigned bytes back
+    // Guard in case the wallet hands the transaction back without our signature
     if (isEmptySignature(getSignature(signed))) {
       throw new SwapKitError("wallet_ledger_wallet_provider_signing_unsupported", {
         message: "Ledger Wallet returned an unsigned Solana transaction.",
