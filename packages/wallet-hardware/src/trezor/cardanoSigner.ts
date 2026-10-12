@@ -18,12 +18,11 @@ import type {
 type CardanoAddressParams = { address: string; path: string; stakingPath: string };
 export type TrezorConnectModule = typeof import("@trezor/connect-web");
 
-function getConnectParams({ CARDANO, PROTO: proto }: TrezorConnectModule) {
+function getConnectParams({ CARDANO, PROTO }: TrezorConnectModule) {
   return {
     // Trezor Suite default, same as the SwapKit keystore
-    derivationType: proto.CardanoDerivationType.ICARUS,
+    derivationType: PROTO.CardanoDerivationType.ICARUS,
     mainnet: { networkId: CARDANO.NETWORK_IDS.mainnet, protocolMagic: CARDANO.PROTOCOL_MAGICS.mainnet },
-    proto,
   };
 }
 
@@ -124,7 +123,8 @@ export async function toTrezorCardanoTransaction(
   connect: TrezorConnectModule,
 ): Promise<CardanoSignTransaction> {
   const { body } = await decodeCardanoTransaction(txHex);
-  const { derivationType, mainnet, proto } = getConnectParams(connect);
+  const { derivationType, mainnet } = getConnectParams(connect);
+  const { PROTO: proto } = connect;
 
   const supportedFields: unknown[] = Object.values(BODY);
   const unsupported = [...body.keys()].filter((field) => !supportedFields.includes(field));
@@ -182,7 +182,10 @@ export async function getCardanoSigner({
 }) {
   const [purpose, coinType, account, role, index] = derivationPath;
   if (derivationPath.length !== 5 || role !== 0 || index === undefined) {
-    throw new SwapKitError("toolbox_derivation_slot_unsupported", { chain: Chain.Cardano, derivationPath });
+    throw new SwapKitError({
+      errorKey: "wallet_trezor_derivation_path_not_supported",
+      info: { chain: Chain.Cardano, derivationPath },
+    });
   }
 
   const path = derivationPathToString(derivationPath);
