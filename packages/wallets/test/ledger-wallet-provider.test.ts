@@ -785,6 +785,18 @@ describe("ledger wallet provider connector", () => {
     expect(providerDisconnectCalls).toEqual([1]);
   });
 
+  test("keeps the EVM chains connected when Solana is unavailable", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Ethereum, Chain.Solana], { discoveryTimeout: 10 });
+
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual([Chain.Ethereum]);
+    expect(solanaConnectCalls).toEqual([]);
+  });
+
   test("loadWallet returns the Ledger Wallet Provider connector", async () => {
     const { loadWallet } = await import("../src/utils");
 

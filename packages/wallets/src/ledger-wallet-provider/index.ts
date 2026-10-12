@@ -38,21 +38,22 @@ export const ledgerWalletProviderWallet = createWallet({
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const evmChains = filteredChains.filter((chain): chain is EVMChain => chain !== Chain.Solana);
       const { provider: _evmProvider, ...solanaOptions } = options;
-      const disconnectSolana = filteredChains.includes(Chain.Solana)
-        ? await connectLedgerSolana({
-            onAccount: ({ address, toolbox }) =>
-              addChain({
-                ...toolbox,
-                address,
-                chain: Chain.Solana,
-                disconnect: () => disconnectSolana?.(),
-                walletType,
-              }),
-            options: solanaOptions,
-          })
-        : undefined;
+      let disconnectSolana: (() => Promise<void>) | undefined;
 
-      if (evmChains.length === 0) return true;
+      async function connectSolana() {
+        if (!filteredChains.includes(Chain.Solana)) return;
+
+        disconnectSolana = await connectLedgerSolana({
+          onAccount: ({ address, toolbox }) =>
+            addChain({ ...toolbox, address, chain: Chain.Solana, disconnect: () => disconnectSolana?.(), walletType }),
+          options: solanaOptions,
+        });
+      }
+
+      if (evmChains.length === 0) {
+        await connectSolana();
+        return true;
+      }
 
       const provider = await resolveLedgerWalletProvider(options);
       const { BrowserProvider } = await import("ethers");
@@ -147,6 +148,9 @@ export const ledgerWalletProviderWallet = createWallet({
         releaseConnection();
         throw error;
       }
+
+      // Solana is optional next to EVM so a missing Solana account does not undo the EVM connection
+      await connectSolana().catch((error) => console.warn("[SwapKit] Ledger Wallet Solana connection skipped:", error));
 
       return true;
     },
