@@ -12,16 +12,25 @@ const RECIPIENT =
   "addr1q9d34spgg2kdy47n82e7x9pdd6vql6d2engxmpj20jmhuc2047yqd4xnh7u6u5jp4t0q3fkxzckph4tgnzvamlu7k5psuahzcp";
 const PATH = "m/1852'/1815'/0'/0/0";
 const STAKING_PATH = "m/1852'/1815'/0'/2/0";
-const PUBLIC_KEY = "5d010cf16fdeff40955633d6c565f3844a288a24967cf6b76acbeb271b4f13c1";
+// Payment and staking keys of the "abandon ... about" seed and the address the SwapKit keystore derives from it
+const PUBLIC_KEY = "7ea09a34aebb13c9841c71397b1cabfec5ddf950405293dee496cac2f437480a";
+const STAKING_KEY = "012f5dc3115b8a07981e6e50f5a671e2c6fbb26c3ffde1cd1dcaf40a7fe8f160";
+const KEYSTORE_ADDRESS =
+  "addr1qy8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7sh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mq4afdhv";
 const SIGNATURE = "9a".repeat(64);
 
 const signCalls: unknown[] = [];
+const publicKeyCalls: unknown[] = [];
 let signPayload: { hash: string; witnesses: { type: number; pubKey: string; signature: string }[] };
 
 const connect = {
   CARDANO: { NETWORK_IDS: { mainnet: 1 }, PROTOCOL_MAGICS: { mainnet: 764824073 } },
   default: {
-    cardanoGetPublicKey: () => Promise.resolve({ payload: { node: { public_key: PUBLIC_KEY } }, success: true }),
+    cardanoGetPublicKey: (params: unknown) => {
+      publicKeyCalls.push(params);
+      const payload = [PUBLIC_KEY, STAKING_KEY].map((key) => ({ node: { public_key: key } }));
+      return Promise.resolve({ payload, success: true });
+    },
     cardanoSignTransaction: (params: unknown) => {
       signCalls.push(params);
       return Promise.resolve({ payload: signPayload, success: true });
@@ -52,17 +61,32 @@ function withFirstOutput(update: (output: Map<unknown, unknown>) => unknown) {
 }
 
 function signWith(tx: string) {
-  return getCardanoSigner({ address: SENDER, connect, derivationPath: [1852, 1815, 0, 0, 0] }).then((signer) =>
+  return getCardanoSigner({ connect, derivationPath: [1852, 1815, 0, 0, 0] }).then((signer) =>
     signer.signTransaction(tx),
   );
 }
 
 beforeEach(() => {
   signCalls.length = 0;
+  publicKeyCalls.length = 0;
   signPayload = { hash: BODY_HASH, witnesses: [{ pubKey: PUBLIC_KEY, signature: SIGNATURE, type: 1 }] };
 });
 
 describe("trezor cardano transaction", () => {
+  it("derives the keystore address from both keys in a single device call", async () => {
+    const signer = await getCardanoSigner({ connect, derivationPath: [1852, 1815, 0, 0, 0] });
+
+    expect(signer.getAddress()).toBe(KEYSTORE_ADDRESS);
+    expect(publicKeyCalls).toEqual([
+      {
+        bundle: [
+          { derivationType: 1, path: PATH },
+          { derivationType: 1, path: STAKING_PATH },
+        ],
+      },
+    ]);
+  });
+
   it("maps an ADA transfer with token change keeping amounts, addresses and inputs", async () => {
     expect(await toTrezorCardanoTransaction(TX, own, connect)).toEqual({
       auxiliaryData: { hash: "b5876c72e8bea78ff57e82306a5c1b83eb86f52a127bd81087b9821e70fd3ef8" },
@@ -120,7 +144,7 @@ describe("trezor cardano transaction", () => {
         witnessSet +
         original.subarray(witnessStart + 1).toString("hex"),
     );
-    expect(signCalls).toEqual([await toTrezorCardanoTransaction(TX, own, connect)]);
+    expect(signCalls).toEqual([await toTrezorCardanoTransaction(TX, { ...own, address: KEYSTORE_ADDRESS }, connect)]);
   });
 
   it("refuses to return a signature for a body the device did not hash", async () => {

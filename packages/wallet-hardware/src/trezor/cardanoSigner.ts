@@ -177,11 +177,9 @@ export async function addTrezorWitnesses(
 }
 
 export async function getCardanoSigner({
-  address: knownAddress,
   connect,
   derivationPath,
 }: {
-  address?: string;
   connect: TrezorConnectModule;
   derivationPath: DerivationPathArray;
 }) {
@@ -192,51 +190,37 @@ export async function getCardanoSigner({
 
   const path = derivationPathToString(derivationPath);
   const stakingPath = derivationPathToString([purpose, coinType, account, 2, 0] as DerivationPathArray);
-  const { derivationType, mainnet, proto } = getConnectParams(connect);
+  const { derivationType, mainnet } = getConnectParams(connect);
   const TrezorConnect = connect.default;
 
-  const publicKeyResult = await TrezorConnect.cardanoGetPublicKey({ derivationType, path });
-  if (!publicKeyResult.success) {
+  // One device call: a second one right after would need a new Connect popup
+  const keysResult = await TrezorConnect.cardanoGetPublicKey({
+    bundle: [path, stakingPath].map((keyPath) => ({ derivationType, path: keyPath })),
+  });
+  if (!keysResult.success) {
     throw new SwapKitError({
       errorKey: "wallet_trezor_failed_to_get_address",
-      info: { chain: Chain.Cardano, derivationPath, error: publicKeyResult.payload.error },
+      info: { chain: Chain.Cardano, derivationPath, error: keysResult.payload.error },
     });
   }
 
-  const publicKeyHex = publicKeyResult.payload.node.public_key.toLowerCase();
-  const publicKey = Buffer.from(publicKeyHex, "hex");
+  const [publicKey, stakingKey] = keysResult.payload.map(({ node }) => Buffer.from(node.public_key, "hex")) as [
+    Buffer,
+    Buffer,
+  ];
   const publicKeyHash = await getCardanoPublicKeyHash(publicKey);
-  let address = knownAddress ?? "";
-
-  async function getAddress() {
-    if (address) return address;
-
-    const result = await TrezorConnect.cardanoGetAddress({
-      ...mainnet,
-      addressParameters: { addressType: proto.CardanoAddressType.BASE, path, stakingPath },
-      derivationType,
-      showOnTrezor: true,
-    });
-
-    if (!result.success) {
-      throw new SwapKitError({
-        errorKey: "wallet_trezor_failed_to_get_address",
-        info: { chain: Chain.Cardano, derivationPath, error: result.payload.error },
-      });
-    }
-
-    address = result.payload.address;
-    return address;
-  }
+  const address = await getCardanoAddressFromBytes(
+    Buffer.concat([Buffer.from([mainnet.networkId]), publicKeyHash, await getCardanoPublicKeyHash(stakingKey)]),
+  );
 
   async function signTransaction(txHex: string) {
-    const params = await toTrezorCardanoTransaction(txHex, { address: await getAddress(), path, stakingPath }, connect);
+    const params = await toTrezorCardanoTransaction(txHex, { address, path, stakingPath }, connect);
     const result = await TrezorConnect.cardanoSignTransaction(params);
 
     if (!result.success) throw signFailed(result.payload.error);
 
-    return addTrezorWitnesses(txHex, result.payload, publicKeyHex, connect);
+    return addTrezorWitnesses(txHex, result.payload, publicKey.toString("hex"), connect);
   }
 
-  return { getAddress, publicKey, publicKeyHash, signTransaction };
+  return { getAddress: () => address, publicKey, publicKeyHash, signTransaction };
 }
