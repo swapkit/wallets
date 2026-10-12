@@ -11,6 +11,7 @@ import * as realHelpers from "@swapkit/helpers";
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 import * as realSolanaToolbox from "@swapkit/toolboxes/solana";
 import * as realEvmExtensions from "@swapkit/wallet-extensions/evm-extensions";
+import { getWallets } from "@wallet-standard/app";
 import * as realEthers from "ethers";
 
 const LEDGER_RDNS = "com.ledger.wallet.provider";
@@ -48,6 +49,9 @@ const solanaKeypair = Keypair.generate();
 const NEXT_SOLANA_KEYPAIR = Keypair.generate();
 const solanaConnectCalls: number[] = [];
 const solanaDisconnectCalls: number[] = [];
+type StandardWallet = Parameters<ReturnType<typeof getWallets>["register"]>[0];
+
+const unregisterSolanaWallets: (() => void)[] = [];
 const solanaSignInputs: SolanaSignInput[] = [];
 const solanaChangeListeners = new Set<(properties: { accounts?: readonly unknown[] }) => void>();
 const solanaToolboxSigners: {
@@ -66,7 +70,7 @@ function createSolanaAccount(keypair: Keypair) {
   };
 }
 
-const ledgerSolanaWallet = {
+const ledgerSolanaWallet: StandardWallet = {
   accounts: [],
   chains: ["solana:mainnet", "solana:devnet", "solana:testnet"],
   features: {
@@ -107,15 +111,8 @@ const ledgerSolanaWallet = {
   version: "1.0.0",
 };
 
-type WalletStandardApi = { register: (...wallets: unknown[]) => () => void };
-
 function registerLedgerSolanaWallet() {
-  const register = ({ register }: WalletStandardApi) => register(ledgerSolanaWallet);
-
-  window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: register }));
-  window.addEventListener("wallet-standard:app-ready", (event) =>
-    register((event as CustomEvent<WalletStandardApi>).detail),
-  );
+  unregisterSolanaWallets.push(getWallets().register(ledgerSolanaWallet));
 }
 
 function buildVersionedSolanaTransaction() {
@@ -309,6 +306,7 @@ describe("ledger wallet provider connector", () => {
   afterEach(async () => {
     const { teardownLedgerWalletProvider } = await import("../src/ledger-wallet-provider");
     await teardownLedgerWalletProvider();
+    for (const unregister of unregisterSolanaWallets.splice(0)) unregister();
   });
 
   afterAll(() => {

@@ -8,6 +8,7 @@ import type {
   LedgerSolanaWallet,
   LedgerSolanaWalletAccount,
   LedgerSolanaWalletFeatures,
+  StandardWallet,
 } from "./types";
 
 const LEDGER_SOLANA_WALLET_NAME = "Ledger";
@@ -15,59 +16,39 @@ const SOLANA_MAINNET = "solana:mainnet";
 const DEFAULT_DISCOVERY_TIMEOUT = 10_000;
 const REGISTERED_WALLET_PROBE_TIMEOUT = 250;
 
-const REGISTER_WALLET_EVENT = "wallet-standard:register-wallet";
-const APP_READY_EVENT = "wallet-standard:app-ready";
-
-type RegisterWalletCallback = (api: { register: (...wallets: unknown[]) => () => void }) => void;
-
-function isLedgerSolanaWallet(wallet: unknown): wallet is LedgerSolanaWallet {
-  if (typeof wallet !== "object" || wallet === null) return false;
-
-  const { chains, features, name } = wallet as Partial<LedgerSolanaWallet>;
-  if (!(Array.isArray(chains) && features)) return false;
-
+function isLedgerSolanaWallet(wallet: StandardWallet): wallet is LedgerSolanaWallet {
   return (
-    name === LEDGER_SOLANA_WALLET_NAME &&
-    chains.includes(SOLANA_MAINNET) &&
-    "standard:connect" in features &&
-    "solana:signTransaction" in features
+    wallet.name === LEDGER_SOLANA_WALLET_NAME &&
+    wallet.chains.includes(SOLANA_MAINNET) &&
+    "standard:connect" in wallet.features &&
+    "solana:signTransaction" in wallet.features
   );
 }
 
-// Same handshake as @wallet-standard/app's getWallets: already registered wallets answer app-ready, late ones dispatch register-wallet
-export function discoverLedgerSolanaWallet({
+export async function discoverLedgerSolanaWallet({
   timeout = DEFAULT_DISCOVERY_TIMEOUT,
 }: {
   timeout?: number;
 } = {}): Promise<LedgerSolanaWallet | undefined> {
-  if (typeof window === "undefined") return Promise.resolve(undefined);
+  if (typeof window === "undefined") return undefined;
+
+  const { getWallets } = await import("@wallet-standard/app");
+  const wallets = getWallets();
+  const registered = wallets.get().find(isLedgerSolanaWallet);
+  if (registered) return registered;
 
   return new Promise((resolve) => {
-    let settled = false;
-    const api = {
-      register: (...wallets: unknown[]) => {
-        const wallet = wallets.find(isLedgerSolanaWallet);
-        if (wallet) settle(wallet);
-        return () => {};
-      },
-    };
-
-    function onRegisterWallet(event: Event) {
-      (event as CustomEvent<RegisterWalletCallback>).detail?.(api);
-    }
+    const timer = setTimeout(() => settle(undefined), timeout);
+    const off = wallets.on("register", (...added) => {
+      const wallet = added.find(isLedgerSolanaWallet);
+      if (wallet) settle(wallet);
+    });
 
     function settle(wallet: LedgerSolanaWallet | undefined) {
-      if (settled) return;
-      settled = true;
       clearTimeout(timer);
-      window.removeEventListener(REGISTER_WALLET_EVENT, onRegisterWallet);
+      off();
       resolve(wallet);
     }
-
-    const timer = setTimeout(() => settle(undefined), timeout);
-
-    window.addEventListener(REGISTER_WALLET_EVENT, onRegisterWallet);
-    window.dispatchEvent(new CustomEvent(APP_READY_EVENT, { detail: api }));
   });
 }
 
