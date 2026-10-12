@@ -5,7 +5,7 @@ import * as realBitcoinApp from "@ledgerhq/hw-app-btc";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, UTXOScriptType, WalletOption } from "@swapkit/helpers";
 import * as realEvmToolbox from "@swapkit/toolboxes/evm";
-import { hexlify, JsonRpcProvider, Signature, Transaction } from "ethers";
+import { hexlify, Signature, Transaction } from "ethers";
 import { of } from "rxjs";
 
 // Registries that capture constructor invocations on the mocked Ledger apps.
@@ -99,14 +99,10 @@ mock.module("@ledgerhq/context-module", () => ({
   },
 }));
 
-// The real provider and toolbox probe the chain RPC over the network, which timed out on slow CI runs.
+// The real getProvider pings the chain RPCs through getRPCUrl, which timed out on slow CI runs.
 const realEvmToolboxSnapshot = { ...realEvmToolbox };
 
-mock.module("@swapkit/toolboxes/evm", () => ({
-  ...realEvmToolboxSnapshot,
-  getEvmToolboxAsync: async () => ({}),
-  getProvider: async () => new JsonRpcProvider("http://127.0.0.1", 42161, { staticNetwork: true }),
-}));
+mock.module("@swapkit/toolboxes/evm", () => ({ ...realEvmToolboxSnapshot, getProvider: async () => ({}) }));
 
 mock.module("@ledgerhq/device-signer-kit-ethereum", () => ({
   SignerEthBuilder: class MockSignerEthBuilder {
