@@ -149,8 +149,7 @@ export const ledgerWalletProviderWallet = createWallet({
         throw error;
       }
 
-      // Solana is optional next to EVM so a missing Solana account does not undo the EVM connection
-      await connectSolana().catch((error) => console.warn("[SwapKit] Ledger Wallet Solana connection skipped:", error));
+      await connectSolana();
 
       return true;
     },
