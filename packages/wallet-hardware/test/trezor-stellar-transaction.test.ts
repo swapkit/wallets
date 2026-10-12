@@ -1,11 +1,30 @@
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { StellarTransaction } from "@swapkit/toolboxes/stellar";
-
-import { getStellarSigner, toTrezorStellarTransaction } from "../src/trezor/stellarSigner";
 
 const SOURCE = "GB3JDWCQJCWMJ3IILWIGDTQJJC5567PGVEVXSCVPEQOTDN64VJBDQBYX";
 const DESTINATION = "GDKIJJIKXLOM2NRMPNQZUUYK24ZPVFC6426GZAEP3KUK6KEJLACCWNMX";
 const ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
+const calls = { getAddress: 0, sign: 0 };
+
+mock.module("@trezor/connect-web", () => ({
+  default: {
+    stellarGetAddress: () => {
+      calls.getAddress++;
+      return Promise.resolve({ payload: { address: SOURCE }, success: true });
+    },
+    stellarSignTransaction: () => {
+      calls.sign++;
+      return Promise.resolve({ payload: { signature: "00" }, success: true });
+    },
+  },
+}));
+
+const { getStellarSigner, toTrezorStellarTransaction } = await import("../src/trezor/stellarSigner");
+
+function signWith(transaction: StellarTransaction) {
+  return getStellarSigner({ derivationPath: [44, 148, 0, 0, 0] }).signTransaction(transaction);
+}
 
 const asset = (type: string, code = "", issuer = "") => ({
   getAssetType: () => type,
@@ -27,6 +46,11 @@ function buildTransaction(overrides: Record<string, unknown> = {}) {
 }
 
 describe("trezor stellar transaction", () => {
+  beforeEach(() => {
+    calls.getAddress = 0;
+    calls.sign = 0;
+  });
+
   it("maps amounts to stroops and keeps the memo decoded from XDR", () => {
     const transaction = buildTransaction({
       operations: [
@@ -40,7 +64,7 @@ describe("trezor stellar transaction", () => {
       ],
     });
 
-    expect(toTrezorStellarTransaction(transaction, SOURCE).transaction).toEqual({
+    expect(toTrezorStellarTransaction(transaction).transaction).toEqual({
       fee: 100,
       memo: { text: "=:BTC.BTC:bc1q", type: 1 },
       operations: [
@@ -68,7 +92,7 @@ describe("trezor stellar transaction", () => {
       ],
     });
 
-    expect(toTrezorStellarTransaction(transaction, SOURCE).transaction).toMatchObject({
+    expect(toTrezorStellarTransaction(transaction).transaction).toMatchObject({
       memo: { hash: hash.toString("hex"), type: 3 },
       operations: [
         { destination: DESTINATION, source: SOURCE, startingBalance: "10000000", type: "createAccount" },
@@ -80,7 +104,7 @@ describe("trezor stellar transaction", () => {
       ],
     });
 
-    const memoOf = (memo: unknown) => toTrezorStellarTransaction(buildTransaction({ memo }), SOURCE).transaction.memo;
+    const memoOf = (memo: unknown) => toTrezorStellarTransaction(buildTransaction({ memo })).transaction.memo;
     expect(memoOf({ type: "id", value: "18446744073709551615" })).toEqual({ id: "18446744073709551615", type: 2 });
     expect(memoOf({ type: "return", value: hash })).toEqual({ hash: hash.toString("hex"), type: 4 });
     expect(memoOf({ type: "none", value: null })).toBeUndefined();
@@ -96,7 +120,6 @@ describe("trezor stellar transaction", () => {
 
   it.each([
     ["fee bump transactions", { innerTransaction: {} }],
-    ["another source account", { source: DESTINATION }],
     ["missing time bounds", { timeBounds: undefined }],
     ["time bounds beyond uint32", { timeBounds: { maxTime: "4294967296", minTime: "0" } }],
     ["unsafe integer time bounds", { timeBounds: { maxTime: "9007199254740993", minTime: "0" } }],
@@ -104,6 +127,7 @@ describe("trezor stellar transaction", () => {
     ["minimum account sequence", { minAccountSequence: "1" }],
     ["minimum account sequence age", { minAccountSequenceAge: 1n }],
     ["minimum account sequence ledger gap", { minAccountSequenceLedgerGap: 1 }],
+    ["zero-valued V2 preconditions", { minAccountSequenceLedgerGap: 0 }],
     ["extra signers", { extraSigners: [SOURCE] }],
     ["unsupported operations", { operations: [{ type: "manageData" }] }],
     ["liquidity pool assets", { operations: payment({ asset: asset("liquidity_pool_shares") }) }],
@@ -111,9 +135,7 @@ describe("trezor stellar transaction", () => {
     ["non numeric amounts", { operations: payment({ amount: "-1" }) }],
     ["text memos that are not UTF-8", { memo: { type: "text", value: Buffer.from([0xff, 0xfe]) } }],
   ])("rejects %s before reaching the device", (_, overrides) => {
-    expect(() => toTrezorStellarTransaction(buildTransaction(overrides), SOURCE)).toThrow(
-      "wallet_trezor_method_not_supported",
-    );
+    expect(() => toTrezorStellarTransaction(buildTransaction(overrides))).toThrow("wallet_trezor_method_not_supported");
   });
 
   it("rejects paths that put the account in the last two slots", () => {
@@ -121,5 +143,19 @@ describe("trezor stellar transaction", () => {
       "wallet_trezor_derivation_path_not_supported",
     );
     expect(() => getStellarSigner({ derivationPath: [44, 148, 5, 0, 0] })).not.toThrow();
+  });
+
+  it("rejects unsupported transactions without asking the device for anything", async () => {
+    await expect(signWith(buildTransaction({ innerTransaction: {} }))).rejects.toThrow(
+      "wallet_trezor_method_not_supported",
+    );
+    expect(calls).toEqual({ getAddress: 0, sign: 0 });
+  });
+
+  it("rejects transactions from another account without signing", async () => {
+    await expect(signWith(buildTransaction({ source: DESTINATION }))).rejects.toThrow(
+      "wallet_trezor_method_not_supported",
+    );
+    expect(calls.sign).toBe(0);
   });
 });

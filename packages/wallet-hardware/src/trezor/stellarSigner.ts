@@ -97,17 +97,16 @@ function toTrezorMemo({ type, value }: StellarClassicTransaction["memo"]) {
   }
 }
 
-export function toTrezorStellarTransaction(transaction: StellarTransaction, address: string) {
+export function toTrezorStellarTransaction(transaction: StellarTransaction) {
   if ("innerTransaction" in transaction) throw notSupported("Trezor cannot sign fee bump transactions");
 
-  if (transaction.source !== address) throw notSupported("Transaction source does not match the Trezor address");
   if (!transaction.timeBounds) throw notSupported("Trezor requires transaction time bounds");
-  const hasPreconditions =
-    transaction.ledgerBounds ||
-    transaction.minAccountSequence ||
-    transaction.minAccountSequenceAge ||
-    transaction.minAccountSequenceLedgerGap;
-  if (hasPreconditions || transaction.extraSigners?.length) {
+  const { extraSigners, ledgerBounds, minAccountSequence, minAccountSequenceAge, minAccountSequenceLedgerGap } =
+    transaction;
+  const hasPreconditions = [ledgerBounds, minAccountSequence, minAccountSequenceAge, minAccountSequenceLedgerGap].some(
+    (precondition) => precondition !== undefined,
+  );
+  if (hasPreconditions || extraSigners?.length) {
     throw notSupported("Trezor cannot sign Stellar transactions with extra preconditions");
   }
 
@@ -156,7 +155,11 @@ export function getStellarSigner({ derivationPath }: { derivationPath: Derivatio
   }
 
   async function signTransaction(transaction: StellarTransaction) {
-    const params = toTrezorStellarTransaction(transaction, await getAddress());
+    const params = toTrezorStellarTransaction(transaction);
+    if (params.transaction.source !== (await getAddress())) {
+      throw notSupported("Transaction source does not match the Trezor address");
+    }
+
     const TrezorConnect = (await import("@trezor/connect-web")).default;
     const result = await TrezorConnect.stellarSignTransaction({ path, ...params });
 
