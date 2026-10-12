@@ -1,5 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { Keypair, type PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  Keypair,
+  type PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import * as realHelpers from "@swapkit/helpers";
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 import * as realSolanaToolbox from "@swapkit/toolboxes/solana";
@@ -43,7 +50,10 @@ const solanaConnectCalls: number[] = [];
 const solanaDisconnectCalls: number[] = [];
 const solanaSignInputs: SolanaSignInput[] = [];
 const solanaChangeListeners = new Set<(properties: { accounts?: readonly unknown[] }) => void>();
-const solanaToolboxSigners: { publicKey: PublicKey; signTransaction: (tx: Transaction) => Promise<Transaction> }[] = [];
+const solanaToolboxSigners: {
+  publicKey: PublicKey;
+  signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => Promise<T>;
+}[] = [];
 
 let signSolanaTransaction: (transaction: Uint8Array) => Uint8Array = (transaction) => transaction;
 
@@ -106,6 +116,28 @@ function registerLedgerSolanaWallet() {
   window.addEventListener("wallet-standard:app-ready", (event) =>
     register((event as CustomEvent<WalletStandardApi>).detail),
   );
+}
+
+function buildVersionedSolanaTransaction() {
+  const message = new TransactionMessage({
+    instructions: [
+      SystemProgram.transfer({
+        fromPubkey: solanaKeypair.publicKey,
+        lamports: 1,
+        toPubkey: NEXT_SOLANA_KEYPAIR.publicKey,
+      }),
+    ],
+    payerKey: solanaKeypair.publicKey,
+    recentBlockhash: "11111111111111111111111111111111",
+  }).compileToV0Message();
+
+  return new VersionedTransaction(message);
+}
+
+function signVersionedOnDevice(bytes: Uint8Array) {
+  const transaction = VersionedTransaction.deserialize(bytes);
+  transaction.sign([solanaKeypair]);
+  return transaction.serialize();
 }
 
 function buildSolanaTransaction() {
@@ -729,12 +761,47 @@ describe("ledger wallet provider connector", () => {
 
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
 
-    const signed = await solanaToolboxSigners[0]?.signTransaction(buildSolanaTransaction());
+    const transaction = buildSolanaTransaction();
+    const unsignedBytes = new Uint8Array(
+      transaction.serialize({ requireAllSignatures: false, verifySignatures: false }),
+    );
+    const signed = await solanaToolboxSigners[0]?.signTransaction(transaction);
 
     expect(solanaSignInputs.map(({ account, chain }) => [account.address, chain])).toEqual([
       [solanaKeypair.publicKey.toBase58(), "solana:mainnet"],
     ]);
+    expect(solanaSignInputs[0]?.transaction).toEqual(unsignedBytes);
     expect(signed?.verifySignatures()).toBe(true);
+  });
+
+  test("signs versioned Solana transactions on the device", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    registerLedgerSolanaWallet();
+    signSolanaTransaction = signVersionedOnDevice;
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
+
+    const transaction = buildVersionedSolanaTransaction();
+    const unsignedBytes = transaction.serialize();
+    const expected = VersionedTransaction.deserialize(unsignedBytes);
+    expected.sign([solanaKeypair]);
+
+    const signed = await solanaToolboxSigners[0]?.signTransaction(transaction);
+
+    expect(solanaSignInputs[0]?.transaction).toEqual(unsignedBytes);
+    expect(signed).toBeInstanceOf(VersionedTransaction);
+    expect(signed?.signatures).toEqual(expected.signatures);
+  });
+
+  test("rejects a versioned Solana transaction the SDK returns unsigned", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
+
+    await expect(solanaToolboxSigners[0]?.signTransaction(buildVersionedSolanaTransaction())).rejects.toThrow(
+      "wallet_ledger_wallet_provider_signing_unsupported",
+    );
   });
 
   test("rejects a Solana transaction the SDK returns unsigned", async () => {
