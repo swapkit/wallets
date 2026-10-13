@@ -812,7 +812,7 @@ describe("ledger wallet provider connector", () => {
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
 
     await expect(solanaToolboxSigners[0]?.signTransaction(buildVersionedSolanaTransaction())).rejects.toThrow(
-      "wallet_ledger_wallet_provider_signing_unsupported",
+      "wallet_ledger_wallet_provider_signing_failed",
     );
   });
 
@@ -823,7 +823,7 @@ describe("ledger wallet provider connector", () => {
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({ addChain: () => {} })([Chain.Solana]);
 
     await expect(solanaToolboxSigners[0]?.signTransaction(buildSolanaTransaction())).rejects.toThrow(
-      "wallet_ledger_wallet_provider_signing_unsupported",
+      "wallet_ledger_wallet_provider_signing_failed",
     );
   });
 
@@ -837,14 +837,34 @@ describe("ledger wallet provider connector", () => {
     })([Chain.Solana]);
 
     const [handleChange] = [...solanaChangeListeners];
-    handleChange?.({ accounts: [] });
+    handleChange?.({});
     handleChange?.({ accounts: [createSolanaAccount(NEXT_SOLANA_KEYPAIR)] });
-    while (addChainCalls.length < 2) await Bun.sleep(0);
 
     expect(addChainCalls.map(({ address }) => address)).toEqual([
       solanaKeypair.publicKey.toBase58(),
       NEXT_SOLANA_KEYPAIR.publicKey.toBase58(),
     ]);
+  });
+
+  test("stops the Solana connection when Ledger reports lost access", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
+
+    await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+      addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+    })([Chain.Solana]);
+
+    const [handleChange] = [...solanaChangeListeners];
+    handleChange?.({ accounts: [] });
+    handleChange?.({ accounts: [createSolanaAccount(NEXT_SOLANA_KEYPAIR)] });
+
+    expect(solanaChangeListeners.size).toBe(0);
+    expect(addChainCalls).toHaveLength(1);
+    await expect(solanaToolboxSigners[0]?.signTransaction(buildSolanaTransaction())).rejects.toThrow(
+      "wallet_ledger_wallet_provider_no_accounts",
+    );
+    expect(solanaSignInputs).toEqual([]);
   });
 
   test("disconnect drops the Solana listener and the wallet session", async () => {

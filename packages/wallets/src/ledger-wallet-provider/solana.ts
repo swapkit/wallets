@@ -73,11 +73,13 @@ export function createLedgerSolanaSigner({
   account,
   disconnect,
   features,
+  isConnected,
   web3: { PublicKey, Transaction, VersionedTransaction },
 }: {
   account: LedgerSolanaWalletAccount;
   disconnect: () => Promise<void>;
   features: LedgerSolanaWalletFeatures;
+  isConnected: () => boolean;
   web3: typeof import("@solana/web3.js");
 }) {
   const publicKey = new PublicKey(account.address);
@@ -94,6 +96,12 @@ export function createLedgerSolanaSigner({
   }
 
   async function signTransaction<T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> {
+    if (!isConnected()) {
+      throw new SwapKitError("wallet_ledger_wallet_provider_no_accounts", {
+        message: "Ledger Wallet no longer gives access to this Solana account; connect it again.",
+      });
+    }
+
     const serialized =
       transaction instanceof VersionedTransaction
         ? transaction.serialize()
@@ -105,7 +113,7 @@ export function createLedgerSolanaSigner({
       transaction: new Uint8Array(serialized),
     });
 
-    if (!result) throw new SwapKitError("wallet_ledger_wallet_provider_signing_unsupported");
+    if (!result) throw new SwapKitError("wallet_ledger_wallet_provider_signing_failed");
 
     const signed = (
       transaction instanceof VersionedTransaction
@@ -115,7 +123,7 @@ export function createLedgerSolanaSigner({
 
     // Guard in case the wallet hands the transaction back without our signature
     if (isEmptySignature(getSignature(signed))) {
-      throw new SwapKitError("wallet_ledger_wallet_provider_signing_unsupported", {
+      throw new SwapKitError("wallet_ledger_wallet_provider_signing_failed", {
         message: "Ledger Wallet returned an unsigned Solana transaction.",
       });
     }
@@ -133,17 +141,23 @@ export async function connectLedgerSolana({
   onAccount: (wallet: { address: string; disconnect: () => Promise<void>; toolbox: SolanaWallet }) => void;
   options: Omit<ConnectLedgerWalletProviderOptions, "provider">;
 }) {
+  const [{ getSolanaToolbox }, web3] = await Promise.all([
+    import("@swapkit/toolboxes/solana"),
+    import("@solana/web3.js"),
+  ]);
   const wallet = await resolveLedgerSolanaWallet(options);
   const { accounts } = await wallet.features["standard:connect"].connect();
   const account = getLedgerSolanaAccount(accounts);
 
   if (!account) throw new SwapKitError("wallet_ledger_wallet_provider_no_accounts");
 
-  const [{ getSolanaToolbox }, web3] = await Promise.all([
-    import("@swapkit/toolboxes/solana"),
-    import("@solana/web3.js"),
-  ]);
   let connectedAddress = account.address;
+  let connected = true;
+
+  function release() {
+    connected = false;
+    offChange?.();
+  }
 
   function addAccount(nextAccount: LedgerSolanaWalletAccount) {
     connectedAddress = nextAccount.address;
@@ -151,6 +165,7 @@ export async function connectLedgerSolana({
       account: nextAccount,
       disconnect: disconnectLedgerSolana,
       features: wallet.features,
+      isConnected: () => connected,
       web3,
     });
 
@@ -162,15 +177,19 @@ export async function connectLedgerSolana({
   }
 
   async function disconnectLedgerSolana() {
-    offChange?.();
+    release();
     await wallet.features["standard:disconnect"]?.disconnect();
   }
 
   addAccount(account);
 
   const offChange = wallet.features["standard:events"]?.on("change", ({ accounts: nextAccounts }) => {
-    const nextAccount = nextAccounts && getLedgerSolanaAccount(nextAccounts);
-    if (nextAccount && nextAccount.address !== connectedAddress) addAccount(nextAccount);
+    if (!(connected && nextAccounts)) return;
+
+    const nextAccount = getLedgerSolanaAccount(nextAccounts);
+    // Ledger reports lost access as an account list without a Solana account
+    if (!nextAccount) release();
+    else if (nextAccount.address !== connectedAddress) addAccount(nextAccount);
   });
 
   return disconnectLedgerSolana;
