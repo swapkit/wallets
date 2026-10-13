@@ -1,10 +1,9 @@
 import "./register";
 
-import { Chain, type EVMChain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { Chain, type EVMChain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-import { getWeb3WalletMethods } from "@swapkit/wallet-extensions/evm-extensions";
 
-import { createLedgerEip1193Adapter, resolveLedgerWalletProvider } from "./helpers";
+import { connectLedgerEvm } from "./evm";
 import { connectLedgerSolana } from "./solana";
 import type { ConnectLedgerWalletProviderOptions } from "./types";
 
@@ -38,115 +37,47 @@ export const ledgerWalletProviderWallet = createWallet({
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const evmChains = filteredChains.filter((chain): chain is EVMChain => chain !== Chain.Solana);
       const { provider: _evmProvider, ...solanaOptions } = options;
-      const disconnectSolana = filteredChains.includes(Chain.Solana)
-        ? await connectLedgerSolana({
-            onAccount: ({ address, toolbox }) =>
-              addChain({
-                ...toolbox,
-                address,
-                chain: Chain.Solana,
-                disconnect: () => disconnectSolana?.(),
-                walletType,
-              }),
-            options: solanaOptions,
-          })
-        : undefined;
+      const pendingChains: Parameters<typeof addChain>[0][] = [];
+      let ready = false;
+      let disconnectSolana: (() => Promise<void>) | undefined;
+      let disconnectEvm: (() => Promise<void>) | undefined;
 
-      if (evmChains.length === 0) return true;
-
-      const provider = await resolveLedgerWalletProvider(options);
-      const { BrowserProvider } = await import("ethers");
-
-      const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[] | undefined;
-      const [address] = accounts ?? [];
-
-      if (!address) throw new SwapKitError("wallet_ledger_wallet_provider_no_accounts");
-
-      let connectedAddress = address;
-      let accountChangeVersion = 0;
-      let disconnected = false;
-      let providerClosed = false;
-      let adaptersReady = false;
-      const adapters: Array<{ chain: EVMChain } & Awaited<ReturnType<typeof createLedgerEip1193Adapter>>> = [];
-
-      function releaseConnection() {
-        if (disconnected) return;
-
-        disconnected = true;
-        accountChangeVersion += 1;
-        provider.removeListener?.("accountsChanged", handleAccountsChanged);
-        provider.removeListener?.("disconnect", handleDisconnect);
-        for (const adapter of adapters) adapter?.destroy();
-      }
-
-      async function addConnectedChains(nextAddress: string) {
-        const version = accountChangeVersion;
-        const connectedChains = await Promise.all(
-          adapters.map(async ({ chain, provider: eip1193Provider }) => ({
-            chain,
-            walletMethods: await getWeb3WalletMethods({
-              address: nextAddress,
-              chain,
-              provider: new BrowserProvider(eip1193Provider, "any"),
-              walletProvider: eip1193Provider,
-            }),
-          })),
-        );
-
-        if (version !== accountChangeVersion) return;
-
-        for (const { chain, walletMethods } of connectedChains) {
-          addChain({ ...walletMethods, address: nextAddress, chain, disconnect, walletType });
-        }
-      }
-
-      function handleAccountsChanged(nextAccounts: string[]) {
-        if (disconnected) return;
-
-        const [nextAddress] = nextAccounts;
-        if (!nextAddress) {
-          releaseConnection();
-          return;
-        }
-        if (nextAddress.toLowerCase() === connectedAddress.toLowerCase()) return;
-
-        connectedAddress = nextAddress;
-        accountChangeVersion += 1;
-        if (adaptersReady) addConnectedChains(nextAddress).catch(releaseConnection);
-      }
-
-      function handleDisconnect() {
-        providerClosed = true;
-        releaseConnection();
+      // Chains are only published once every requested family connected, so a failure leaves nothing behind
+      function publish(chainWallet: Parameters<typeof addChain>[0]) {
+        if (ready) addChain(chainWallet);
+        else pendingChains.push(chainWallet);
       }
 
       async function disconnect() {
-        releaseConnection();
-        await disconnectSolana?.();
-        if (!providerClosed) await provider.disconnect?.();
+        const results = await Promise.allSettled([disconnectSolana?.(), disconnectEvm?.()]);
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure) throw failure.reason;
       }
 
-      provider.on?.("accountsChanged", handleAccountsChanged);
-      provider.on?.("disconnect", handleDisconnect);
-
-      try {
-        await Promise.all(
-          evmChains.map(async (chain, index) => {
-            const adapter = await createLedgerEip1193Adapter({
-              chain,
-              getAddress: () => (disconnected ? undefined : connectedAddress),
-              provider,
-            });
-            if (disconnected) adapter.destroy();
-            else adapters[index] = { chain, ...adapter };
-          }),
-        );
-        adaptersReady = true;
-        await addConnectedChains(connectedAddress);
-      } catch (error) {
-        releaseConnection();
-        throw error;
+      if (filteredChains.includes(Chain.Solana)) {
+        disconnectSolana = await connectLedgerSolana({
+          onAccount: ({ address, toolbox }) =>
+            publish({ ...toolbox, address, chain: Chain.Solana, disconnect, walletType }),
+          options: solanaOptions,
+        });
       }
+
+      if (evmChains.length > 0) {
+        try {
+          disconnectEvm = await connectLedgerEvm({
+            chains: evmChains,
+            onChain: ({ address, chain, walletMethods }) =>
+              publish({ ...walletMethods, address, chain, disconnect, walletType }),
+            options,
+          });
+        } catch (error) {
+          await disconnectSolana?.();
+          throw error;
+        }
+      }
+
+      ready = true;
+      for (const chainWallet of pendingChains.splice(0)) addChain(chainWallet);
 
       return true;
     },
