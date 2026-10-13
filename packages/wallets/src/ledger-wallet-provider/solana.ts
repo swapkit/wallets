@@ -130,7 +130,7 @@ export async function connectLedgerSolana({
   onAccount,
   options,
 }: {
-  onAccount: (wallet: { address: string; toolbox: SolanaWallet }) => void;
+  onAccount: (wallet: { address: string; disconnect: () => Promise<void>; toolbox: SolanaWallet }) => void;
   options: Omit<ConnectLedgerWalletProviderOptions, "provider">;
 }) {
   const wallet = await resolveLedgerSolanaWallet(options);
@@ -154,7 +154,11 @@ export async function connectLedgerSolana({
       web3,
     });
 
-    onAccount({ address: nextAccount.address, toolbox: getSolanaToolbox({ signer }) });
+    onAccount({
+      address: nextAccount.address,
+      disconnect: disconnectLedgerSolana,
+      toolbox: getSolanaToolbox({ signer }),
+    });
   }
 
   async function disconnectLedgerSolana() {

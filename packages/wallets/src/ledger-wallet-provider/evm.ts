@@ -12,7 +12,12 @@ export async function connectLedgerEvm({
   options,
 }: {
   chains: EVMChain[];
-  onChain: (wallet: { address: string; chain: EVMChain; walletMethods: EvmWalletMethods }) => void;
+  onChain: (wallet: {
+    address: string;
+    chain: EVMChain;
+    disconnect: () => Promise<void>;
+    walletMethods: EvmWalletMethods;
+  }) => void;
   options: ConnectLedgerWalletProviderOptions;
 }) {
   const provider = await resolveLedgerWalletProvider(options);
@@ -56,7 +61,8 @@ export async function connectLedgerEvm({
 
     if (version !== accountChangeVersion) return;
 
-    for (const { chain, walletMethods } of connectedChains) onChain({ address: nextAddress, chain, walletMethods });
+    for (const { chain, walletMethods } of connectedChains)
+      onChain({ address: nextAddress, chain, disconnect: disconnectLedgerEvm, walletMethods });
   }
 
   function handleAccountsChanged(nextAccounts: string[]) {
@@ -101,8 +107,10 @@ export async function connectLedgerEvm({
     throw error;
   }
 
-  return async function disconnectLedgerEvm() {
+  async function disconnectLedgerEvm() {
     releaseConnection();
     if (!providerClosed) await provider.disconnect?.();
-  };
+  }
+
+  return disconnectLedgerEvm;
 }

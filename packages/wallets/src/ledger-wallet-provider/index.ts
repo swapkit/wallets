@@ -1,6 +1,6 @@
 import "./register";
 
-import { Chain, type EVMChain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
+import { Chain, type EVMChain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 
 import { connectLedgerEvm } from "./evm";
@@ -36,48 +36,30 @@ export const ledgerWalletProviderWallet = createWallet({
     async function connectLedgerWalletProvider(chains: Chain[], options: ConnectLedgerWalletProviderOptions = {}) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
       const evmChains = filteredChains.filter((chain): chain is EVMChain => chain !== Chain.Solana);
-      const { provider: _evmProvider, ...solanaOptions } = options;
-      const pendingChains: Parameters<typeof addChain>[0][] = [];
-      let ready = false;
-      let disconnectSolana: (() => Promise<void>) | undefined;
-      let disconnectEvm: (() => Promise<void>) | undefined;
-
-      // Chains are only published once every requested family connected, so a failure leaves nothing behind
-      function publish(chainWallet: Parameters<typeof addChain>[0]) {
-        if (ready) addChain(chainWallet);
-        else pendingChains.push(chainWallet);
-      }
-
-      async function disconnect() {
-        const results = await Promise.allSettled([disconnectSolana?.(), disconnectEvm?.()]);
-        const failure = results.find((result) => result.status === "rejected");
-        if (failure) throw failure.reason;
-      }
 
       if (filteredChains.includes(Chain.Solana)) {
-        disconnectSolana = await connectLedgerSolana({
-          onAccount: ({ address, toolbox }) =>
-            publish({ ...toolbox, address, chain: Chain.Solana, disconnect, walletType }),
+        if (evmChains.length > 0) {
+          throw new SwapKitError("wallet_ledger_wallet_provider_mixed_families", {
+            message: "Connect EVM networks and Solana in separate calls.",
+          });
+        }
+
+        const { provider: _evmProvider, ...solanaOptions } = options;
+        await connectLedgerSolana({
+          onAccount: ({ address, disconnect, toolbox }) =>
+            addChain({ ...toolbox, address, chain: Chain.Solana, disconnect, walletType }),
           options: solanaOptions,
         });
+
+        return true;
       }
 
-      if (evmChains.length > 0) {
-        try {
-          disconnectEvm = await connectLedgerEvm({
-            chains: evmChains,
-            onChain: ({ address, chain, walletMethods }) =>
-              publish({ ...walletMethods, address, chain, disconnect, walletType }),
-            options,
-          });
-        } catch (error) {
-          await disconnectSolana?.();
-          throw error;
-        }
-      }
-
-      ready = true;
-      for (const chainWallet of pendingChains.splice(0)) addChain(chainWallet);
+      await connectLedgerEvm({
+        chains: evmChains,
+        onChain: ({ address, chain, disconnect, walletMethods }) =>
+          addChain({ ...walletMethods, address, chain, disconnect, walletType }),
+        options,
+      });
 
       return true;
     },

@@ -673,20 +673,34 @@ describe("ledger wallet provider connector", () => {
     ).rejects.toThrow("wallet_chain_not_supported");
   });
 
-  test("connects every supported chain from a single approval per chain family", async () => {
+  test("connects every supported EVM chain from a single device approval", async () => {
     const { ledgerWalletProviderWallet, LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS } = await import(
       "../src/ledger-wallet-provider"
     );
+    const evmChains = LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS.filter((chain) => chain !== Chain.Solana);
     const addChainCalls: Record<string, unknown>[] = [];
-    registerLedgerSolanaWallet();
 
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
       addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
-    })([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS]);
+    })(evmChains);
 
-    expect(addChainCalls.map(({ chain }) => chain).sort()).toEqual([...LEDGER_WALLET_PROVIDER_SUPPORTED_CHAINS].sort());
+    expect(addChainCalls.map(({ chain }) => chain)).toEqual(evmChains);
     expect(ledgerRequests).toEqual([{ method: "eth_requestAccounts", params: undefined }]);
-    expect(solanaConnectCalls).toEqual([1]);
+  });
+
+  test("rejects connecting EVM networks and Solana in the same call", async () => {
+    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
+    const addChainCalls: Record<string, unknown>[] = [];
+    registerLedgerSolanaWallet();
+
+    await expect(
+      ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
+        addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
+      })([Chain.Ethereum, Chain.Solana]),
+    ).rejects.toThrow("wallet_ledger_wallet_provider_mixed_families");
+    expect(addChainCalls).toEqual([]);
+    expect(ledgerRequests).toEqual([]);
+    expect(solanaConnectCalls).toEqual([]);
   });
 
   test("supports exactly the SwapKit chains on Ledger Wallet's network list", async () => {
@@ -833,34 +847,19 @@ describe("ledger wallet provider connector", () => {
     ]);
   });
 
-  test("disconnect tears down both the EVM provider and the Solana wallet", async () => {
+  test("disconnect drops the Solana listener and the wallet session", async () => {
     const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
     const addChainCalls: Record<string, unknown>[] = [];
     registerLedgerSolanaWallet();
 
     await ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
       addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
-    })([Chain.Ethereum, Chain.Solana]);
+    })([Chain.Solana]);
 
-    await (addChainCalls.find(({ chain }) => chain === Chain.Ethereum)?.disconnect as () => Promise<void>)();
+    await (addChainCalls[0]?.disconnect as () => Promise<void>)();
 
     expect(solanaChangeListeners.size).toBe(0);
     expect(solanaDisconnectCalls).toEqual([1]);
-    expect(accountsChangedListeners.size).toBe(0);
-    expect(providerDisconnectCalls).toEqual([1]);
-  });
-
-  test("fails before adding any chain when Solana is requested next to EVM but unavailable", async () => {
-    const { ledgerWalletProviderWallet } = await import("../src/ledger-wallet-provider");
-    const addChainCalls: Record<string, unknown>[] = [];
-
-    await expect(
-      ledgerWalletProviderWallet.connectLedgerWalletProvider.connectWallet({
-        addChain: (chainWallet) => addChainCalls.push(chainWallet as Record<string, unknown>),
-      })([Chain.Ethereum, Chain.Solana], { discoveryTimeout: 10 }),
-    ).rejects.toThrow("wallet_ledger_wallet_provider_not_announced");
-    expect(addChainCalls).toEqual([]);
-    expect(ledgerRequests).toEqual([]);
   });
 
   test("loadWallet returns the Ledger Wallet Provider connector", async () => {
