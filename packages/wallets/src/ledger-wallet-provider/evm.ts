@@ -111,6 +111,4 @@ export async function connectLedgerEvm({
     releaseConnection();
     if (!providerClosed) await provider.disconnect?.();
   }
-
-  return disconnectLedgerEvm;
 }

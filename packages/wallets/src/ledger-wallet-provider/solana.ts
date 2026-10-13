@@ -23,11 +23,7 @@ function isLedgerSolanaWallet(wallet: StandardWallet): wallet is LedgerSolanaWal
   );
 }
 
-export async function discoverLedgerSolanaWallet({
-  timeout,
-}: {
-  timeout: number;
-}): Promise<LedgerSolanaWallet | undefined> {
+async function discoverLedgerSolanaWallet({ timeout }: { timeout: number }): Promise<LedgerSolanaWallet | undefined> {
   if (typeof window === "undefined") return undefined;
 
   const { getWallets } = await import("@wallet-standard/app");
@@ -50,7 +46,7 @@ export async function discoverLedgerSolanaWallet({
   });
 }
 
-export function resolveLedgerSolanaWallet(options: Omit<ConnectLedgerWalletProviderOptions, "provider"> = {}) {
+function resolveLedgerSolanaWallet(options: Omit<ConnectLedgerWalletProviderOptions, "provider"> = {}) {
   return discoverAfterInitialization({
     discover: discoverLedgerSolanaWallet,
     notAnnouncedMessage: "Ledger Solana wallet did not register; Solana may be disabled for this dApp.",
@@ -59,9 +55,7 @@ export function resolveLedgerSolanaWallet(options: Omit<ConnectLedgerWalletProvi
   });
 }
 
-export function getLedgerSolanaAccount(
-  accounts: readonly LedgerSolanaWalletAccount[],
-): LedgerSolanaWalletAccount | undefined {
+function getLedgerSolanaAccount(accounts: readonly LedgerSolanaWalletAccount[]): LedgerSolanaWalletAccount | undefined {
   return accounts.find(({ chains }) => chains.includes(SOLANA_MAINNET));
 }
 
@@ -69,7 +63,7 @@ function isEmptySignature(signature: Uint8Array | null | undefined) {
   return !signature || signature.every((byte) => byte === 0);
 }
 
-export function createLedgerSolanaSigner({
+function createLedgerSolanaSigner({
   account,
   disconnect,
   features,
@@ -181,8 +175,6 @@ export async function connectLedgerSolana({
     await wallet.features["standard:disconnect"]?.disconnect();
   }
 
-  addAccount(account);
-
   const offChange = wallet.features["standard:events"]?.on("change", ({ accounts: nextAccounts }) => {
     if (!(connected && nextAccounts)) return;
 
@@ -192,5 +184,5 @@ export async function connectLedgerSolana({
     else if (nextAccount.address !== connectedAddress) addAccount(nextAccount);
   });
 
-  return disconnectLedgerSolana;
+  addAccount(account);
 }
