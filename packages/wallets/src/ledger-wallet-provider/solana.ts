@@ -69,14 +69,17 @@ function isEmptySignature(signature: Uint8Array | null | undefined) {
   return !signature || signature.every((byte) => byte === 0);
 }
 
-export async function createLedgerSolanaSigner({
+export function createLedgerSolanaSigner({
   account,
+  disconnect,
   features,
+  web3: { PublicKey, Transaction, VersionedTransaction },
 }: {
   account: LedgerSolanaWalletAccount;
+  disconnect: () => Promise<void>;
   features: LedgerSolanaWalletFeatures;
+  web3: typeof import("@solana/web3.js");
 }) {
-  const { PublicKey, Transaction, VersionedTransaction } = await import("@solana/web3.js");
   const publicKey = new PublicKey(account.address);
 
   function getSignature(transaction: Transaction | VersionedTransaction) {
@@ -120,12 +123,7 @@ export async function createLedgerSolanaSigner({
     return signed;
   }
 
-  return {
-    connect: () => Promise.resolve({ publicKey }),
-    disconnect: () => features["standard:disconnect"]?.disconnect() ?? Promise.resolve(),
-    publicKey,
-    signTransaction,
-  };
+  return { connect: () => Promise.resolve({ publicKey }), disconnect, publicKey, signTransaction };
 }
 
 export async function connectLedgerSolana({
@@ -141,28 +139,35 @@ export async function connectLedgerSolana({
 
   if (!account) throw new SwapKitError("wallet_ledger_wallet_provider_no_accounts");
 
-  const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
+  const [{ getSolanaToolbox }, web3] = await Promise.all([
+    import("@swapkit/toolboxes/solana"),
+    import("@solana/web3.js"),
+  ]);
   let connectedAddress = account.address;
 
-  async function addAccount(nextAccount: LedgerSolanaWalletAccount) {
-    const signer = await createLedgerSolanaSigner({ account: nextAccount, features: wallet.features });
-    if (nextAccount.address !== connectedAddress) return;
+  function addAccount(nextAccount: LedgerSolanaWalletAccount) {
+    connectedAddress = nextAccount.address;
+    const signer = createLedgerSolanaSigner({
+      account: nextAccount,
+      disconnect: disconnectLedgerSolana,
+      features: wallet.features,
+      web3,
+    });
 
     onAccount({ address: nextAccount.address, toolbox: getSolanaToolbox({ signer }) });
   }
 
-  await addAccount(account);
+  async function disconnectLedgerSolana() {
+    offChange?.();
+    await wallet.features["standard:disconnect"]?.disconnect();
+  }
+
+  addAccount(account);
 
   const offChange = wallet.features["standard:events"]?.on("change", ({ accounts: nextAccounts }) => {
     const nextAccount = nextAccounts && getLedgerSolanaAccount(nextAccounts);
-    if (!nextAccount || nextAccount.address === connectedAddress) return;
-
-    connectedAddress = nextAccount.address;
-    void addAccount(nextAccount);
+    if (nextAccount && nextAccount.address !== connectedAddress) addAccount(nextAccount);
   });
 
-  return async function disconnectLedgerSolana() {
-    offChange?.();
-    await wallet.features["standard:disconnect"]?.disconnect();
-  };
+  return disconnectLedgerSolana;
 }
