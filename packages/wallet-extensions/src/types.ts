@@ -20,7 +20,7 @@ type StarknetAccount = StarknetToolboxParams extends infer Params
     : never
   : never;
 
-export type OkxStarknetProvider = { account: StarknetAccount; enable: () => Promise<string[]> };
+export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
 
 export type OkxCardanoApi = {
   getChangeAddress: () => Promise<string>;
