@@ -11,7 +11,11 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
     .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
     .with(WalletOption.VULTISIG, async () => (await import("@swapkit/wallet-extensions/vultisig")).vultisigWallet)
-    .with(WalletOption.OKX, async () => (await import("@swapkit/wallet-extensions/okx")).okxWallet)
+    .with(
+      WalletOption.OKX,
+      WalletOption.OKX_MOBILE,
+      async () => (await import("@swapkit/wallet-extensions/okx")).okxWallet,
+    )
     .with(WalletOption.ONEKEY, async () => (await import("@swapkit/wallet-extensions/onekey")).onekeyWallet)
     .with(WalletOption.EXODUS, async () => (await import("./passkeys")).passkeysWallet)
     .with(WalletOption.KEEPKEY, async () => (await import("@swapkit/wallet-hardware/keepkey")).keepkeyWallet)
@@ -29,7 +33,6 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
       WalletOption.BRAVE,
       WalletOption.COINBASE_WEB,
       WalletOption.EIP6963,
-      WalletOption.OKX_MOBILE,
       async () => (await import("@swapkit/wallet-extensions/evm-extensions")).evmWallet,
     )
     .with(WalletOption.METAMASK, async () => (await import("./metamask")).metamaskWallet)
