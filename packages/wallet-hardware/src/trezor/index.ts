@@ -598,6 +598,18 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Cardano: {
+      const { getCardanoToolbox } = await import("@swapkit/toolboxes/cardano");
+      const { getCardanoSigner } = await import("./cardanoSigner");
+
+      const connect = await import("@trezor/connect-web");
+      const signer = await getCardanoSigner({ connect, derivationPath });
+      const address = signer.getAddress();
+      const toolbox = getCardanoToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Ripple: {
       const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
       const { getRippleSigner } = await import("./rippleSigner");
@@ -605,6 +617,28 @@ async function getTrezorWallet<T extends Chain>({
       const signer = getRippleSigner({ derivationPath });
       const address = providedAddress ?? (await signer.getAddress());
       const toolbox = getRippleToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
+    case Chain.Solana: {
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
+      const { getSolanaSigner } = await import("./solanaSigner");
+
+      const signer = getSolanaSigner({ address: providedAddress, derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
+      const toolbox = getSolanaToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
+    case Chain.Stellar: {
+      const { getStellarToolbox } = await import("@swapkit/toolboxes/stellar");
+      const { getStellarSigner } = await import("./stellarSigner");
+
+      const signer = getStellarSigner({ derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
+      const toolbox = getStellarToolbox({ signer });
 
       return { ...toolbox, address };
     }
@@ -1507,6 +1541,7 @@ export const trezorWallet = createWallet({
     [Chain.BinanceSmartChain]: true,
     [Chain.Bitcoin]: true,
     [Chain.BitcoinCash]: true,
+    [Chain.Cardano]: true,
     [Chain.Dash]: true,
     [Chain.Ethereum]: true,
     [Chain.Gnosis]: true,
@@ -1518,6 +1553,8 @@ export const trezorWallet = createWallet({
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
     [Chain.Robinhood]: true,
+    [Chain.Solana]: true,
+    [Chain.Stellar]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     [Chain.Zcash]: true,
@@ -1534,6 +1571,7 @@ export const trezorWallet = createWallet({
     Chain.BinanceSmartChain,
     Chain.Bitcoin,
     Chain.BitcoinCash,
+    Chain.Cardano,
     Chain.Dash,
     Chain.Dogecoin,
     Chain.Ethereum,
@@ -1545,6 +1583,8 @@ export const trezorWallet = createWallet({
     Chain.Polygon,
     Chain.Ripple,
     Chain.Robinhood,
+    Chain.Solana,
+    Chain.Stellar,
     Chain.Tron,
     Chain.XLayer,
     Chain.Zcash,
