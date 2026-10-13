@@ -12,13 +12,7 @@ import type { Eip1193Provider } from "ethers";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
 
-type StarknetAccount = StarknetToolboxParams extends infer Params
-  ? Params extends { signer?: infer Signer }
-    ? unknown extends Signer
-      ? never
-      : NonNullable<Signer>
-    : never
-  : never;
+type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
 
 export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
 
