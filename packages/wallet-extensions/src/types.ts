@@ -6,10 +6,15 @@ import type { EthereumWindowProvider } from "@swapkit/helpers";
 // replacing the @cosmjs ones — type the handles with those.
 import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
+import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
+
+type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
+
+export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
 
 export type OkxCardanoApi = {
   getChangeAddress: () => Promise<string>;
@@ -136,6 +141,7 @@ declare global {
             getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
           };
           solana: SolanaProvider;
+          starknet: OkxStarknetProvider;
           cardano: { enable: () => Promise<OkxCardanoApi> };
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
