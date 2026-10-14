@@ -87,6 +87,34 @@ describe("connectOkx", () => {
 
     await expect(connect([Chain.Cardano, Chain.Starknet]).result).rejects.toBe(rejection);
   });
+
+  test("asks the wallet for one chain at a time", async () => {
+    let pending = 0;
+    let maxPending = 0;
+    const approve = async <T>(value: T) => {
+      pending += 1;
+      maxPending = Math.max(maxPending, pending);
+      await Bun.sleep(1);
+      pending -= 1;
+      return value;
+    };
+    const address = `0x${"1".repeat(64)}`;
+    globalThis.window = {
+      okxwallet: {
+        cardano: { enable: () => approve(mockCardano().enable()) },
+        starknet: {
+          enable() {
+            this.account = { address };
+            return approve([address]);
+          },
+        },
+      },
+    };
+
+    await connect([Chain.Cardano, Chain.Starknet]).result;
+
+    expect(maxPending).toBe(1);
+  });
 });
 
 describe("OKX Sui", () => {
