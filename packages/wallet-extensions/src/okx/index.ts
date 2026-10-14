@@ -8,21 +8,23 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     async function connectOkx(chains: Chain[]) {
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
 
-      const results = await Promise.allSettled(
-        filteredChains.map(async (chain) => {
+      const missingChains: unknown[] = [];
+
+      // OKX Wallet shows one approval at a time and rejects requests made while one is open
+      for (const chain of filteredChains) {
+        try {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
-        }),
-      );
+        } catch (error) {
+          // OKX Mobile does not expose every chain the extension does, only those are skipped
+          if (!isMissingChain(error)) throw error;
+          missingChains.push(error);
+        }
+      }
 
-      const errors = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
-      // OKX Mobile does not expose every chain the extension does, only those are skipped
-      const realError = errors.find((error) => !isMissingChain(error));
+      if (missingChains.length > 0 && missingChains.length === filteredChains.length) throw missingChains[0];
 
-      if (realError) throw realError;
-      if (errors.length > 0 && errors.length === results.length) throw errors[0];
-
-      for (const error of errors) {
+      for (const error of missingChains) {
         console.warn("connectOkx: skipping a chain OKX Wallet does not expose", error);
       }
 
