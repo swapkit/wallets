@@ -2,8 +2,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { bech32, hex } from "@scure/base";
 import { Chain } from "@swapkit/helpers";
+import { Address, beginCell } from "@ton/core";
 
+import { getWalletMethods } from "../helpers";
 import { okxWallet } from "../index";
+
+const RAW_TON_ADDRESS = `0:${"ab".repeat(32)}`;
 
 // CIP-19 mainnet base address test vector
 const CARDANO_ADDRESS =
@@ -67,5 +71,49 @@ describe("connectOkx", () => {
     };
 
     await expect(connect([Chain.Cardano, Chain.Starknet]).result).rejects.toBe(rejection);
+  });
+});
+
+describe("OKX TON", () => {
+  function mockTonBridge(requests: unknown[]) {
+    globalThis.window = {
+      okxTonWallet: {
+        tonconnect: {
+          restoreConnection: async () => ({
+            event: "connect",
+            payload: { items: [{ address: RAW_TON_ADDRESS, name: "ton_addr", network: "-239" }] },
+          }),
+          send: (request) => {
+            requests.push(JSON.parse(request.params[0]));
+            return Promise.resolve({ id: request.id, result: beginCell().endCell().toBoc().toString("base64") });
+          },
+        },
+      },
+    };
+  }
+
+  test("sends friendly destinations and returns the message hash", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const hash = await wallet.signAndBroadcastTransaction([{ address: RAW_TON_ADDRESS, amount: "1000" }]);
+
+    expect(wallet.address).toBe(Address.parse(RAW_TON_ADDRESS).toString({ bounceable: false, urlSafe: true }));
+    expect(requests[0].messages).toEqual([
+      { address: Address.parse(RAW_TON_ADDRESS).toString({ bounceable: true, urlSafe: true }), amount: "1000" },
+    ]);
+    expect(hash).toBe(beginCell().endCell().hash().toString("hex"));
+  });
+
+  test("rejects sweep transactions before reaching the wallet", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const sweep = { messages: [{ address: RAW_TON_ADDRESS, amount: "0" }], sendMode: 128 };
+
+    await expect(wallet.signAndBroadcastTransaction(sweep)).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
   });
 });
