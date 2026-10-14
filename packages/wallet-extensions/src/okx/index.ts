@@ -1,4 +1,4 @@
-import { Chain, filterSupportedChains, WalletOption } from "@swapkit/helpers";
+import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { ExtensionWallet } from "../walletTypes";
 import { getWalletMethods } from "./helpers";
@@ -15,15 +15,15 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
         }),
       );
 
-      // OKX Mobile does not expose every chain the extension does, so one missing chain should not block the rest
-      const failed = results.flatMap((result, index) =>
-        result.status === "rejected" ? [{ chain: filteredChains[index], reason: result.reason }] : [],
-      );
+      const errors = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+      // OKX Mobile does not expose every chain the extension does, only those are skipped
+      const realError = errors.find((error) => !isMissingChain(error));
 
-      if (failed.length > 0 && failed.length === results.length) throw failed[0]?.reason;
+      if (realError) throw realError;
+      if (errors.length > 0 && errors.length === results.length) throw errors[0];
 
-      for (const { chain, reason } of failed) {
-        console.error(`connectOkx: skipping ${chain}, failed to connect`, reason);
+      for (const error of errors) {
+        console.warn("connectOkx: skipping a chain OKX Wallet does not expose", error);
       }
 
       return true;
@@ -76,3 +76,7 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
 });
 
 export const OKX_SUPPORTED_CHAINS = getWalletSupportedChains(okxWallet);
+
+function isMissingChain(error: unknown) {
+  return error instanceof SwapKitError && error.errorKey === "wallet_okx_not_found";
+}

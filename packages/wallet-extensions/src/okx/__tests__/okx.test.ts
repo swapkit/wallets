@@ -59,4 +59,13 @@ describe("connectOkx", () => {
     expect(await result).toBe(true);
     expect(added[0].address).toBe(address);
   });
+
+  test("fails when the user rejects a chain even if another one connects", async () => {
+    const rejection = new Error("User rejected the request");
+    globalThis.window = {
+      okxwallet: { cardano: mockCardano(), starknet: { enable: () => Promise.reject(rejection) } },
+    };
+
+    await expect(connect([Chain.Cardano, Chain.Starknet]).result).rejects.toBe(rejection);
+  });
 });
