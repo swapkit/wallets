@@ -71,6 +71,7 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
       .with(
         P.union(
           Chain.Arbitrum,
+          Chain.Arc,
           Chain.Aurora,
           Chain.Avalanche,
           Chain.Base,
@@ -78,9 +79,11 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
           Chain.BinanceSmartChain,
           Chain.Ethereum,
           Chain.Gnosis,
+          Chain.Hyperevm,
           Chain.Monad,
           Chain.Optimism,
           Chain.Polygon,
+          Chain.Robinhood,
           Chain.XLayer,
         ),
         async () => {
