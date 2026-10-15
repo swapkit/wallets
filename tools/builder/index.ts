@@ -1,4 +1,5 @@
 import type { BuildArtifact, BuildConfig, BuildOutput } from "bun";
+import { inlineCssPlugin } from "./inline-css";
 import { writeThirdPartyNotices } from "./thirdPartyNotices";
 
 const isDebug = process.env.DEBUG === "true";
@@ -45,6 +46,7 @@ export async function buildPackage({
     minify: !isDebug,
     outdir: "./dist",
     packages: bundlePackages ? "bundle" : (packages ?? "external"),
+    plugins: [inlineCssPlugin],
     sourcemap: "linked",
     splitting: !pkgName.includes("toolboxes"),
     ...rest,
