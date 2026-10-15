@@ -160,7 +160,7 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
           throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Starknet });
         }
 
-        const toolbox = getStarknetToolbox({ signer: account });
+        const toolbox = getStarknetToolbox({ signer: account, walletDeploysAccount: true });
 
         return { ...toolbox, address: account.address };
       })
