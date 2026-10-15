@@ -3,7 +3,7 @@ import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 import type { OkxTonConnectEvent } from "../types";
 
 const TON_MAINNET = "-239";
-const CARRY_ALL_REMAINING_BALANCE = 128;
+const SUPPORTED_SEND_MODE = 3;
 const VALID_SECONDS = 300;
 
 type OkxTonConnectBridge = NonNullable<Window["okxTonWallet"]>["tonconnect"];
@@ -21,10 +21,10 @@ export async function getOkxTonWallet() {
     const messages = Array.isArray(transaction) ? transaction : transaction.messages;
     const sendMode = Array.isArray(transaction) ? transaction[0]?.sendMode : transaction.sendMode;
 
-    if (sendMode !== undefined && (sendMode & CARRY_ALL_REMAINING_BALANCE) !== 0) {
+    if (sendMode !== undefined && sendMode !== SUPPORTED_SEND_MODE) {
       throw new SwapKitError({
         errorKey: "core_swap_invalid_params",
-        info: { reason: "OKX Wallet does not support TON sweep transactions", sendMode },
+        info: { reason: "OKX Wallet does not support this TON send mode", sendMode },
       });
     }
 

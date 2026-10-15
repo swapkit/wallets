@@ -117,14 +117,14 @@ describe("OKX TON", () => {
     expect(hash).toBe(beginCell().endCell().hash().toString("hex"));
   });
 
-  test("rejects sweep transactions before reaching the wallet", async () => {
+  test.each([0, 130])("rejects send mode %d before reaching the wallet", async (sendMode) => {
     const requests = [];
     mockTonBridge(requests);
 
     const wallet = await getWalletMethods(Chain.Ton);
-    const sweep = { messages: [{ address: RAW_TON_ADDRESS, amount: "0" }], sendMode: 128 };
+    const transaction = { messages: [{ address: RAW_TON_ADDRESS, amount: "1000" }], sendMode };
 
-    await expect(wallet.signAndBroadcastTransaction(sweep)).rejects.toThrow("core_swap_invalid_params");
+    await expect(wallet.signAndBroadcastTransaction(transaction)).rejects.toThrow("core_swap_invalid_params");
     expect(requests).toHaveLength(0);
   });
 });
