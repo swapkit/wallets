@@ -1,5 +1,18 @@
 # @swapkit/sdk
 
+## 5.1.2
+
+### Patch Changes
+
+- [#186](https://github.com/swapkit/wallets/pull/186) [`12d7ef8`](https://github.com/swapkit/wallets/commit/12d7ef8fbae997d1bc7e54c80be949fc4a21df29) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+- [#185](https://github.com/swapkit/wallets/pull/185) [`fc324e9`](https://github.com/swapkit/wallets/commit/fc324e9c3c552bfc8e0b6fe61df14c55a4e37085) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Solana to the Ledger Wallet connector (`connectLedgerWalletProvider`) and move it to Ledger Wallet Provider v2 (`@ledgerhq/ledger-wallet-provider` 2.0.0 with the `-evm` and `-solana` family packages, both wired into `initializeLedgerProvider`). Ledger exposes Solana as a Wallet Standard wallet that the connector hands to the SwapKit Solana toolbox; EVM networks and Solana connect in separate calls; asking for both at once fails with `wallet_ledger_wallet_provider_mixed_families` (80205). Ledger only registers the Solana wallet when Solana is enabled for the dApp. As a safeguard, a transaction handed back without our signature fails with the new `wallet_ledger_wallet_provider_signing_failed` error (80204) instead of being broadcast. (via @swapkit/wallets@5.2.0)
+- [#168](https://github.com/swapkit/wallets/pull/168) [`b79b38d`](https://github.com/swapkit/wallets/commit/b79b38d80fa5fdd51549c2ce0afd5ac7364965d6) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - TON Connect now reads its manifest URL from `SKConfig.integrations.tonConnect.manifestUrl` when none is passed to `connectTonConnect`, matching how other wallets read their configuration. An explicitly passed `manifestUrl` still takes precedence. (via @swapkit/wallets@5.2.0)
+- [#183](https://github.com/swapkit/wallets/pull/183) [`c70b145`](https://github.com/swapkit/wallets/commit/c70b145d0c22ba5c965f0c2edbb2f95aecfda688) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Cardano support to the Trezor wallet for ADA transfers, including native tokens returned as change. (via @swapkit/wallets@5.2.0)
+- [#175](https://github.com/swapkit/wallets/pull/175) [`eda85f4`](https://github.com/swapkit/wallets/commit/eda85f47eb7ecdfc0c43dc0d3a8135c20e23ca22) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Solana support to the Trezor wallet. (via @swapkit/wallets@5.2.0)
+- [#180](https://github.com/swapkit/wallets/pull/180) [`87401f9`](https://github.com/swapkit/wallets/commit/87401f9beecb7e45e4b808a216a67bcc4e57b9cd) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Stellar support to the Trezor wallet. (via @swapkit/wallets@5.2.0)
+- [#173](https://github.com/swapkit/wallets/pull/173) [`93e7b81`](https://github.com/swapkit/wallets/commit/93e7b81fb8a364819c9e39653a086dc9abe321b1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Tron support to the Trezor wallet for TRX and TRC20 transfers. (via @swapkit/wallets@5.2.0)
+- [#174](https://github.com/swapkit/wallets/pull/174) [`a2f67a1`](https://github.com/swapkit/wallets/commit/a2f67a180c7f04b83670130281d74db72a792e33) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add XRP support to the Trezor wallet for native XRP payments. (via @swapkit/wallets@5.2.0)
+
 ## 5.1.1
 
 ### Patch Changes
