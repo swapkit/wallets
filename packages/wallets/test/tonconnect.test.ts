@@ -94,6 +94,17 @@ describe("sendTonConnectTransaction", () => {
     ).rejects.toBeInstanceOf(SwapKitError);
   });
 
+  it("rejects send modes the wallet would not honour", async () => {
+    const sent: { address: string }[][] = [];
+    await expect(
+      sendTonConnectTransaction({
+        tonConnectUI: makeFakeTonConnectUI(sent),
+        transaction: { messages: [{ address: RAW_ADDRESS, amount: "1" }], sendMode: 0 },
+      }),
+    ).rejects.toBeInstanceOf(SwapKitError);
+    expect(sent).toHaveLength(0);
+  });
+
   it("rejects empty message lists", () => {
     expect(
       sendTonConnectTransaction({ tonConnectUI: makeFakeTonConnectUI([]), transaction: [] }),
