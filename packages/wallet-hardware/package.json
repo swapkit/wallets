@@ -1,6 +1,7 @@
 {
   "author": "swapkit",
   "dependencies": {
+    "@cardano-foundation/ledgerjs-hw-app-cardano": "~8.1.0",
     "@cosmjs/amino": "~0.37.0",
     "@cosmjs/crypto": "0.37.0",
     "@keepkey/keepkey-sdk": "~0.2.62",
@@ -38,6 +39,7 @@
   },
   "description": "SwapKit - Wallet Hardware",
   "devDependencies": {
+    "@cardano-foundation/ledgerjs-hw-app-cardano": "8.1.0",
     "@cosmjs/amino": "0.37.0",
     "@cosmjs/crypto": "0.37.0",
     "@keepkey/keepkey-sdk": "0.2.62",
@@ -95,16 +97,11 @@
       "types": "./dist/types/trezor/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-hardware",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
     "directory": "packages/wallet-hardware",
     "type": "git",
