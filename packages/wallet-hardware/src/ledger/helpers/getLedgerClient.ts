@@ -26,6 +26,7 @@ import {
   XLayerLedger,
 } from "../clients/evm";
 import { getNearLedgerClient } from "../clients/near";
+import { StellarLedger } from "../clients/stellar";
 import { SuiLedger } from "../clients/sui";
 import { THORChainLedger } from "../clients/thorchain";
 import { TronLedger } from "../clients/tron";
@@ -56,6 +57,7 @@ type LedgerSignerMap = {
   [Chain.Optimism]: ReturnType<typeof OptimismLedger>;
   [Chain.Polygon]: ReturnType<typeof PolygonLedger>;
   [Chain.Ripple]: ReturnType<typeof XRPLedger>;
+  [Chain.Stellar]: ReturnType<typeof StellarLedger>;
   [Chain.Sui]: ReturnType<typeof SuiLedger>;
   [Chain.THORChain]: THORChainLedger;
   [Chain.Tron]: ReturnType<typeof TronLedger>;
@@ -114,6 +116,7 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
     .with(Chain.Litecoin, () => Promise.resolve(LitecoinLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Zcash, () => Promise.resolve(ZcashLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Ripple, () => Promise.resolve(XRPLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Stellar, () => Promise.resolve(StellarLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Tron, () => Promise.resolve(TronLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Sui, () => Promise.resolve(SuiLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Near, () => Promise.resolve(getNearLedgerClient(clientParams) as LedgerSignerMap[T]))
