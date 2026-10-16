@@ -13,6 +13,7 @@ import type {
   MonadLedger,
   OptimismLedger,
   PolygonLedger,
+  RobinhoodLedger,
   XLayerLedger,
 } from "./clients/evm";
 import type { SuiLedger } from "./clients/sui";
@@ -42,6 +43,7 @@ export type EVMLedgerClients =
   | ReturnType<typeof MonadLedger>
   | ReturnType<typeof OptimismLedger>
   | ReturnType<typeof PolygonLedger>
+  | ReturnType<typeof RobinhoodLedger>
   | ReturnType<typeof XLayerLedger>;
 export type TronLedgerClient = ReturnType<typeof TronLedger>;
 export type SuiLedgerClient = ReturnType<typeof SuiLedger>;

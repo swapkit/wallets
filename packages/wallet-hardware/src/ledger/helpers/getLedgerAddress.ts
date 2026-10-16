@@ -38,6 +38,7 @@ export const getLedgerAddress = async <
     case Chain.Aurora:
     case Chain.Gnosis:
     case Chain.Monad:
+    case Chain.Robinhood:
     case Chain.XLayer: {
       return (ledgerClient as EVMLedgerClients).getAddress();
     }
