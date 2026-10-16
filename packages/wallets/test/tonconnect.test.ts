@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { AssetValue, Chain, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { Address, beginCell } from "@ton/core";
 import type { TonConnectUI } from "@tonconnect/ui";
 
+import { getWalletForChain } from "../src/tonconnect/helpers";
 import "../src/tonconnect/register";
 import { resolveManifestUrl, sendTonConnectTransaction, toFriendlyDestination } from "../src/tonconnect/walletMethods";
 
@@ -109,5 +110,26 @@ describe("sendTonConnectTransaction", () => {
     expect(
       sendTonConnectTransaction({ tonConnectUI: makeFakeTonConnectUI([]), transaction: [] }),
     ).rejects.toBeInstanceOf(SwapKitError);
+  });
+});
+
+describe("TON Connect transfer", () => {
+  it("rejects a TON balance sweep before reaching the wallet", async () => {
+    const sent: { address: string }[][] = [];
+    const wallet = await getWalletForChain({
+      address: NON_BOUNCEABLE,
+      chain: Chain.Ton,
+      config: {},
+      tonConnectUI: makeFakeTonConnectUI(sent),
+    });
+
+    await expect(
+      wallet.transfer({
+        assetValue: AssetValue.from({ chain: Chain.Ton, value: "1" }),
+        recipient: RAW_ADDRESS,
+        sweep: true,
+      }),
+    ).rejects.toBeInstanceOf(SwapKitError);
+    expect(sent).toHaveLength(0);
   });
 });
