@@ -16,8 +16,8 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
         } catch (error) {
-          // OKX Mobile does not expose every chain the extension does, only those are skipped
-          if (!isMissingChain(error)) throw error;
+          // OKX Mobile does not expose every chain the extension does, and TON needs a TON Connect manifest
+          if (!isSkippableChain(error)) throw error;
           missingChains.push(error);
         }
       }
@@ -25,7 +25,7 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
       if (missingChains.length > 0 && missingChains.length === filteredChains.length) throw missingChains[0];
 
       for (const error of missingChains) {
-        console.warn("connectOkx: skipping a chain OKX Wallet does not expose", error);
+        console.warn("connectOkx: skipping a chain OKX Wallet cannot connect", error);
       }
 
       return true;
@@ -85,6 +85,6 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
 
 export const OKX_SUPPORTED_CHAINS = getWalletSupportedChains(okxWallet);
 
-function isMissingChain(error: unknown) {
-  return error instanceof SwapKitError && error.errorKey === "wallet_okx_not_found";
+function isSkippableChain(error: unknown) {
+  return error instanceof SwapKitError && ["wallet_okx_not_found", "wallet_missing_params"].includes(error.errorKey);
 }

@@ -1,7 +1,7 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { afterEach, describe, expect, test } from "bun:test";
 import { bech32, hex } from "@scure/base";
-import { Chain } from "@swapkit/helpers";
+import { AssetValue, Chain } from "@swapkit/helpers";
 import { Address, beginCell } from "@ton/core";
 
 import { getWalletMethods } from "../helpers";
@@ -60,6 +60,17 @@ describe("connectOkx", () => {
     globalThis.window = { okxwallet: { cardano: mockCardano(), solana: { connect: () => Promise.reject(rejection) } } };
 
     await expect(connect([Chain.Cardano, Chain.Solana]).result).rejects.toBe(rejection);
+  });
+
+  test("keeps the other chains when TON has no TON Connect manifest", async () => {
+    globalThis.window = {
+      okxTonWallet: { tonconnect: { restoreConnection: () => Promise.reject(new Error("No session")) } },
+      okxwallet: { cardano: mockCardano() },
+    };
+    const { added, result } = connect([Chain.Ton, Chain.Cardano]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Cardano]);
   });
 
   test("asks the wallet for one chain at a time", async () => {
@@ -125,6 +136,21 @@ describe("OKX TON", () => {
     const transaction = { messages: [{ address: RAW_TON_ADDRESS, amount: "1000" }], sendMode };
 
     await expect(wallet.signAndBroadcastTransaction(transaction)).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("rejects a TON balance sweep before reaching the wallet", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const sweep = wallet.transfer({
+      assetValue: AssetValue.from({ chain: Chain.Ton, value: "1" }),
+      recipient: RAW_TON_ADDRESS,
+      sweep: true,
+    });
+
+    await expect(sweep).rejects.toThrow("core_swap_invalid_params");
     expect(requests).toHaveLength(0);
   });
 });

@@ -55,8 +55,15 @@ export async function getOkxTonWallet() {
     return Cell.fromBase64(response.result).hash().toString("hex");
   }
 
-  async function transfer({ assetValue, recipient, memo }: GenericTransferParams) {
-    const transaction = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address });
+  async function transfer({ assetValue, recipient, memo, sweep }: GenericTransferParams) {
+    if (sweep && assetValue.isGasAsset) {
+      throw new SwapKitError({
+        errorKey: "core_swap_invalid_params",
+        info: { reason: "OKX Wallet does not support sweeping the TON balance" },
+      });
+    }
+
+    const transaction = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address, sweep });
     return signAndBroadcastTransaction(transaction);
   }
 
