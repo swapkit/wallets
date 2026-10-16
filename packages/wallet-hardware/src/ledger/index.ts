@@ -1,12 +1,13 @@
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import {
-  type AssetValue,
+  AssetValue,
   Chain,
   type DerivationPathArray,
   derivationPathToString,
   FeeOption,
   filterSupportedChains,
+  type GenericTransferParams,
   getUTXOScriptTypeForPath,
   NetworkDerivationPath,
   SwapKitError,
@@ -14,6 +15,7 @@ import {
   UTXOScriptType,
   WalletOption,
 } from "@swapkit/helpers";
+import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 import {
   addInputsAndOutputs,
   assertDerivationIndex,
@@ -105,6 +107,7 @@ const LEDGER_SUPPORTED_CHAINS_CONFIG = [
   Chain.Ripple,
   Chain.Sui,
   Chain.THORChain,
+  Chain.Ton,
   Chain.XLayer,
   Chain.Tron,
   Chain.Zcash,
@@ -192,6 +195,7 @@ export const ledgerWallet = createWallet({
     [Chain.Ripple]: true,
     [Chain.Sui]: true,
     [Chain.THORChain]: true,
+    [Chain.Ton]: true,
     [Chain.Tron]: true,
     [Chain.XLayer]: true,
     // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
@@ -694,6 +698,47 @@ async function getSuiWalletMethods({
   return { ...toolbox, address };
 }
 
+async function getTONWalletMethods({
+  chain,
+  derivationPath,
+  dmkSession,
+  onDeviceActionState,
+  transport,
+}: WalletMethodsParams<Chain.Ton>) {
+  const { getTONToolbox } = await import("@swapkit/toolboxes/ton");
+  const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
+  const address = await getLedgerAddress({ chain, ledgerClient: signer });
+  // Signerless toolbox: it builds messages and reads balances, the device signs the external message.
+  const toolbox = getTONToolbox();
+
+  const signAndBroadcastTransaction = async (transaction: TONTransactionInput) =>
+    toolbox.broadcastTransaction(await signer.signTransaction(transaction));
+
+  const transfer = async ({ assetValue, memo, recipient, sweep }: GenericTransferParams) =>
+    signAndBroadcastTransaction(
+      await toolbox.createTransaction({ assetValue, memo, recipient, sender: address, sweep }),
+    );
+
+  // Same budget as TON Connect: the signerless toolbox underestimates jetton fees
+  const estimateTransactionFee = ({ assetValue }: GenericTransferParams) =>
+    Promise.resolve(AssetValue.from({ chain: Chain.Ton, value: assetValue.isGasAsset ? "0.01" : "0.06" }));
+
+  const sign = () => {
+    throw new SwapKitError("wallet_ledger_method_not_supported", { method: "sign", wallet: WalletOption.LEDGER });
+  };
+
+  return {
+    ...toolbox,
+    address,
+    estimateTransactionFee,
+    getAddress: () => address,
+    getBalance: () => toolbox.getBalance(address),
+    sign,
+    signAndBroadcastTransaction,
+    transfer,
+  };
+}
+
 function getWalletMethods(params: WalletMethodsParams) {
   if (!isLedgerSupportedChain(params.chain)) {
     throw new SwapKitError("wallet_ledger_chain_not_supported", { chain: params.chain });
@@ -708,6 +753,7 @@ function getWalletMethods(params: WalletMethodsParams) {
     .with(Chain.Ripple, (chain) => getRippleWalletMethods({ ...params, chain }))
     .with(Chain.Tron, (chain) => getTronWalletMethods({ ...params, chain }))
     .with(Chain.Sui, (chain) => getSuiWalletMethods({ ...params, chain }))
+    .with(Chain.Ton, (chain) => getTONWalletMethods({ ...params, chain }))
     .exhaustive();
 }
 
