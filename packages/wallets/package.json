@@ -268,5 +268,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "5.2.0"
+  "version": "6.0.0"
 }

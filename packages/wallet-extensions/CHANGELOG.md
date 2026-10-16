@@ -1,5 +1,13 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.7.0
+
+### Minor Changes
+
+- [#181](https://github.com/swapkit/wallets/pull/181) [`013585c`](https://github.com/swapkit/wallets/commit/013585c5bb5dacbc2ecbf92e6b56e8a482cdb03e) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects Solana and Cardano, plus the Arc, HyperEVM and Robinhood EVM chains. A chain the wallet does not expose, such as Cardano on OKX Mobile, is skipped instead of failing the whole connection.
+
+- [#191](https://github.com/swapkit/wallets/pull/191) [`369399e`](https://github.com/swapkit/wallets/commit/369399ee0f911ff45f679f61e2e7c6bc39b6b160) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects TON through the TON Connect bridge OKX injects as `window.okxTonWallet`. The first connection needs a TON Connect manifest URL in `SKConfig.integrations.tonConnect.manifestUrl`, the same one the TON Connect wallet uses. Sweeping the whole balance is not supported over TON Connect.
+
 ## 4.6.6
 
 ### Patch Changes

@@ -1,5 +1,26 @@
 # @swapkit-dev/wallets
 
+## 6.0.0
+
+### Major Changes
+
+- [#181](https://github.com/swapkit/wallets/pull/181) [`013585c`](https://github.com/swapkit/wallets/commit/013585c5bb5dacbc2ecbf92e6b56e8a482cdb03e) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - **`loadWallet(WalletOption.OKX_MOBILE)` now returns the OKX wallet (`connectOkx`) instead of the generic EVM wallet (`connectEVMWallet`).** OKX Mobile is the same OKX integration running inside the OKX app's browser, so it now offers the same chains as the extension instead of only EVM chains. To migrate, replace `connectEVMWallet(chains, WalletOption.OKX_MOBILE)` with `connectOkx(chains)`. Connected chains are reported with the `OKX` wallet type, which is what the SwapKit widget already did for OKX Mobile. Importing `evmWallet` from `@swapkit/wallet-extensions/evm-extensions` and passing `WalletOption.OKX_MOBILE` keeps working unchanged. Like the OKX extension, OKX Mobile no longer follows EVM account switches in the wallet: reconnect after switching accounts.
+
+### Minor Changes
+
+- [#181](https://github.com/swapkit/wallets/pull/181) [`013585c`](https://github.com/swapkit/wallets/commit/013585c5bb5dacbc2ecbf92e6b56e8a482cdb03e) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects Solana and Cardano, plus the Arc, HyperEVM and Robinhood EVM chains. A chain the wallet does not expose, such as Cardano on OKX Mobile, is skipped instead of failing the whole connection.
+
+- [#191](https://github.com/swapkit/wallets/pull/191) [`369399e`](https://github.com/swapkit/wallets/commit/369399ee0f911ff45f679f61e2e7c6bc39b6b160) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects TON through the TON Connect bridge OKX injects as `window.okxTonWallet`. The first connection needs a TON Connect manifest URL in `SKConfig.integrations.tonConnect.manifestUrl`, the same one the TON Connect wallet uses. Sweeping the whole balance is not supported over TON Connect.
+
+### Patch Changes
+
+- [#195](https://github.com/swapkit/wallets/pull/195) [`c7aedbd`](https://github.com/swapkit/wallets/commit/c7aedbd9a9ef43aa207d9db3d91e64966ed20e43) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - TON Connect now rejects transactions whose `sendMode` is not `3` (pay gas separately, ignore errors) instead of sending them with the wallet's own mode. TON Connect cannot pass a send mode to the wallet, so any other mode would have been silently replaced.
+
+- [#196](https://github.com/swapkit/wallets/pull/196) [`7717cfa`](https://github.com/swapkit/wallets/commit/7717cfac8e9fad8c413c9bbfe23b7992f9706448) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - TON Connect now rejects `transfer` with `sweep: true` for native TON instead of silently sending the given amount, since the wallet cannot send the whole balance. Jetton sweeps are passed through and send the full token balance.
+
+- Updated dependencies [[`013585c`](https://github.com/swapkit/wallets/commit/013585c5bb5dacbc2ecbf92e6b56e8a482cdb03e), [`369399e`](https://github.com/swapkit/wallets/commit/369399ee0f911ff45f679f61e2e7c6bc39b6b160)]:
+  - @swapkit/wallet-extensions@4.7.0
+
 ## 5.2.0
 
 ### Minor Changes
