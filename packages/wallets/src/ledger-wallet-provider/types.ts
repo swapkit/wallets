@@ -1,3 +1,5 @@
+import type { getWallets } from "@wallet-standard/app";
+
 export type LedgerWalletProviderEventPayloads = {
   accountsChanged: string[];
   chainChanged: string;
@@ -48,3 +50,25 @@ export type ConnectLedgerWalletProviderOptions = InitializeLedgerWalletProviderO
   initialize?: boolean;
   discoveryTimeout?: number;
 };
+
+export type StandardWallet = ReturnType<ReturnType<typeof getWallets>["get"]>[number];
+
+export type LedgerSolanaWalletAccount = StandardWallet["accounts"][number];
+
+export type LedgerSolanaWalletFeatures = {
+  "standard:connect": { connect: () => Promise<{ accounts: readonly LedgerSolanaWalletAccount[] }> };
+  "standard:disconnect"?: { disconnect: () => Promise<void> };
+  "standard:events"?: {
+    on: (
+      event: "change",
+      listener: (properties: { accounts?: readonly LedgerSolanaWalletAccount[] }) => void,
+    ) => () => void;
+  };
+  "solana:signTransaction": {
+    signTransaction: (
+      ...inputs: { account: LedgerSolanaWalletAccount; transaction: Uint8Array; chain?: string }[]
+    ) => Promise<readonly { signedTransaction: Uint8Array }[]>;
+  };
+};
+
+export type LedgerSolanaWallet = StandardWallet & { readonly features: LedgerSolanaWalletFeatures };
