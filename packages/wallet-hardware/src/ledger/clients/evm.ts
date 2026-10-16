@@ -316,6 +316,10 @@ export function PolygonLedger(params: LedgerParams) {
   return new EVMLedgerInterface({ ...params, chainId: ChainId.Polygon });
 }
 
+export function RobinhoodLedger(params: LedgerParams) {
+  return new EVMLedgerInterface({ ...params, chainId: ChainId.Robinhood });
+}
+
 export function BinanceSmartChainLedger(params: LedgerParams) {
   return new EVMLedgerInterface({ ...params, chainId: ChainId.BinanceSmartChain });
 }

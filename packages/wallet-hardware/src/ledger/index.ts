@@ -103,6 +103,7 @@ const LEDGER_SUPPORTED_CHAINS_CONFIG = [
   Chain.Optimism,
   Chain.Polygon,
   Chain.Ripple,
+  Chain.Robinhood,
   Chain.Sui,
   Chain.THORChain,
   Chain.XLayer,
@@ -134,6 +135,7 @@ const LEDGER_EVM_CHAINS = [
   Chain.Aurora,
   Chain.Gnosis,
   Chain.Monad,
+  Chain.Robinhood,
   Chain.XLayer,
 ] as const satisfies readonly LedgerSupportedChain[];
 
@@ -190,6 +192,7 @@ export const ledgerWallet = createWallet({
     [Chain.Optimism]: true,
     [Chain.Polygon]: true,
     [Chain.Ripple]: true,
+    [Chain.Robinhood]: true,
     [Chain.Sui]: true,
     [Chain.THORChain]: true,
     [Chain.Tron]: true,
