@@ -1,4 +1,4 @@
-import { hex } from "@scure/base";
+import { base64, hex } from "@scure/base";
 import {
   Chain,
   type EVMChain,
@@ -201,38 +201,39 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Sui });
         }
 
+        const signFeature = features["sui:signTransaction"];
+        const legacyFeature = features["sui:signTransactionBlock"];
+        const signWithWallet = signFeature
+          ? (account: SuiAccount, transaction: unknown) =>
+              signFeature.signTransaction({ account, chain: SUI_MAINNET, transaction })
+          : legacyFeature &&
+            (async (account: SuiAccount, transactionBlock: unknown) => {
+              const { transactionBlockBytes, signature } = await legacyFeature.signTransactionBlock({
+                account,
+                chain: SUI_MAINNET,
+                transactionBlock,
+              });
+              return { bytes: transactionBlockBytes, signature };
+            });
+
+        if (!signWithWallet) {
+          throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui });
+        }
+
         const { accounts } = await connect.connect();
-        const account = accounts.find(({ chains }) => chains.includes(SUI_MAINNET)) ?? accounts[0];
+        const account = accounts.find(({ chains }) => chains.includes(SUI_MAINNET));
 
         if (!account) {
-          throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Sui });
+          throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui, message: "Mainnet only" });
         }
 
         const signTransaction = async (txBytes: Uint8Array) => {
-          const serialized = Buffer.from(txBytes).toString("base64");
-          const transaction = { serialize: () => serialized, toJSON: () => Promise.resolve(serialized) };
-          const signFeature = features["sui:signTransaction"];
-
-          if (signFeature) {
-            const { bytes, signature } = await signFeature.signTransaction({
-              account,
-              chain: SUI_MAINNET,
-              transaction,
-            });
-            return { bytes, signature };
-          }
-
-          const legacyFeature = features["sui:signTransactionBlock"];
-          if (!legacyFeature) {
-            throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui });
-          }
-
-          const { transactionBlockBytes, signature } = await legacyFeature.signTransactionBlock({
-            account,
-            chain: SUI_MAINNET,
-            transactionBlock: transaction,
+          const serialized = base64.encode(txBytes);
+          const { bytes, signature } = await signWithWallet(account, {
+            serialize: () => serialized,
+            toJSON: () => Promise.resolve(serialized),
           });
-          return { bytes: transactionBlockBytes, signature };
+          return { bytes, signature };
         };
 
         const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");

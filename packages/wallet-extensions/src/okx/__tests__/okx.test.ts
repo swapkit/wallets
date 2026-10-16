@@ -125,6 +125,26 @@ describe("OKX Sui", () => {
     ]);
     expect(signed).toEqual({ bytes: "c2lnbmVk", signature: "c2lnbmF0dXJl" });
   });
+
+  test("rejects a wallet that only returns non-mainnet accounts", async () => {
+    const { connect } = suiWallet.features["standard:connect"];
+    suiWallet.features["standard:connect"].connect = async () => ({
+      accounts: [{ address: SUI_ADDRESS, chains: ["sui:testnet"] }],
+    });
+
+    await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
+    suiWallet.features["standard:connect"].connect = connect;
+  });
+
+  test("rejects a wallet without a Sui signing feature before connecting", async () => {
+    const { "sui:signTransaction": signFeature, ...features } = suiWallet.features;
+    let connected = false;
+    suiWallet.features = { ...features, "standard:connect": { connect: async () => (connected = true) } };
+
+    await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
+    expect(connected).toBe(false);
+    suiWallet.features = { ...features, "sui:signTransaction": signFeature };
+  });
 });
 
 describe("OKX TON", () => {
