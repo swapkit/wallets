@@ -12,6 +12,7 @@ import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapki
 import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
+import { getOkxTonWallet } from "./ton";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 type SuiAccount = { address: string; chains: readonly string[] };
@@ -239,6 +240,7 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...getSuiToolbox({ signer }), address: account.address };
       })
+      .with(Chain.Ton, () => getOkxTonWallet())
       .with(Chain.Cosmos, async () => {
         if (!(window.okxwallet && "keplr" in window.okxwallet)) {
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });
