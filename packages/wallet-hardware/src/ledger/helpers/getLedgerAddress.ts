@@ -1,6 +1,7 @@
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 
 import type { getNearLedgerClient } from "../clients/near";
+import type { StellarLedger } from "../clients/stellar";
 import type { SuiLedger } from "../clients/sui";
 import type { TronLedger } from "../clients/tron";
 import type { XRPLedger } from "../clients/xrp";
@@ -61,6 +62,10 @@ export const getLedgerAddress = async <
 
     case Chain.Ripple: {
       return (ledgerClient as Awaited<ReturnType<typeof XRPLedger>>).getAddress();
+    }
+
+    case Chain.Stellar: {
+      return (ledgerClient as Awaited<ReturnType<typeof StellarLedger>>).getAddress();
     }
 
     case Chain.Tron: {
