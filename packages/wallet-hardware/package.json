@@ -30,7 +30,7 @@
     "@swapkit/wallet-core": "^5.0.10",
     "@trezor/connect-web": "~9.7.3",
     "bitcoinjs-lib": "~6.1.7",
-    "ethers": "^6.14.0",
+    "ethers": "6.16.0",
     "ripple-binary-codec": "2.7.0",
     "rxjs": "~7.8.2",
     "ts-pattern": "^5.9.0",
@@ -95,11 +95,16 @@
       "types": "./dist/types/trezor/index.d.ts"
     }
   },
-  "files": ["dist/", "src/"],
+  "files": [
+    "dist/",
+    "src/"
+  ],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-hardware",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "directory": "packages/wallet-hardware",
     "type": "git",
@@ -113,5 +118,5 @@
     "type-check:go": "tsgo"
   },
   "type": "module",
-  "version": "6.0.1"
+  "version": "6.1.0"
 }

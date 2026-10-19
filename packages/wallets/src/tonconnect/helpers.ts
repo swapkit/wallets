@@ -23,8 +23,15 @@ export function getWalletForChain({ address, chain, config, tonConnectUI }: GetW
       const signAndBroadcastTransaction = (transaction: TONTransactionInput) =>
         sendTonConnectTransaction({ tonConnectUI, transaction, validSeconds: config.requestTimeoutSeconds });
 
-      const transfer = async ({ assetValue, recipient, memo }: GenericTransferParams) => {
-        const transaction = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address });
+      const transfer = async ({ assetValue, recipient, memo, sweep }: GenericTransferParams) => {
+        if (sweep && assetValue.isGasAsset) {
+          throw new SwapKitError({
+            errorKey: "core_swap_invalid_params",
+            info: { reason: "TON Connect does not support sweeping the TON balance" },
+          });
+        }
+
+        const transaction = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address, sweep });
         return signAndBroadcastTransaction(transaction);
       };
 

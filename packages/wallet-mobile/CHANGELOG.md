@@ -1,5 +1,18 @@
 # @swapkit-dev/wallet-mobile
 
+## 4.3.29
+
+### Patch Changes
+
+- [#186](https://github.com/swapkit/wallets/pull/186) [`12d7ef8`](https://github.com/swapkit/wallets/commit/12d7ef8fbae997d1bc7e54c80be949fc4a21df29) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#444](https://github.com/swapkit/sdk/pull/444) [`d9f486d`](https://github.com/swapkit/sdk/commit/d9f486d8197c13523934e6524bdcd9e3371fdebb) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Export Cardano transaction helpers from `@swapkit/toolboxes/cardano` so hardware and browser wallets can reuse them, and sign keystore transactions over the body exactly as received instead of a re-encoded copy. `decodeCardanoWitnessSet` turns the signatures a CIP-30 wallet returns into the list `addCardanoVkeyWitnesses` accepts. (via @swapkit/toolboxes@6.3.0)
+  - [#439](https://github.com/swapkit/sdk/pull/439) [`92e68f2`](https://github.com/swapkit/sdk/commit/92e68f28a36915bf35fa3b9ddb4d249f035a522c) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Allow the Stellar toolbox to use an external signer, so hardware wallets can sign Stellar transactions without exposing a seed phrase. (via @swapkit/toolboxes@6.3.0)
+  - [#440](https://github.com/swapkit/sdk/pull/440) [`ab0cc3d`](https://github.com/swapkit/sdk/commit/ab0cc3d80439fd1541616bfc0cdf8e8798c06590) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Keep THORChain and Maya balances loading when the account holds a denom `AssetValue` cannot parse. Secured assets such as `btc-btc` threw inside `getBalance`, which rejected the whole call and left RUNE and every other balance of the chain empty. Those denoms are now skipped and the rest are returned. (via @swapkit/toolboxes@6.3.0)
+  - [#445](https://github.com/swapkit/sdk/pull/445) [`0e9f9ee`](https://github.com/swapkit/sdk/commit/0e9f9ee3e9c6769ded65394d5aef2e3704c7e7a7) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - TON now uses Toncenter (`https://toncenter.com/api/v2/jsonRPC`) as its default RPC and goes through the same health-checked `rpcUrls` fallback as other chains. Orbs node discovery is only used when every configured TON RPC fails, so an Orbs outage no longer breaks TON addresses, fees or transfers. The TON RPC health check now calls `getMasterchainInfo`; the previous `getAddressInformation` call with an empty address was rejected by every node. (via @swapkit/toolboxes@6.3.0)
+  - [#447](https://github.com/swapkit/sdk/pull/447) [`b827853`](https://github.com/swapkit/sdk/commit/b827853cd1bfa68a9bd733843b3740f10ecab359) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update generated token lists. (via @swapkit/toolboxes@6.3.0)
+  - [#443](https://github.com/swapkit/sdk/pull/443) [`81b8303`](https://github.com/swapkit/sdk/commit/81b83032429f8e2bd496335d252563dd4a69a60f) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Solana's default derivation path is now `m/44'/501'/0'/0'` (four hardened levels) instead of a five-level BIP44 shape. Keystore and passkey already derived this path by trimming the default, so their addresses do not change. `getSolanaToolbox({ phrase })` without an explicit `derivationPath` now derives the same address as the keystore, Phantom and Trezor Suite, which moves the address for anyone relying on that fallback. Hardware wallets that read `NetworkDerivationPath[Chain.Solana]` now receive a path the device firmware accepts. (via @swapkit/toolboxes@6.3.0)
+
 ## 4.3.28
 
 ### Patch Changes

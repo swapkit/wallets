@@ -1,9 +1,13 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { afterEach, describe, expect, test } from "bun:test";
 import { bech32, hex } from "@scure/base";
-import { Chain } from "@swapkit/helpers";
+import { AssetValue, Chain } from "@swapkit/helpers";
+import { Address, beginCell } from "@ton/core";
 
+import { getWalletMethods } from "../helpers";
 import { okxWallet } from "../index";
+
+const RAW_TON_ADDRESS = `0:${"ab".repeat(32)}`;
 
 // CIP-19 mainnet base address test vector
 const CARDANO_ADDRESS =
@@ -58,6 +62,17 @@ describe("connectOkx", () => {
     await expect(connect([Chain.Cardano, Chain.Solana]).result).rejects.toBe(rejection);
   });
 
+  test("keeps the other chains when TON has no TON Connect manifest", async () => {
+    globalThis.window = {
+      okxTonWallet: { tonconnect: { restoreConnection: () => Promise.reject(new Error("No session")) } },
+      okxwallet: { cardano: mockCardano() },
+    };
+    const { added, result } = connect([Chain.Ton, Chain.Cardano]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Cardano]);
+  });
+
   test("asks the wallet for one chain at a time", async () => {
     let pending = 0;
     let maxPending = 0;
@@ -93,5 +108,64 @@ describe("connectOkx", () => {
 
     expect(await result).toBe(true);
     expect(added[0].address).toBe(address);
+  });
+});
+
+describe("OKX TON", () => {
+  function mockTonBridge(requests: unknown[]) {
+    globalThis.window = {
+      okxTonWallet: {
+        tonconnect: {
+          restoreConnection: async () => ({
+            event: "connect",
+            payload: { items: [{ address: RAW_TON_ADDRESS, name: "ton_addr", network: "-239" }] },
+          }),
+          send: (request) => {
+            requests.push(JSON.parse(request.params[0]));
+            return Promise.resolve({ id: request.id, result: beginCell().endCell().toBoc().toString("base64") });
+          },
+        },
+      },
+    };
+  }
+
+  test("sends friendly destinations and returns the message hash", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const hash = await wallet.signAndBroadcastTransaction([{ address: RAW_TON_ADDRESS, amount: "1000" }]);
+
+    expect(wallet.address).toBe(Address.parse(RAW_TON_ADDRESS).toString({ bounceable: false, urlSafe: true }));
+    expect(requests[0].messages).toEqual([
+      { address: Address.parse(RAW_TON_ADDRESS).toString({ bounceable: true, urlSafe: true }), amount: "1000" },
+    ]);
+    expect(hash).toBe(beginCell().endCell().hash().toString("hex"));
+  });
+
+  test.each([0, 130])("rejects send mode %d before reaching the wallet", async (sendMode) => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const transaction = { messages: [{ address: RAW_TON_ADDRESS, amount: "1000" }], sendMode };
+
+    await expect(wallet.signAndBroadcastTransaction(transaction)).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("rejects a TON balance sweep before reaching the wallet", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const sweep = wallet.transfer({
+      assetValue: AssetValue.from({ chain: Chain.Ton, value: "1" }),
+      recipient: RAW_TON_ADDRESS,
+      sweep: true,
+    });
+
+    await expect(sweep).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
   });
 });
