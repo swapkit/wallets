@@ -692,7 +692,6 @@ async function getSuiWalletMethods({
   const address = await getLedgerAddress({ chain, ledgerClient: signer });
   const toolbox = getSuiToolbox({ signer });
 
-  // Sui's public fullnode no longer serves JSON-RPC, so the toolbox reads a funded wallet as empty.
   return { ...toolbox, address, getBalance: getBalanceViaApi(chain, toolbox.getBalance) };
 }
 

@@ -245,7 +245,6 @@ export async function createKeystoreWallet<T extends Chain[]>({
           ? await createHDWalletMethods(chain as UTXOChain, toolbox)
           : {};
 
-      // Sui's public fullnode no longer serves JSON-RPC, so the toolbox reads a funded wallet as empty.
       const balanceMethods =
         chain === Chain.Sui
           ? { getBalance: getBalanceViaApi(chain, (toolbox as Toolboxes[Chain.Sui]).getBalance) }

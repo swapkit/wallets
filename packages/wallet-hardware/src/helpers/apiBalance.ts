@@ -3,7 +3,6 @@ import { SwapKitApi } from "@swapkit/helpers/api";
 
 export type BalanceGetter = (address: string, scamFilter?: boolean) => Promise<AssetValue[]>;
 
-// Reads the wallet through the SwapKit API and only falls back to the toolbox when the API is unreachable.
 export function getBalanceViaApi(chain: Chain, fallback: BalanceGetter): BalanceGetter {
   return async (address, scamFilter = true) => {
     let balances: Awaited<ReturnType<typeof SwapKitApi.getChainBalance>>;
