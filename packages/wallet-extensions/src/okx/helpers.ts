@@ -154,10 +154,10 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
         const provider = window.okxwallet.starknet;
-        const [address] = await provider.enable();
+        await provider.enable();
         const { account } = provider;
 
-        if (!(address && account)) {
+        if (!account) {
           throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Starknet });
         }
 
