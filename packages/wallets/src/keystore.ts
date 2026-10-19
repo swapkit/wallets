@@ -15,8 +15,15 @@ import {
   updateDerivationPath,
   WalletOption,
 } from "@swapkit/helpers";
-import type { DerivedAddress, ExtendedPublicKeyResult, FullWallet, HDWalletAccountParams } from "@swapkit/toolboxes";
+import type {
+  DerivedAddress,
+  ExtendedPublicKeyResult,
+  FullWallet,
+  HDWalletAccountParams,
+  Toolboxes,
+} from "@swapkit/toolboxes";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { getBalanceViaApi } from "@swapkit/wallet-hardware";
 
 export {
   decryptFromKeystore,
@@ -238,7 +245,13 @@ export async function createKeystoreWallet<T extends Chain[]>({
           ? await createHDWalletMethods(chain as UTXOChain, toolbox)
           : {};
 
-      const wallet = { ...toolbox, ...hdWalletMethods, address, chain };
+      // Sui's public fullnode no longer serves JSON-RPC, so the toolbox reads a funded wallet as empty.
+      const balanceMethods =
+        chain === Chain.Sui
+          ? { getBalance: getBalanceViaApi(chain, (toolbox as Toolboxes[Chain.Sui]).getBalance) }
+          : {};
+
+      const wallet = { ...toolbox, ...hdWalletMethods, ...balanceMethods, address, chain };
 
       return wallet;
     }),

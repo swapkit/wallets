@@ -33,6 +33,7 @@ import {
 import type { Transaction, ZcashTransaction } from "@swapkit/utxo-signer";
 import { createWallet, getWalletSupportedChains, type HardwareExtendedPublicKeyInfo } from "@swapkit/wallet-core";
 import { match, P } from "ts-pattern";
+import { getBalanceViaApi } from "../helpers/apiBalance";
 import {
   getLedgerAddress,
   getLedgerClient,
@@ -691,7 +692,8 @@ async function getSuiWalletMethods({
   const address = await getLedgerAddress({ chain, ledgerClient: signer });
   const toolbox = getSuiToolbox({ signer });
 
-  return { ...toolbox, address };
+  // Sui's public fullnode no longer serves JSON-RPC, so the toolbox reads a funded wallet as empty.
+  return { ...toolbox, address, getBalance: getBalanceViaApi(chain, toolbox.getBalance) };
 }
 
 function getWalletMethods(params: WalletMethodsParams) {
