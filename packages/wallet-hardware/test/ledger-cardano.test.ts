@@ -95,7 +95,13 @@ describe("ledger cardano transaction", () => {
   });
 
   it("maps an ADA transfer with token change keeping amounts, addresses and inputs", async () => {
-    expect(await toLedgerCardanoTransaction(TX, own, realCardanoApp)).toEqual({
+    expect(
+      await toLedgerCardanoTransaction(
+        withBody((body) => body.set(8, 167000000)),
+        own,
+        realCardanoApp,
+      ),
+    ).toEqual({
       additionalWitnessPaths: [],
       options: { tagCborSets: false },
       signingMode: "ordinary_transaction",
@@ -136,6 +142,7 @@ describe("ledger cardano transaction", () => {
           },
         ],
         ttl: "168000000",
+        validityIntervalStart: "167000000",
       },
     });
   });

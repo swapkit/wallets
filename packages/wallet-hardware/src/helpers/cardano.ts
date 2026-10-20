@@ -79,18 +79,24 @@ export function readCardanoBody(body: Map<number, unknown>, device: string, notS
 
   const inputs = inputList.map((input: unknown) => {
     if (!Array.isArray(input) || input.length !== 2) throw notSupported("Invalid Cardano input");
-    const [txHash, index] = input as [Uint8Array, unknown];
+    const [txHash, index] = input as [unknown, unknown];
+    if (!(txHash instanceof Uint8Array)) throw notSupported("Invalid Cardano input");
     return { index: Number(toCardanoUint(index, "input index", notSupported)), txHash };
   });
 
   const outputs = body.get(BODY.OUTPUTS);
   if (!Array.isArray(outputs)) throw notSupported("Invalid Cardano outputs");
 
+  const auxiliaryDataHash = body.get(BODY.AUXILIARY_DATA_HASH);
+  if (auxiliaryDataHash !== undefined && !(auxiliaryDataHash instanceof Uint8Array)) {
+    throw notSupported("Invalid Cardano auxiliary data hash");
+  }
+
   const ttl = body.get(BODY.TTL);
   const validityIntervalStart = body.get(BODY.VALIDITY_INTERVAL_START);
 
   return {
-    auxiliaryDataHash: body.get(BODY.AUXILIARY_DATA_HASH) as Uint8Array | undefined,
+    auxiliaryDataHash,
     fee: toCardanoUint(body.get(BODY.FEE), "fee", notSupported),
     inputs,
     outputs: outputs.map((output) => readCardanoOutput(output, device, notSupported)),
