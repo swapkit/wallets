@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import type Transport from "@ledgerhq/hw-transport";
 import type { DerivationPathArray } from "@swapkit/helpers";
 import * as realHelpers from "@swapkit/helpers";
+import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 import { Address, beginCell, type Cell, comment, internal, loadMessage, storeMessageRelaxed, toNano } from "@ton/core";
 import * as realTonTon from "@ton/ton";
 import type { TonPayloadFormat, TonTransport } from "@ton-community/ton-ledger";
@@ -208,17 +209,21 @@ describe("ledger TON client", () => {
     expect(message.body.hash().equals(signed.hash())).toBe(true);
   });
 
-  it("takes the bounce flag from the destination and the send mode from the bare-array shape", async () => {
+  it("takes the bounce flag from the destination and the send mode from the message when the transaction has none", async () => {
     const client = await TONLedger(undefined, transport);
 
     await client.signTransaction([{ address: RECIPIENT_NON_BOUNCEABLE, amount: "1", sendMode: 130 }]);
     await client.signTransaction([{ address: RECIPIENT_RAW, amount: "2" }]);
+    await client.signTransaction({
+      messages: [{ address: RECIPIENT_NON_BOUNCEABLE, amount: "3", sendMode: 128 }],
+    } as unknown as TONTransactionInput);
 
     expect(
       signRequests.map(({ transaction }) => [transaction.bounce, transaction.sendMode, transaction.payload]),
     ).toEqual([
       [false, 130, undefined],
       [true, 3, undefined],
+      [false, 128, undefined],
     ]);
   });
 

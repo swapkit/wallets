@@ -9,7 +9,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import type { TONTransactionInput, TONTransactionMessage } from "@swapkit/toolboxes/ton";
-import type { Address, Cell, StateInit } from "@ton/core";
+import type { Address, Cell, MessageRelaxed, StateInit } from "@ton/core";
 import type { TonClient } from "@ton/ton";
 import type { TonPayloadFormat, TonTransport } from "@ton-community/ton-ledger";
 
@@ -89,20 +89,15 @@ function resolveSingleMessage(input: TONTransactionInput) {
     });
   }
 
-  const transactionSendMode = Array.isArray(input) ? message.sendMode : input.sendMode;
-  if (
-    !Array.isArray(input) &&
-    message.sendMode !== undefined &&
-    transactionSendMode !== undefined &&
-    message.sendMode !== transactionSendMode
-  ) {
+  const sendMode =
+    (Array.isArray(input) ? message.sendMode : (input.sendMode ?? message.sendMode)) ?? DEFAULT_SEND_MODE;
+  if (!Array.isArray(input) && message.sendMode !== undefined && message.sendMode !== sendMode) {
     throw invalidParams("The message send mode differs from the transaction send mode", {
       messageSendMode: message.sendMode,
-      sendMode: transactionSendMode,
+      sendMode,
     });
   }
 
-  const sendMode = transactionSendMode ?? DEFAULT_SEND_MODE;
   if (!Number.isInteger(sendMode) || sendMode < 0 || sendMode > 255) {
     throw invalidParams("The TON send mode must be an integer between 0 and 255", { sendMode });
   }
@@ -168,6 +163,7 @@ function sameStateInit(signed: StateInit | null | undefined, requested: StateIni
 async function assertSignedTransfer(body: Cell, expected: SignedTransferExpectation) {
   const { Cell, loadMessageRelaxed } = await import("@ton/core");
 
+  let signed: { walletId: number; timeout: number; seqno: number; sendMode: number; order: MessageRelaxed };
   try {
     const transfer = body.beginParse().skip(512);
     const walletId = transfer.loadUint(32);
@@ -177,19 +173,7 @@ async function assertSignedTransfer(body: Cell, expected: SignedTransferExpectat
     const sendMode = transfer.loadUint(8);
     const order = loadMessageRelaxed(transfer.loadRef().beginParse());
     transfer.endParse();
-
-    const matches =
-      walletId === expected.walletId &&
-      timeout === expected.timeout &&
-      seqno === expected.seqno &&
-      sendMode === expected.sendMode &&
-      order.info.type === "internal" &&
-      order.info.dest.equals(expected.to) &&
-      order.info.value.coins === expected.amount &&
-      order.info.bounce === expected.bounce &&
-      order.body.hash().equals((expected.payload ?? Cell.EMPTY).hash()) &&
-      sameStateInit(order.init, expected.stateInit);
-    if (matches) return;
+    signed = { order, sendMode, seqno, timeout, walletId };
   } catch (error) {
     throw new SwapKitError(
       { errorKey: "wallet_ledger_signing_error", info: { reason: "Unreadable signed TON transfer" } },
@@ -197,10 +181,24 @@ async function assertSignedTransfer(body: Cell, expected: SignedTransferExpectat
     );
   }
 
-  throw new SwapKitError({
-    errorKey: "wallet_ledger_signing_error",
-    info: { reason: "The signed TON transfer does not match the requested message" },
-  });
+  const { order } = signed;
+  const matches =
+    signed.walletId === expected.walletId &&
+    signed.timeout === expected.timeout &&
+    signed.seqno === expected.seqno &&
+    signed.sendMode === expected.sendMode &&
+    order.info.type === "internal" &&
+    order.info.dest.equals(expected.to) &&
+    order.info.value.coins === expected.amount &&
+    order.info.bounce === expected.bounce &&
+    order.body.hash().equals((expected.payload ?? Cell.EMPTY).hash()) &&
+    sameStateInit(order.init, expected.stateInit);
+  if (!matches) {
+    throw new SwapKitError({
+      errorKey: "wallet_ledger_signing_error",
+      info: { reason: "The signed TON transfer does not match the requested message" },
+    });
+  }
 }
 
 export async function TONLedger(paramsOrPath?: TONLedgerParams | DerivationPathArray, transport?: Transport) {
