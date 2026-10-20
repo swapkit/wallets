@@ -5,7 +5,6 @@ import type {
   ExtendedPublicKey,
   SignedTransactionData,
   SignTransactionRequest,
-  TxInput,
   TxOutput,
   TxOutputDestination,
 } from "@cardano-foundation/ledgerjs-hw-app-cardano";
@@ -14,6 +13,7 @@ import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import { Chain, type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 
+import { type CardanoOutputFields, readCardanoBody } from "../../helpers/cardano";
 import {
   LEDGER_USER_INTERACTION_REQUIRED,
   type LedgerJsClientParams,
@@ -26,62 +26,16 @@ export type CardanoLedgerAddressParams = { address: string; paymentPath: BIP32Pa
 
 type CardanoLedgerParams = LedgerJsClientParams<DerivationPathArray>;
 
-const BODY = { AUXILIARY_DATA_HASH: 7, FEE: 2, INPUTS: 0, OUTPUTS: 1, TTL: 3, VALIDITY_INTERVAL_START: 8 } as const;
-const SET_TAG = 258;
-
 function notSupported(reason: string) {
   return new SwapKitError("wallet_ledger_method_not_supported", { chain: Chain.Cardano, reason });
 }
 
-function toUint(value: unknown, field: string) {
-  const isBigNumber = typeof value === "object" && value !== null && "toFixed" in value;
-  const text = isBigNumber || Number.isSafeInteger(value) ? String((value as number).toFixed()) : "";
-  if (!/^\d+$/.test(text)) throw notSupported(`Invalid ${field} in Cardano transaction`);
-  return text;
-}
-
-function toTokenBundle(multiAsset: unknown): AssetGroup[] {
-  if (!(multiAsset instanceof Map)) throw notSupported("Invalid Cardano output value");
-
-  return [...(multiAsset as Map<Uint8Array, Map<Uint8Array, unknown>>)].map(([policyId, assets]) => ({
-    policyIdHex: hex.encode(policyId),
-    tokens: [...assets].map(([assetName, amount]) => ({
-      amount: toUint(amount, "token amount"),
-      assetNameHex: hex.encode(assetName),
-    })),
-  }));
-}
-
 async function toLedgerOutput(
-  output: unknown,
+  { address, amount, format, tokenGroups }: CardanoOutputFields,
   own: CardanoLedgerAddressParams,
   { AddressType, TxOutputDestinationType, TxOutputFormat }: CardanoLedgerModule,
 ): Promise<TxOutput> {
   const { getCardanoAddressFromBytes } = await import("@swapkit/toolboxes/cardano");
-  let address: unknown;
-  let value: unknown;
-  let format: TxOutput["format"];
-
-  if (Array.isArray(output)) {
-    if (output.length !== 2) throw notSupported("Ledger cannot sign Cardano outputs with a datum");
-    [address, value] = output;
-    format = TxOutputFormat.ARRAY_LEGACY;
-  } else if (output instanceof Map) {
-    if (output.has(2)) throw notSupported("Ledger cannot sign Cardano outputs with a datum");
-    if (output.has(3)) throw notSupported("Ledger cannot sign Cardano outputs with a reference script");
-    if ([...output.keys()].some((key) => key !== 0 && key !== 1)) {
-      throw notSupported("Unsupported field in Cardano output");
-    }
-    address = output.get(0);
-    value = output.get(1);
-    format = TxOutputFormat.MAP_BABBAGE;
-  } else {
-    throw notSupported("Invalid Cardano output");
-  }
-
-  if (!(address instanceof Uint8Array)) throw notSupported("Invalid Cardano output address");
-  if (Array.isArray(value) && value.length !== 2) throw notSupported("Invalid Cardano output value");
-  const [coin, multiAsset] = Array.isArray(value) ? value : [value];
   const outputAddress = await getCardanoAddressFromBytes(address);
   const destination: TxOutputDestination =
     outputAddress === own.address
@@ -93,28 +47,17 @@ async function toLedgerOutput(
           type: TxOutputDestinationType.DEVICE_OWNED,
         }
       : { params: { addressHex: hex.encode(address) }, type: TxOutputDestinationType.THIRD_PARTY };
+  const tokenBundle: AssetGroup[] | undefined = tokenGroups?.map(({ policyId, tokens }) => ({
+    policyIdHex: hex.encode(policyId),
+    tokens: tokens.map(({ amount, assetName }) => ({ amount, assetNameHex: hex.encode(assetName) })),
+  }));
 
   return {
-    amount: toUint(coin, "output amount"),
+    amount,
     destination,
-    format,
-    ...(multiAsset === undefined ? {} : { tokenBundle: toTokenBundle(multiAsset) }),
+    format: format === "legacy" ? TxOutputFormat.ARRAY_LEGACY : TxOutputFormat.MAP_BABBAGE,
+    ...(tokenBundle === undefined ? {} : { tokenBundle }),
   } as TxOutput;
-}
-
-function toLedgerInputs(inputs: unknown, path: BIP32Path) {
-  const isTagged =
-    typeof inputs === "object" && inputs !== null && "tag" in inputs && inputs.tag === SET_TAG && "value" in inputs;
-  const list = isTagged ? inputs.value : inputs;
-  if (!Array.isArray(list)) throw notSupported("Invalid Cardano inputs");
-
-  const ledgerInputs: TxInput[] = list.map((input: unknown) => {
-    if (!Array.isArray(input) || input.length !== 2) throw notSupported("Invalid Cardano input");
-    const [txHash, index] = input as [Uint8Array, unknown];
-    return { outputIndex: Number(toUint(index, "input index")), path, txHashHex: hex.encode(txHash) };
-  });
-
-  return { inputs: ledgerInputs, tagCborSets: isTagged };
 }
 
 export async function toLedgerCardanoTransaction(
@@ -125,27 +68,23 @@ export async function toLedgerCardanoTransaction(
   const { decodeCardanoTransaction } = await import("@swapkit/toolboxes/cardano");
   const { Networks, TransactionSigningMode, TxAuxiliaryDataType } = ledgerModule;
   const { body } = await decodeCardanoTransaction(txHex);
-
-  const supportedFields: unknown[] = Object.values(BODY);
-  const unsupported = [...body.keys()].filter((field) => !supportedFields.includes(field));
-  if (unsupported.length > 0) {
-    throw notSupported(`Ledger cannot sign Cardano transactions with body fields ${unsupported.join(", ")}`);
-  }
-
-  const outputs = body.get(BODY.OUTPUTS);
-  if (!Array.isArray(outputs)) throw notSupported("Invalid Cardano outputs");
-  const auxiliaryDataHash = body.get(BODY.AUXILIARY_DATA_HASH) as Uint8Array | undefined;
-  const ttl = body.get(BODY.TTL);
-  const validityIntervalStart = body.get(BODY.VALIDITY_INTERVAL_START);
-  const { inputs, tagCborSets } = toLedgerInputs(body.get(BODY.INPUTS), own.paymentPath);
+  const { auxiliaryDataHash, fee, inputs, outputs, tagCborSets, ttl, validityIntervalStart } = readCardanoBody(
+    body,
+    "Ledger",
+    notSupported,
+  );
 
   return {
     additionalWitnessPaths: [],
     options: { tagCborSets },
     signingMode: TransactionSigningMode.ORDINARY_TRANSACTION,
     tx: {
-      fee: toUint(body.get(BODY.FEE), "fee"),
-      inputs,
+      fee,
+      inputs: inputs.map(({ index, txHash }) => ({
+        outputIndex: index,
+        path: own.paymentPath,
+        txHashHex: hex.encode(txHash),
+      })),
       network: Networks.Mainnet,
       outputs: await Promise.all(outputs.map((output) => toLedgerOutput(output, own, ledgerModule))),
       ...(auxiliaryDataHash
@@ -156,10 +95,8 @@ export async function toLedgerCardanoTransaction(
             },
           }
         : {}),
-      ...(ttl === undefined ? {} : { ttl: toUint(ttl, "ttl") }),
-      ...(validityIntervalStart === undefined
-        ? {}
-        : { validityIntervalStart: toUint(validityIntervalStart, "validity interval start") }),
+      ...(ttl === undefined ? {} : { ttl }),
+      ...(validityIntervalStart === undefined ? {} : { validityIntervalStart }),
     },
   };
 }

@@ -8,12 +8,12 @@ import {
 } from "@swapkit/toolboxes/cardano";
 import type {
   CardanoAssetGroup,
-  CardanoInput,
   CardanoOutput,
   CardanoSignedTxData,
   CardanoSignTransaction,
-  PROTO,
 } from "@trezor/connect-web";
+
+import { type CardanoOutputFields, readCardanoBody } from "../helpers/cardano";
 
 type CardanoAddressParams = { address: string; path: string; stakingPath: string };
 export type TrezorConnectModule = typeof import("@trezor/connect-web");
@@ -26,9 +26,6 @@ function getConnectParams({ CARDANO, PROTO }: TrezorConnectModule) {
   };
 }
 
-const BODY = { AUXILIARY_DATA_HASH: 7, FEE: 2, INPUTS: 0, OUTPUTS: 1, TTL: 3, VALIDITY_INTERVAL_START: 8 } as const;
-const SET_TAG = 258;
-
 function notSupported(reason: string) {
   return new SwapKitError({ errorKey: "wallet_trezor_method_not_supported", info: { chain: Chain.Cardano, reason } });
 }
@@ -40,50 +37,12 @@ function signFailed(error: string) {
   });
 }
 
-function toUint(value: unknown, field: string) {
-  const isBigNumber = typeof value === "object" && value !== null && "toFixed" in value;
-  const text = isBigNumber || Number.isSafeInteger(value) ? String((value as number).toFixed()) : "";
-  if (!/^\d+$/.test(text)) throw notSupported(`Invalid ${field} in Cardano transaction`);
-  return text;
-}
-
-function toTokenBundle(multiAsset: Map<Uint8Array, Map<Uint8Array, unknown>>): CardanoAssetGroup[] {
-  return [...multiAsset].map(([policyId, assets]) => ({
-    policyId: hex.encode(policyId),
-    tokenAmounts: [...assets].map(([assetName, amount]) => ({
-      amount: toUint(amount, "token amount"),
-      assetNameBytes: hex.encode(assetName),
-    })),
-  }));
-}
-
 async function toTrezorOutput(
-  output: unknown,
+  { address, amount, format, tokenGroups }: CardanoOutputFields,
   own: CardanoAddressParams,
   proto: TrezorConnectModule["PROTO"],
 ): Promise<CardanoOutput> {
-  let address: unknown;
-  let value: unknown;
-  let format: PROTO.CardanoTxOutputSerializationFormat;
-
-  if (Array.isArray(output)) {
-    if (output.length !== 2) throw notSupported("Trezor cannot sign Cardano outputs with a datum");
-    [address, value] = output;
-    format = proto.CardanoTxOutputSerializationFormat.ARRAY_LEGACY;
-  } else if (output instanceof Map) {
-    if (output.has(2)) throw notSupported("Trezor cannot sign Cardano outputs with a datum");
-    if (output.has(3)) throw notSupported("Trezor cannot sign Cardano outputs with a reference script");
-    if (output.size !== 2) throw notSupported("Unsupported field in Cardano output");
-    address = output.get(0);
-    value = output.get(1);
-    format = proto.CardanoTxOutputSerializationFormat.MAP_BABBAGE;
-  } else {
-    throw notSupported("Invalid Cardano output");
-  }
-
-  if (Array.isArray(value) && value.length !== 2) throw notSupported("Invalid Cardano output value");
-  const [coin, multiAsset] = Array.isArray(value) ? value : [value];
-  const outputAddress = await getCardanoAddressFromBytes(address as Uint8Array);
+  const outputAddress = await getCardanoAddressFromBytes(address);
   const destination =
     outputAddress === own.address
       ? {
@@ -94,27 +53,20 @@ async function toTrezorOutput(
           },
         }
       : { address: outputAddress };
+  const tokenBundle: CardanoAssetGroup[] | undefined = tokenGroups?.map(({ policyId, tokens }) => ({
+    policyId: hex.encode(policyId),
+    tokenAmounts: tokens.map(({ amount, assetName }) => ({ amount, assetNameBytes: hex.encode(assetName) })),
+  }));
 
   return {
     ...destination,
-    amount: toUint(coin, "output amount"),
-    format,
-    ...(multiAsset === undefined ? {} : { tokenBundle: toTokenBundle(multiAsset) }),
+    amount,
+    format:
+      format === "legacy"
+        ? proto.CardanoTxOutputSerializationFormat.ARRAY_LEGACY
+        : proto.CardanoTxOutputSerializationFormat.MAP_BABBAGE,
+    ...(tokenBundle === undefined ? {} : { tokenBundle }),
   };
-}
-
-function toTrezorInputs(inputs: unknown, path: string) {
-  const isTagged =
-    typeof inputs === "object" && inputs !== null && "tag" in inputs && inputs.tag === SET_TAG && "value" in inputs;
-  const list = (isTagged ? inputs.value : inputs) as unknown[][];
-
-  const trezorInputs: CardanoInput[] = list.map((input) => {
-    if (input.length !== 2) throw notSupported("Invalid Cardano input");
-    const [txHash, index] = input as [Uint8Array, unknown];
-    return { path, prev_hash: hex.encode(txHash), prev_index: Number(toUint(index, "input index")) };
-  });
-
-  return { inputs: trezorInputs, tagCborSets: isTagged };
 }
 
 export async function toTrezorCardanoTransaction(
@@ -125,31 +77,23 @@ export async function toTrezorCardanoTransaction(
   const { body } = await decodeCardanoTransaction(txHex);
   const { derivationType, mainnet } = getConnectParams(connect);
   const { PROTO: proto } = connect;
-
-  const supportedFields: unknown[] = Object.values(BODY);
-  const unsupported = [...body.keys()].filter((field) => !supportedFields.includes(field));
-  if (unsupported.length > 0) {
-    throw notSupported(`Trezor cannot sign Cardano transactions with body fields ${unsupported.join(", ")}`);
-  }
-
-  const outputs = body.get(BODY.OUTPUTS) as unknown[];
-  const auxiliaryDataHash = body.get(BODY.AUXILIARY_DATA_HASH) as Uint8Array | undefined;
-
-  const ttl = body.get(BODY.TTL);
-  const validityIntervalStart = body.get(BODY.VALIDITY_INTERVAL_START);
+  const { auxiliaryDataHash, fee, inputs, outputs, tagCborSets, ttl, validityIntervalStart } = readCardanoBody(
+    body,
+    "Trezor",
+    notSupported,
+  );
 
   return {
-    ...toTrezorInputs(body.get(BODY.INPUTS), own.path),
+    inputs: inputs.map(({ index, txHash }) => ({ path: own.path, prev_hash: hex.encode(txHash), prev_index: index })),
+    tagCborSets,
     ...mainnet,
     derivationType,
-    fee: toUint(body.get(BODY.FEE), "fee"),
+    fee,
     outputs: await Promise.all(outputs.map((output) => toTrezorOutput(output, own, proto))),
     signingMode: proto.CardanoTxSigningMode.ORDINARY_TRANSACTION,
     ...(auxiliaryDataHash ? { auxiliaryData: { hash: hex.encode(auxiliaryDataHash) } } : {}),
-    ...(ttl === undefined ? {} : { ttl: toUint(ttl, "ttl") }),
-    ...(validityIntervalStart === undefined
-      ? {}
-      : { validityIntervalStart: toUint(validityIntervalStart, "validity interval start") }),
+    ...(ttl === undefined ? {} : { ttl }),
+    ...(validityIntervalStart === undefined ? {} : { validityIntervalStart }),
   };
 }
 
