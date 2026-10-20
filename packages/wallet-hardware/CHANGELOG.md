@@ -1,5 +1,17 @@
 # @swapkit-dev/wallet-hardware
 
+## 6.1.1
+
+### Patch Changes
+
+- [#201](https://github.com/swapkit/wallets/pull/201) [`f0b1fac`](https://github.com/swapkit/wallets/commit/f0b1fac7c9e7bfd8b8d25853f9463d1515de813d) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Pin ethers to the same version `@swapkit/toolboxes` requires, so applications that install both no longer end up with two copies of ethers. Two copies made the SDK treat browser and hardware wallets as plain RPC providers and fail with a gas estimation error when the wallet was on a different network than the swap.
+
+- [#203](https://github.com/swapkit/wallets/pull/203) [`f3d5e76`](https://github.com/swapkit/wallets/commit/f3d5e76875593767d4075fed5bfb7bd1cb8958a1) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#373](https://github.com/swapkit/sdk/pull/373) [`218e46d`](https://github.com/swapkit/sdk/commit/218e46d12d423e0420143ec410f0a4c8d102ab8d) Thanks [@ice-chillios](https://github.com/ice-chillios)! - Add the `toolbox_lightspark_*` block (91301 to 91313) to `SwapKitError.ErrorCode` for the new Lightning toolbox: `toolbox_lightspark_missing_credentials`, `toolbox_lightspark_invalid_invoice`, `toolbox_lightspark_invoice_amount_mismatch`, `toolbox_lightspark_invoice_destination_mismatch`, `toolbox_lightspark_invoice_expired`, `toolbox_lightspark_invoice_already_settled`, `toolbox_lightspark_fee_limit_exceeded`, `toolbox_lightspark_invalid_params`, `toolbox_lightspark_api_error`, `toolbox_lightspark_invalid_amount`, `toolbox_lightspark_invalid_destination`, `toolbox_lightspark_network_mismatch` and `toolbox_lightspark_signing_key_unavailable`. An unloadable node signing key is reported as `toolbox_lightspark_signing_key_unavailable`, distinct from `toolbox_lightspark_missing_credentials`, so an integrator branching on the code can tell an unloaded key from an absent credential. (via @swapkit/helpers@6.2.0)
+  - [#447](https://github.com/swapkit/sdk/pull/447) [`b827853`](https://github.com/swapkit/sdk/commit/b827853cd1bfa68a9bd733843b3740f10ecab359) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update generated token lists. (via @swapkit/helpers@6.2.0)
+  - [#449](https://github.com/swapkit/sdk/pull/449) [`e105e04`](https://github.com/swapkit/sdk/commit/e105e0417e77c486406706ecf1c0ed12c77c4375) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - The Starknet toolbox uses a wallet-provided account only to sign and send. Network reads and fee estimates go through the configured Starknet RPC, so wallets that bundle an older starknet.js (such as OKX Wallet) no longer fail with `getClassHashAt` of undefined or an "Invalid block id" error. (via @swapkit/toolboxes@6.4.0)
+
 ## 6.1.0
 
 ### Minor Changes
