@@ -30,6 +30,7 @@ import { getNearLedgerClient } from "../clients/near";
 import { StellarLedger } from "../clients/stellar";
 import { SuiLedger } from "../clients/sui";
 import { THORChainLedger } from "../clients/thorchain";
+import { TONLedger } from "../clients/ton";
 import { TronLedger } from "../clients/tron";
 import { BitcoinCashLedger, DashLedger, DogecoinLedger, LitecoinLedger } from "../clients/utxo";
 import { XRPLedger } from "../clients/xrp";
@@ -62,6 +63,7 @@ type LedgerSignerMap = {
   [Chain.Stellar]: ReturnType<typeof StellarLedger>;
   [Chain.Sui]: ReturnType<typeof SuiLedger>;
   [Chain.THORChain]: THORChainLedger;
+  [Chain.Ton]: ReturnType<typeof TONLedger>;
   [Chain.Tron]: ReturnType<typeof TronLedger>;
   [Chain.XLayer]: ReturnType<typeof XLayerLedger>;
   [Chain.Zcash]: ReturnType<typeof ZcashLedger>;
@@ -121,6 +123,7 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
     .with(Chain.Stellar, () => Promise.resolve(StellarLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Tron, () => Promise.resolve(TronLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Sui, () => Promise.resolve(SuiLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Ton, () => Promise.resolve(TONLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Near, () => Promise.resolve(getNearLedgerClient(clientParams) as LedgerSignerMap[T]))
     .with(
       Chain.Arbitrum,
