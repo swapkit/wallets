@@ -147,6 +147,24 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...toolbox, address: publicKey.toString() };
       })
+      .with(Chain.Starknet, async () => {
+        if (!(window.okxwallet && "starknet" in window.okxwallet)) {
+          throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Starknet });
+        }
+
+        const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
+        const provider = window.okxwallet.starknet;
+        await provider.enable();
+        const { account } = provider;
+
+        if (!account) {
+          throw new SwapKitError("wallet_okx_no_accounts", { chain: Chain.Starknet });
+        }
+
+        const toolbox = getStarknetToolbox({ signer: account, walletDeploysAccount: true });
+
+        return { ...toolbox, address: account.address };
+      })
       .with(Chain.Cardano, async () => {
         if (!(window.okxwallet && "cardano" in window.okxwallet)) {
           throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cardano });

@@ -94,6 +94,21 @@ describe("connectOkx", () => {
 
     expect(maxPending).toBe(1);
   });
+
+  test("reads the Starknet account once the wallet has been enabled", async () => {
+    const address = `0x${"1".repeat(64)}`;
+    const starknet = {
+      enable() {
+        this.account = { address };
+        return Promise.resolve([address]);
+      },
+    };
+    globalThis.window = { okxwallet: { starknet } };
+    const { added, result } = connect([Chain.Starknet]);
+
+    expect(await result).toBe(true);
+    expect(added[0].address).toBe(address);
+  });
 });
 
 describe("OKX TON", () => {
