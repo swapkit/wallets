@@ -43,8 +43,6 @@ interface SignedTransferExpectation extends TONLedgerOrder {
   walletId: number;
 }
 
-// The TON app derives from six hardened levels, [44, 607, network, workchain, account, 0]; SwapKit's five-level
-// m/44'/607'/0'/0'/{account}' maps onto the mainnet basechain shape.
 function toLedgerPath(derivationPath: DerivationPathArray) {
   const [purpose, coinType, network, workchain, account, ...rest] = derivationPath;
   const isTonPath =
