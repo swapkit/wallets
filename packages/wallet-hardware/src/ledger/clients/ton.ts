@@ -230,7 +230,6 @@ export async function TONLedger(paramsOrPath?: TONLedgerParams | DerivationPathA
       app.getAddress(path, { bounceable: false, chain: TON_WORKCHAIN, testOnly: false, walletVersion: "v4" }),
   });
 
-  // Same wallet v4 contract the TON toolbox builds for a keystore, so the address matches the keystore convention.
   const wallet = WalletContractV4.create({ publicKey, workchain: TON_WORKCHAIN });
   if (!wallet.address.equals(Address.parse(deviceAddress))) {
     throw new SwapKitError({
