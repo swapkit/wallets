@@ -4,7 +4,7 @@ import { base64, hex } from "@scure/base";
 import { Chain, type CosmosChain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapkit/toolboxes/tron";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { type ChainSigningSupport, createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type SignClientClient from "@walletconnect/sign-client";
 import type { PairingTypes, ProposalTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
@@ -31,24 +31,24 @@ export interface Walletconnect {
   session?: SessionTypes.Struct;
 }
 
-const DIRECT_SIGNING_SUPPORT: Partial<Record<Chain, boolean>> = {
-  [Chain.Arbitrum]: true,
-  [Chain.Aurora]: true,
-  [Chain.Avalanche]: true,
-  [Chain.Base]: true,
-  [Chain.Berachain]: true,
-  [Chain.BinanceSmartChain]: true,
-  [Chain.Ethereum]: true,
-  [Chain.Monad]: true,
-  [Chain.Optimism]: true,
-  [Chain.Polygon]: true,
-  [Chain.XLayer]: true,
-  [Chain.Cosmos]: true,
-  [Chain.Kujira]: true,
-  [Chain.Maya]: true,
-  [Chain.Near]: true,
-  [Chain.THORChain]: true,
-  [Chain.Tron]: true,
+const SIGNING_SUPPORT: ChainSigningSupport = {
+  [Chain.Arbitrum]: { direct: true },
+  [Chain.Aurora]: { direct: true },
+  [Chain.Avalanche]: { direct: true },
+  [Chain.Base]: { direct: true },
+  [Chain.Berachain]: { direct: true },
+  [Chain.BinanceSmartChain]: { direct: true },
+  [Chain.Ethereum]: { direct: true },
+  [Chain.Monad]: { direct: true },
+  [Chain.Optimism]: { direct: true },
+  [Chain.Polygon]: { direct: true },
+  [Chain.XLayer]: { direct: true },
+  [Chain.Cosmos]: { direct: true },
+  [Chain.Kujira]: { direct: true },
+  [Chain.Maya]: { direct: true },
+  [Chain.Near]: { direct: true },
+  [Chain.THORChain]: { direct: true },
+  [Chain.Tron]: { direct: true },
 };
 
 export function getSessionDirectSigningSupport(chain: Chain, session: SessionTypes.Struct | undefined): boolean {
@@ -111,8 +111,10 @@ export const walletconnectWallet = createWallet({
             address,
             chain,
             disconnect: walletconnect.disconnect,
-            supportsDirectSigning:
-              DIRECT_SIGNING_SUPPORT[chain] === true && getSessionDirectSigningSupport(chain, walletconnect.session),
+            signing: {
+              direct:
+                SIGNING_SUPPORT[chain]?.direct === true && getSessionDirectSigningSupport(chain, walletconnect.session),
+            },
             walletType: WalletOption.WALLETCONNECT,
           });
         }),
@@ -120,8 +122,8 @@ export const walletconnectWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: DIRECT_SIGNING_SUPPORT,
   name: "connectWalletconnect",
+  signingSupport: SIGNING_SUPPORT,
   supportedChains: [
     Chain.Arbitrum,
     Chain.Aurora,

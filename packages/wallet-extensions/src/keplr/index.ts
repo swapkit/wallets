@@ -40,8 +40,13 @@ export const keplrWallet: ExtensionWallet<"connectKeplr"> = createWallet({
 
       return true;
     },
-  directSigningSupport: { [Chain.Cosmos]: true, [Chain.Kujira]: true, [Chain.Noble]: true, [Chain.THORChain]: true },
   name: "connectKeplr",
+  signingSupport: {
+    [Chain.Cosmos]: { direct: true },
+    [Chain.Kujira]: { direct: true },
+    [Chain.Noble]: { direct: true },
+    [Chain.THORChain]: { direct: true },
+  },
   supportedChains: [Chain.Cosmos, Chain.Kujira, Chain.Noble, Chain.THORChain],
   walletType: WalletOption.KEPLR,
 });

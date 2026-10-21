@@ -18,15 +18,31 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
-    [Chain.Bitcoin]: true,
-    [Chain.Cosmos]: true,
-    [Chain.Solana]: true,
-    [Chain.Tron]: true,
+  name: "connectBitget",
+  signingSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true }])),
+    ...Object.fromEntries(
+      [
+        Chain.Arbitrum,
+        Chain.Aurora,
+        Chain.Avalanche,
+        Chain.Base,
+        Chain.Berachain,
+        Chain.BinanceSmartChain,
+        Chain.Ethereum,
+        Chain.Gnosis,
+        Chain.Monad,
+        Chain.Optimism,
+        Chain.Polygon,
+        Chain.XLayer,
+      ].map((chain) => [chain, { direct: true, typedData: true }]),
+    ),
+    [Chain.Bitcoin]: { direct: true },
+    [Chain.Cosmos]: { direct: true },
+    [Chain.Solana]: { direct: true },
+    [Chain.Tron]: { direct: true },
     // [Chain.Aptos]: blocked on toolbox — getAptosToolbox needs to accept AptosExtensionProvider
   },
-  name: "connectBitget",
   supportedChains: [...EVMChains, Chain.Cosmos, Chain.Bitcoin, Chain.Solana, Chain.Tron],
   walletType: WalletOption.BITGET,
 });

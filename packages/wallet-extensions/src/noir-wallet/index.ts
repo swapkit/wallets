@@ -80,8 +80,8 @@ export const noirWallet: ExtensionWallet<"connectNoirWallet"> = createWallet({
     },
   // Raw-sign RPC is not exposed by the extension; transactions are built and
   // signed inside the wallet.
-  directSigningSupport: {},
   name: "connectNoirWallet",
+  signingSupport: {},
   supportedChains: [Chain.Zcash],
   walletType: WalletOption.NOIR_WALLET,
 });

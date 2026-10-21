@@ -31,8 +31,8 @@ export const tonconnectWallet = createWallet({
       await Promise.all(promises);
       return true;
     },
-  directSigningSupport: { [Chain.Ton]: true },
   name: "connectTonConnect",
+  signingSupport: { [Chain.Ton]: { direct: true } },
   supportedChains: [Chain.Ton],
   walletType: WalletOption.TON_CONNECT,
 });

@@ -22,8 +22,8 @@ export const radixWallet = createWallet({
       return true;
     },
   // Radix is not in V3 swap chain list
-  directSigningSupport: {},
   name: "connectRadixWallet",
+  signingSupport: {},
   supportedChains: [Chain.Radix],
   walletType: WalletOption.RADIX_WALLET,
 });
