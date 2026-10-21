@@ -207,6 +207,7 @@ export const ledgerWallet = createWallet({
   },
   getExtendedPublicKey: getLedgerExtendedPublicKey,
   name: "connectLedger",
+  signingSupport: Object.fromEntries(LEDGER_EVM_CHAINS.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...LEDGER_SUPPORTED_CHAINS_CONFIG],
   walletType: WalletOption.LEDGER,
 });

@@ -27,6 +27,22 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
     // [Chain.Aptos]: blocked on toolbox — getAptosToolbox needs to accept AptosExtensionProvider
   },
   name: "connectBitget",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Aurora,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.Berachain,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Gnosis,
+      Chain.Monad,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.XLayer,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [...EVMChains, Chain.Cosmos, Chain.Bitcoin, Chain.Solana, Chain.Tron],
   walletType: WalletOption.BITGET,
 });

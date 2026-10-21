@@ -39,6 +39,18 @@ export const coinbaseWallet = createWallet({
     [Chain.XLayer]: true,
   },
   name: "connectCoinbaseWallet",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Arc,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Optimism,
+      Chain.Polygon,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Arc,

@@ -48,6 +48,17 @@ export const keepkeyBexWallet: ExtensionWallet<"connectKeepkeyBex"> = createWall
     // Ripple/Solana/THORChain/Maya: provider lacks raw-sign RPC
   },
   name: "connectKeepkeyBex",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Optimism,
+      Chain.Polygon,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Avalanche,

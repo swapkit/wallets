@@ -56,6 +56,25 @@ export const okxWallet: ExtensionWallet<"connectOkx"> = createWallet({
     // [Chain.Aptos]: blocked on toolbox
   },
   name: "connectOkx",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Arc,
+      Chain.Aurora,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.Berachain,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Gnosis,
+      Chain.Hyperevm,
+      Chain.Monad,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.Robinhood,
+      Chain.XLayer,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Arc,

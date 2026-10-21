@@ -161,6 +161,7 @@ export const keystoreWallet = createWallet({
     [Chain.Tron]: true,
   },
   name: "connectKeystore",
+  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [
     ...EVMChains,
     ...UTXOChains,

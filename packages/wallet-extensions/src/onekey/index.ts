@@ -162,6 +162,20 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
     [Chain.XLayer]: true,
   },
   name: "connectOnekeyWallet",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Aurora,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Gnosis,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.XLayer,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Aurora,

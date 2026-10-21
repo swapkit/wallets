@@ -68,6 +68,21 @@ export const keepkeyWallet = createWallet({
     // BTC/BCH/DASH/DOGE/LTC/Cosmos/THORChain/Maya: pending KeepKey SDK signer wrappers (V3 plan PRs)
   },
   name: "connectKeepkey",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.Berachain,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Gnosis,
+      Chain.Monad,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.XLayer,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Avalanche,

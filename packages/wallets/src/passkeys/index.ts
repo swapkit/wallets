@@ -174,6 +174,7 @@ export const passkeysWallet = createWallet({
     [Chain.Solana]: true,
   },
   name: "connectPasskeys",
+  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...EVMChains, Chain.Bitcoin, Chain.Solana],
   walletType: WalletOption.PASSKEYS,
 });

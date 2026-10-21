@@ -125,6 +125,7 @@ export const cosmostationWallet: ExtensionWallet<"connectCosmostation"> = create
     [Chain.XLayer]: true,
   },
   name: "connectCosmostation",
+  signingSupport: Object.fromEntries(cosmostationSupportedEVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [
     Chain.Cosmos,
     Chain.Kujira,

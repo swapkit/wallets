@@ -35,6 +35,7 @@ export const phantomWallet: ExtensionWallet<"connectPhantom"> = createWallet({
   // Bitcoin disabled until Phantom's Wallet Standard integration is reviewed
   directSigningSupport: { [Chain.Ethereum]: true, [Chain.Solana]: true },
   name: "connectPhantom",
+  signingSupport: { [Chain.Ethereum]: { typedData: true } },
   supportedChains: [Chain.Ethereum, Chain.Solana],
   walletType: WalletOption.PHANTOM,
 });

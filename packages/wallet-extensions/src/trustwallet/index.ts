@@ -45,6 +45,7 @@ export const trustwalletWallet: ExtensionWallet<"connectTrustWallet"> = createWa
     // Ton: no signer wired
   },
   name: "connectTrustWallet",
+  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...EVMChains, Chain.Ton],
   walletType: WalletOption.TRUSTWALLET_WEB,
 });

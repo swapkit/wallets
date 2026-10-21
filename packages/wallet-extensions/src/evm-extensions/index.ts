@@ -135,6 +135,7 @@ export const evmWallet: ExtensionWallet<
     },
   directSigningSupport: Object.fromEntries(EVMChains.map((chain) => [chain, true])),
   name: "connectEVMWallet",
+  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...EVMChains] as EVMChain[],
 });
 

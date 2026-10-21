@@ -218,6 +218,7 @@ export const metamaskWallet = createWallet({
   directSigningSupport: Object.fromEntries([...EVMChains, Chain.Solana].map((chain) => [chain, true])),
   name: "connectMetamask",
   // EVM + Solana under one session. Widen further as non-EVM adapters land.
+  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...EVMChains, Chain.Solana],
   walletType: WalletOption.METAMASK,
 });

@@ -73,6 +73,18 @@ export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
     // BTC/ZEC/Cosmos/Kujira/THORChain/Maya/Solana/Ripple: blocked on Vultisig provider — no raw-sign RPC
   },
   name: "connectVultisig",
+  signingSupport: Object.fromEntries(
+    [
+      Chain.Arbitrum,
+      Chain.Avalanche,
+      Chain.Base,
+      Chain.BinanceSmartChain,
+      Chain.Ethereum,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.XLayer,
+    ].map((chain) => [chain, { typedData: true }]),
+  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Avalanche,
