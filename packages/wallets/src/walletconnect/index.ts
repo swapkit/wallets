@@ -314,7 +314,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       const signer = await getEVMSigner({ chain, provider, walletconnect });
       const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
 
-      return { ...toolbox, signTypedData: undefined };
+      return toolbox;
     }
 
     case Chain.Cosmos:
@@ -402,7 +402,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       } as NearSigner;
 
       const toolbox = getNearToolbox({ signer });
-      return { ...toolbox, signTransaction: undefined };
+      return toolbox;
     }
 
     case Chain.Tron: {

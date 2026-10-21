@@ -13,7 +13,7 @@ import {
 } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
-import { extractUtxoTransferIntent } from "../helpers/utxoTransferIntent";
+import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
   getVultisigAddress,
@@ -145,14 +145,14 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
     .with(...UTXOChains, async () => {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
       if (chain === Chain.Zcash) {
-        return { ...(await getUtxoToolbox(chain)), signTransaction: undefined, transfer: walletTransfer };
+        return { ...(await getUtxoToolbox(chain)), transfer: walletTransfer };
       }
 
       const utxoChain = chain as Exclude<UTXOChain, typeof Chain.Zcash>;
       const address = await getVultisigAddress(chain);
       const toolbox = await getUtxoToolbox(utxoChain, await getUtxoScriptTypeParams({ address, chain: utxoChain }));
       if (chain === Chain.Bitcoin) {
-        return { ...toolbox, signTransaction: undefined, transfer: walletTransfer };
+        return { ...toolbox, transfer: walletTransfer };
       }
 
       return {
@@ -166,7 +166,7 @@ async function getWalletMethods(chain: (typeof VULTISIG_SUPPORTED_CHAINS)[number
             recipient: intent.recipient,
           });
         },
-        signTransaction: undefined,
+        signTransaction: () => unsupportedUtxoSignTransaction(WalletOption.VULTISIG),
         transfer: walletTransfer,
       };
     })

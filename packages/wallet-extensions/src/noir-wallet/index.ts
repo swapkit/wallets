@@ -53,7 +53,6 @@ export const noirWallet: ExtensionWallet<"connectNoirWallet"> = createWallet({
 
           return signature;
         },
-        signTransaction: undefined,
         /**
          * Transaction building, fee selection and signing happen inside the
          * extension. Memos are only supported towards shielded recipients,
