@@ -51,20 +51,19 @@ const DIRECT_SIGNING_SUPPORT: Partial<Record<Chain, boolean>> = {
   [Chain.Tron]: true,
 };
 
-function getSessionChainMethods(chain: Chain, session: SessionTypes.Struct | undefined) {
+export function getSessionDirectSigningSupport(chain: Chain, session: SessionTypes.Struct | undefined): boolean {
+  if (!session) return false;
+
   const chainId = chainToChainId(chain);
   const [namespace] = chainId.split(":");
-  const namespaceGrant = namespace ? session?.namespaces[namespace] : undefined;
-  const chainGrant = chainId ? session?.namespaces[chainId] : undefined;
+  if (!chainId || !namespace) return false;
+
+  const namespaceGrant = session.namespaces[namespace];
+  const chainGrant = session.namespaces[chainId];
   const accounts = [...(namespaceGrant?.accounts ?? []), ...(chainGrant?.accounts ?? [])];
-  const hasAccount = !!chainId && accounts.some((account) => account.startsWith(`${chainId}:`));
-  const methods = hasAccount ? [...(namespaceGrant?.methods ?? []), ...(chainGrant?.methods ?? [])] : [];
+  if (!accounts.some((account) => account.startsWith(`${chainId}:`))) return false;
 
-  return { methods: new Set(methods), namespace };
-}
-
-export function getSessionDirectSigningSupport(chain: Chain, session: SessionTypes.Struct | undefined): boolean {
-  const { methods, namespace } = getSessionChainMethods(chain, session);
+  const methods = new Set([...(namespaceGrant?.methods ?? []), ...(chainGrant?.methods ?? [])]);
   const requiredMethods = (() => {
     switch (namespace) {
       case "eip155":
@@ -81,25 +80,6 @@ export function getSessionDirectSigningSupport(chain: Chain, session: SessionTyp
   })();
 
   return requiredMethods.length > 0 && requiredMethods.every((method) => methods.has(method));
-}
-
-// Expose message and typed-data signing only on chains whose session grants the matching method.
-export function withSessionEvmSigningMethods<T extends { signMessage?: unknown; signTypedData?: unknown }>({
-  chain,
-  session,
-  toolbox,
-}: {
-  chain: Chain;
-  session: SessionTypes.Struct | undefined;
-  toolbox: T;
-}) {
-  const { methods } = getSessionChainMethods(chain, session);
-
-  return {
-    ...toolbox,
-    signMessage: methods.has(DEFAULT_EIP155_METHODS.PERSONAL_SIGN) ? toolbox.signMessage : undefined,
-    signTypedData: methods.has(DEFAULT_EIP155_METHODS.ETH_SIGN_TYPED_DATA_V4) ? toolbox.signTypedData : undefined,
-  };
 }
 
 export const walletconnectWallet = createWallet({
@@ -334,7 +314,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       const signer = await getEVMSigner({ chain, provider, walletconnect });
       const toolbox = await getEvmToolboxAsync(chain, { provider, signer });
 
-      return withSessionEvmSigningMethods({ chain, session, toolbox });
+      return { ...toolbox, signTypedData: undefined };
     }
 
     case Chain.Cosmos:

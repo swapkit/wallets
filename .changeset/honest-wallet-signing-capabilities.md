@@ -4,8 +4,8 @@
 "@swapkit/wallet-hardware": patch
 ---
 
-Wallet signing methods are now present only when the wallet can actually sign on that chain, so checking whether a method exists is a reliable capability check.
+Wallet signing methods that could never succeed are no longer exposed, so checking whether a method exists is a reliable capability check. No new signing support is added.
 
-- WalletConnect (EVM): `signTypedData` now works (EIP-712 via `eth_signTypedData_v4`) and `signMessage` now uses `personal_sign`. Each is exposed only on chains where the wallet granted that method in the session; on other chains it is `undefined` instead of throwing.
+- WalletConnect (EVM): `signTypedData` is now `undefined` instead of a method that always threw. EIP-712 signing is still not supported.
 - WalletConnect (NEAR): `signTransaction` is now `undefined`; use `signAndBroadcastTransaction`.
 - KeepKey extension and Vultisig (UTXO chains), Noir Wallet (Zcash) and Ledger (Zcash): `signTransaction` is now `undefined` instead of a method that always threw. Transfers and `signAndBroadcastTransaction` are unchanged.

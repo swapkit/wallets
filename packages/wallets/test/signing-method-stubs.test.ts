@@ -10,6 +10,8 @@ const SIGNING_METHODS = new Set(["signMessage", "signPsbt", "signTransaction", "
 const ALLOWED_STUBS = new Set([
   // ethers AbstractSigner declares signTransaction abstract; the toolbox does not expose it.
   "packages/wallets/src/walletconnect/evmSigner.ts#signTransaction",
+  // Internal ethers signer method; the WalletConnect wallet object sets signTypedData to undefined.
+  "packages/wallets/src/walletconnect/evmSigner.ts#signTypedData",
   // The NEAR toolbox falls back to signAndSendTransactions on this rejection; the wallet sets it undefined.
   "packages/wallets/src/walletconnect/index.ts#signTransaction",
 ]);
