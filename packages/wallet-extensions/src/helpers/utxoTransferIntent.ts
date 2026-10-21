@@ -156,13 +156,3 @@ export function extractUtxoTransferIntent({
     recipient: spendOutput.address,
   };
 }
-
-export function unsupportedUtxoSignTransaction(wallet: string) {
-  return Promise.reject(
-    new SwapKitError("wallet_walletconnect_method_not_supported", {
-      method: "signTransaction",
-      reason: `${wallet} UTXO provider only supports signAndBroadcastTransaction`,
-      wallet,
-    }),
-  );
-}

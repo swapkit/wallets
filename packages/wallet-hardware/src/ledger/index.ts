@@ -584,6 +584,7 @@ async function getUTXOWalletMethods({
     getExtendedPublicKey,
     getExtendedPublicKeyInfo,
     signAndBroadcastTransaction,
+    signTransaction: toolboxSigner ? toolbox.signTransaction : undefined,
     transfer,
     transferFromMultipleAddresses,
   };

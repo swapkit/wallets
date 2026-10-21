@@ -63,3 +63,79 @@ describe("WalletconnectSigner.sendTransaction", () => {
     ).rejects.toThrow("wallet_walletconnect_invalid_method");
   });
 });
+
+describe("WalletconnectSigner signing", () => {
+  const ADDRESS = "0x0676d507de026d5c1d0a4fb6c0e9df5bba18b4d7";
+  const SIGNATURE = `0x${"ab".repeat(65)}`;
+  const domain = {
+    chainId: 1,
+    name: "Limit Order",
+    verifyingContract: "0x1099c4a01a1a59c4c2bd1b31f19b74f0f5f1a5a1",
+    version: "1",
+  };
+  const types = {
+    Order: [
+      { name: "maker", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+  };
+  const value = { amount: 1000n, maker: ADDRESS };
+
+  const getRequest = (request: ReturnType<typeof mock>) =>
+    (request.mock.calls[0] as [{ chainId: string; request: { method: string; params: unknown[] } }])[0];
+
+  test("signTypedData requests eth_signTypedData_v4 with the full EIP-712 payload", async () => {
+    const request = mock(() => Promise.resolve(SIGNATURE));
+    const signer = await getEVMSigner({ chain: Chain.Ethereum, provider, walletconnect: makeWalletconnect(request) });
+
+    expect(await signer.signTypedData(domain, types, value)).toBe(SIGNATURE);
+
+    const { chainId, request: rpcRequest } = getRequest(request);
+    expect(chainId).toBe("eip155:1");
+    expect(rpcRequest.method).toBe("eth_signTypedData_v4");
+    const [address, payload] = rpcRequest.params as [string, string];
+    expect(address).toBe(ADDRESS);
+    expect(JSON.parse(payload)).toEqual({
+      domain: { ...domain, chainId: "0x1" },
+      message: { amount: "1000", maker: ADDRESS },
+      primaryType: "Order",
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" },
+          { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" },
+          { name: "verifyingContract", type: "address" },
+        ],
+        ...types,
+      },
+    });
+  });
+
+  test("signTypedData accepts types that already include EIP712Domain", async () => {
+    const request = mock(() => Promise.resolve(SIGNATURE));
+    const signer = await getEVMSigner({ chain: Chain.Ethereum, provider, walletconnect: makeWalletconnect(request) });
+
+    await signer.signTypedData(domain, { EIP712Domain: [{ name: "name", type: "string" }], ...types }, value);
+
+    const [, payload] = getRequest(request).request.params as [string, string];
+    expect(JSON.parse(payload).types.EIP712Domain).toHaveLength(4);
+  });
+
+  test("signMessage requests personal_sign with the hex-encoded message and the address", async () => {
+    const request = mock(() => Promise.resolve(SIGNATURE.slice(2)));
+    const signer = await getEVMSigner({ chain: Chain.Ethereum, provider, walletconnect: makeWalletconnect(request) });
+
+    expect(await signer.signMessage("hello")).toBe(SIGNATURE);
+
+    const { request: rpcRequest } = getRequest(request);
+    expect(rpcRequest.method).toBe("personal_sign");
+    expect(rpcRequest.params).toEqual(["0x68656c6c6f", ADDRESS]);
+  });
+
+  test("throws a SwapKitError when the wallet resolves without a signature", async () => {
+    const request = mock(() => Promise.resolve(null));
+    const signer = await getEVMSigner({ chain: Chain.Ethereum, provider, walletconnect: makeWalletconnect(request) });
+
+    expect(signer.signTypedData(domain, types, value)).rejects.toThrow("wallet_walletconnect_invalid_method");
+  });
+});

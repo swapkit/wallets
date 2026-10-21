@@ -2,7 +2,7 @@ import { AssetValue, Chain, ChainId, filterSupportedChains, SwapKitError, Wallet
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { Eip1193Provider } from "ethers";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
-import { extractUtxoTransferIntent, unsupportedUtxoSignTransaction } from "../helpers/utxoTransferIntent";
+import { extractUtxoTransferIntent } from "../helpers/utxoTransferIntent";
 import type { ExtensionWallet } from "../walletTypes";
 import {
   getKEEPKEYAddress,
@@ -136,7 +136,7 @@ async function getWalletMethods(chain: (typeof KEEPKEY_BEX_SUPPORTED_CHAINS)[num
             recipient: intent.recipient,
           });
         },
-        signTransaction: () => unsupportedUtxoSignTransaction(WalletOption.KEEPKEY_BEX),
+        signTransaction: undefined,
         transfer: walletTransfer,
       };
     }

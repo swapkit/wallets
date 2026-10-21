@@ -8,7 +8,48 @@ import {
   getWalletConnectCosmosAccounts,
   getWalletConnectSignature,
   walletconnectWallet,
+  withSessionEvmSigningMethods,
 } from "../src/walletconnect";
+import { getSupportedMethodsByNamespace } from "../src/walletconnect/namespaces";
+
+describe("withSessionEvmSigningMethods", () => {
+  const ETH_ACCOUNT = "eip155:1:0x0676d507de026d5c1d0a4fb6c0e9df5bba18b4d7";
+  const BASE_ACCOUNT = "eip155:8453:0x0676d507de026d5c1d0a4fb6c0e9df5bba18b4d7";
+  const toolbox = { signMessage: () => Promise.resolve("0xmessage"), signTypedData: () => Promise.resolve("0xtyped") };
+  const session = {
+    namespaces: {
+      eip155: { accounts: [ETH_ACCOUNT, BASE_ACCOUNT], events: [], methods: ["eth_sendTransaction"] },
+      "eip155:1": { accounts: [ETH_ACCOUNT], events: [], methods: ["eth_signTypedData_v4", "personal_sign"] },
+    },
+  } as unknown as Parameters<typeof withSessionEvmSigningMethods>[0]["session"];
+
+  it("requests the signing methods in the eip155 session proposal", () => {
+    expect(getSupportedMethodsByNamespace("eip155")).toEqual(
+      expect.arrayContaining(["eth_signTypedData_v4", "personal_sign"]),
+    );
+  });
+
+  it("keeps signing methods on the chain whose session grants them", () => {
+    const wallet = withSessionEvmSigningMethods({ chain: Chain.Ethereum, session, toolbox });
+
+    expect(wallet.signTypedData).toBe(toolbox.signTypedData);
+    expect(wallet.signMessage).toBe(toolbox.signMessage);
+  });
+
+  it("drops signing methods on a chain whose session does not grant them", () => {
+    const wallet = withSessionEvmSigningMethods({ chain: Chain.Base, session, toolbox });
+
+    expect(wallet.signTypedData).toBeUndefined();
+    expect(wallet.signMessage).toBeUndefined();
+  });
+
+  it("drops signing methods on a chain without a session account", () => {
+    const wallet = withSessionEvmSigningMethods({ chain: Chain.Polygon, session, toolbox });
+
+    expect(wallet.signTypedData).toBeUndefined();
+    expect(wallet.signMessage).toBeUndefined();
+  });
+});
 
 const compressedPublicKey = Uint8Array.from([2, ...Array.from({ length: 32 }, (_, index) => index + 1)]);
 
