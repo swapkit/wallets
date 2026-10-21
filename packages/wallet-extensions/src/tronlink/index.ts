@@ -39,8 +39,8 @@ export const tronlinkWallet: ExtensionWallet<"connectTronLink"> = createWallet({
 
       return true;
     },
-  directSigningSupport: { [Chain.Tron]: true },
   name: "connectTronLink",
+  signingSupport: { [Chain.Tron]: { direct: true } },
   supportedChains: [Chain.Tron],
   walletType: WalletOption.TRONLINK,
 });

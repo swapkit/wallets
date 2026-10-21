@@ -57,34 +57,22 @@ export const vultisigWallet: ExtensionWallet<"connectVultisig"> = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.BitcoinCash]: true,
-    [Chain.Dash]: true,
-    [Chain.Dogecoin]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Litecoin]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.XLayer]: true,
+  name: "connectVultisig",
+  signingSupport: {
+    [Chain.Arbitrum]: { direct: true, typedData: true },
+    [Chain.Avalanche]: { direct: true, typedData: true },
+    [Chain.Base]: { direct: true, typedData: true },
+    [Chain.BinanceSmartChain]: { direct: true, typedData: true },
+    [Chain.BitcoinCash]: { direct: true },
+    [Chain.Dash]: { direct: true },
+    [Chain.Dogecoin]: { direct: true },
+    [Chain.Ethereum]: { direct: true, typedData: true },
+    [Chain.Litecoin]: { direct: true },
+    [Chain.Optimism]: { direct: true, typedData: true },
+    [Chain.Polygon]: { direct: true, typedData: true },
+    [Chain.XLayer]: { direct: true, typedData: true },
     // BTC/ZEC/Cosmos/Kujira/THORChain/Maya/Solana/Ripple: blocked on Vultisig provider — no raw-sign RPC
   },
-  name: "connectVultisig",
-  signingSupport: Object.fromEntries(
-    [
-      Chain.Arbitrum,
-      Chain.Avalanche,
-      Chain.Base,
-      Chain.BinanceSmartChain,
-      Chain.Ethereum,
-      Chain.Optimism,
-      Chain.Polygon,
-      Chain.XLayer,
-    ].map((chain) => [chain, { typedData: true }]),
-  ),
   supportedChains: [
     Chain.Arbitrum,
     Chain.Avalanche,

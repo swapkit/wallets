@@ -107,8 +107,8 @@ export const walletSelectorWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: { [Chain.Near]: true },
   name: "connectWalletSelector",
+  signingSupport: { [Chain.Near]: { direct: true } },
   supportedChains: [Chain.Near],
   walletType: WalletOption.WALLET_SELECTOR,
 });

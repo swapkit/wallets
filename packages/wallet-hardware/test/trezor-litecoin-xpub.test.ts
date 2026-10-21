@@ -142,10 +142,10 @@ describe("Trezor wallet handling", () => {
   });
 
   it("marks BCH, DASH, DOGE, and ZEC direct signing as available for testing", () => {
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.BitcoinCash]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dash]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dogecoin]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Zcash]).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.BitcoinCash]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Dash]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Dogecoin]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Zcash]?.direct).toBe(true);
   });
 
   it.each([

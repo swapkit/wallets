@@ -27,30 +27,18 @@ export const coinbaseWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Arc]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.XLayer]: true,
-  },
   name: "connectCoinbaseWallet",
-  signingSupport: Object.fromEntries(
-    [
-      Chain.Arbitrum,
-      Chain.Arc,
-      Chain.Avalanche,
-      Chain.Base,
-      Chain.BinanceSmartChain,
-      Chain.Ethereum,
-      Chain.Optimism,
-      Chain.Polygon,
-    ].map((chain) => [chain, { typedData: true }]),
-  ),
+  signingSupport: {
+    [Chain.Arbitrum]: { direct: true, typedData: true },
+    [Chain.Arc]: { direct: true, typedData: true },
+    [Chain.Avalanche]: { direct: true, typedData: true },
+    [Chain.Base]: { direct: true, typedData: true },
+    [Chain.BinanceSmartChain]: { direct: true, typedData: true },
+    [Chain.Ethereum]: { direct: true, typedData: true },
+    [Chain.Optimism]: { direct: true, typedData: true },
+    [Chain.Polygon]: { direct: true, typedData: true },
+    [Chain.XLayer]: { direct: true },
+  },
   supportedChains: [
     Chain.Arbitrum,
     Chain.Arc,

@@ -63,9 +63,11 @@ export const ledgerWalletProviderWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: Object.fromEntries(LEDGER_WALLET_PROVIDER_CHAINS.map((chain) => [chain, true])),
   name: "connectLedgerWalletProvider",
-  signingSupport: Object.fromEntries(LEDGER_WALLET_PROVIDER_EVM_CHAINS.map((chain) => [chain, { typedData: true }])),
+  signingSupport: {
+    ...Object.fromEntries(LEDGER_WALLET_PROVIDER_EVM_CHAINS.map((chain) => [chain, { direct: true, typedData: true }])),
+    [Chain.Solana]: { direct: true },
+  },
   supportedChains: LEDGER_WALLET_PROVIDER_CHAINS,
   walletType: WalletOption.LEDGER_WALLET_PROVIDER,
 });

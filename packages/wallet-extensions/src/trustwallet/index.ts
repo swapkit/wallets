@@ -40,12 +40,11 @@ export const trustwalletWallet: ExtensionWallet<"connectTrustWallet"> = createWa
 
       return true;
     },
-  directSigningSupport: {
-    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
+  name: "connectTrustWallet",
+  signingSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
     // Ton: no signer wired
   },
-  name: "connectTrustWallet",
-  signingSupport: Object.fromEntries(EVMChains.map((chain) => [chain, { typedData: true }])),
   supportedChains: [...EVMChains, Chain.Ton],
   walletType: WalletOption.TRUSTWALLET_WEB,
 });
