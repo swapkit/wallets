@@ -116,6 +116,36 @@ describe("keystore derivation entries", () => {
     }
   });
 
+  test("a falsy entry fails the whole connect instead of falling back to the default path", async () => {
+    for (const entry of [0, "", false, null]) {
+      await expect(
+        createKeystoreWallet({
+          chains: [Chain.Ethereum, Chain.Bitcoin],
+          derivationPathMapOrIndex: { [Chain.Bitcoin]: entry as never },
+          phrase: TEST_PHRASE,
+        }),
+      ).rejects.toMatchObject({ cause: { chain: Chain.Bitcoin }, errorKey: "toolbox_utxo_invalid_params" });
+
+      await expect(
+        createKeystoreWallet({
+          chains: [Chain.Bitcoin, Chain.Ethereum],
+          derivationPathMapOrIndex: { [Chain.Ethereum]: entry as never },
+          phrase: TEST_PHRASE,
+        }),
+      ).rejects.toMatchObject({ cause: { chain: Chain.Ethereum }, errorKey: "wallet_missing_params" });
+    }
+  });
+
+  test("an entry left undefined connects with the default path", async () => {
+    const wallets = await createKeystoreWallet({
+      chains: [Chain.Ethereum],
+      derivationPathMapOrIndex: { [Chain.Ethereum]: undefined },
+      phrase: TEST_PHRASE,
+    });
+
+    expect(wallets[Chain.Ethereum]?.address).toBe("0x9858EfFD232B4033E47d90003D41EC34EcaEda94");
+  });
+
   test("the first malformed entry in chain order fails the connect before any chain connects", async () => {
     // TON rejects a non-default path only once its toolbox is built: connecting first would report TON.
     await expect(
