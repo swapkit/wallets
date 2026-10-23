@@ -9,6 +9,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { BitcoinLedger } from "../clients/bitcoin";
+import { CardanoLedger } from "../clients/cardano";
 import { CosmosLedger } from "../clients/cosmos";
 import {
   ArbitrumLedger,
@@ -48,6 +49,7 @@ type LedgerSignerMap = {
   [Chain.BinanceSmartChain]: ReturnType<typeof BinanceSmartChainLedger>;
   [Chain.BitcoinCash]: ReturnType<typeof BitcoinCashLedger>;
   [Chain.Bitcoin]: ReturnType<typeof BitcoinLedger>;
+  [Chain.Cardano]: ReturnType<typeof CardanoLedger>;
   [Chain.Cosmos]: CosmosLedger;
   [Chain.Dash]: ReturnType<typeof DashLedger>;
   [Chain.Dogecoin]: ReturnType<typeof DogecoinLedger>;
@@ -121,6 +123,7 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
     .with(Chain.Zcash, () => Promise.resolve(ZcashLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Ripple, () => Promise.resolve(XRPLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Stellar, () => Promise.resolve(StellarLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Cardano, () => Promise.resolve(CardanoLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Tron, () => Promise.resolve(TronLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Sui, () => Promise.resolve(SuiLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Ton, () => Promise.resolve(TONLedger(clientParams) as LedgerSignerMap[T]))

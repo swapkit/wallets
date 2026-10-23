@@ -88,7 +88,13 @@ describe("trezor cardano transaction", () => {
   });
 
   it("maps an ADA transfer with token change keeping amounts, addresses and inputs", async () => {
-    expect(await toTrezorCardanoTransaction(TX, own, connect)).toEqual({
+    expect(
+      await toTrezorCardanoTransaction(
+        withBody((body) => body.set(8, 167000000)),
+        own,
+        connect,
+      ),
+    ).toEqual({
       auxiliaryData: { hash: "b5876c72e8bea78ff57e82306a5c1b83eb86f52a127bd81087b9821e70fd3ef8" },
       derivationType: 1,
       fee: "174301",
@@ -115,6 +121,7 @@ describe("trezor cardano transaction", () => {
       signingMode: 0,
       tagCborSets: false,
       ttl: "168000000",
+      validityIntervalStart: "167000000",
     });
   });
 
