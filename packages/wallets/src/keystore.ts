@@ -51,32 +51,31 @@ function readChainDerivation<C extends Chain>(chain: C, entry: KeystoreChainDeri
   const derivationPath = isObjectEntry && "derivationPath" in entry ? entry.derivationPath : entry;
   const scriptType = isObjectEntry && "scriptType" in entry ? entry.scriptType : undefined;
 
-  if (!Array.isArray(derivationPath)) {
-    throw isUTXO
-      ? new SwapKitError("toolbox_utxo_invalid_params", {
-          chain,
-          entry,
-          error: `${chain}: a UTXO derivation entry must state its path as an array: { derivationPath, scriptType }.`,
-        })
-      : new SwapKitError("wallet_missing_params", {
-          chain,
-          entry,
-          error: `${chain}: a derivation entry must be a path array or { derivationPath: number[] }.`,
-          param: "derivationPath",
-          wallet: WalletOption.KEYSTORE,
-        });
+  if (isUTXO) {
+    if (!Array.isArray(derivationPath) || !scriptType) {
+      throw new SwapKitError("toolbox_utxo_invalid_params", {
+        chain,
+        entry,
+        error:
+          `${chain}: a UTXO derivation entry must be { derivationPath: number[], scriptType }. ` +
+          "getUTXOScriptTypeForPath(derivationPath) gives the encoding the path implies.",
+      });
+    }
+
+    return { chain, derivationPath, scriptType };
   }
 
-  if (isUTXO && !scriptType) {
-    throw new SwapKitError("toolbox_utxo_invalid_params", {
+  if (!Array.isArray(derivationPath)) {
+    throw new SwapKitError("wallet_missing_params", {
       chain,
-      error:
-        `${chain}: a UTXO derivation entry must state its scriptType: { derivationPath, scriptType }. ` +
-        "getUTXOScriptTypeForPath(derivationPath) gives the encoding the path implies.",
+      entry,
+      error: `${chain}: a derivation entry must be a path array or { derivationPath: number[] }.`,
+      param: "derivationPath",
+      wallet: WalletOption.KEYSTORE,
     });
   }
 
-  return { chain, derivationPath, scriptType: isUTXO ? scriptType : undefined };
+  return { chain, derivationPath, scriptType: undefined };
 }
 
 /**
