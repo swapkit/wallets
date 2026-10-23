@@ -41,31 +41,30 @@ export type KeystoreDerivationPathMap = {
 };
 export type KeystoreDerivationPathMapOrIndex = KeystoreDerivationPathMap | number;
 
-function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | undefined) {
-  if (!entry) return { derivationPath: undefined, scriptType: undefined };
+function readChainDerivation<C extends Chain>(chain: C, entry: KeystoreChainDerivation | undefined) {
+  // Only a missing entry means "use the default path"; 0, "", false or null are configuration mistakes.
+  if (entry === undefined) return { chain, derivationPath: undefined, scriptType: undefined };
 
   const isUTXO = UTXOChains.includes(chain as UTXOChain);
-  // JS callers and casts can pass a string or number; `in` on one throws a TypeError that names no chain.
-  const isObjectEntry = typeof entry === "object";
+  // JS callers and casts can pass a primitive or null; `in` on one throws a TypeError that names no chain.
+  const isObjectEntry = typeof entry === "object" && entry !== null;
   const derivationPath = isObjectEntry && "derivationPath" in entry ? entry.derivationPath : entry;
   const scriptType = isObjectEntry && "scriptType" in entry ? entry.scriptType : undefined;
 
-  if (isUTXO && !Array.isArray(derivationPath)) {
-    throw new SwapKitError("toolbox_utxo_invalid_params", {
-      chain,
-      entry,
-      error: `${chain}: a UTXO derivation entry must state its path as an array: { derivationPath, scriptType }.`,
-    });
-  }
-
   if (!Array.isArray(derivationPath)) {
-    throw new SwapKitError("wallet_missing_params", {
-      chain,
-      entry,
-      error: `${chain}: a derivation entry must be a path array or { derivationPath: number[] }.`,
-      param: "derivationPath",
-      wallet: WalletOption.KEYSTORE,
-    });
+    throw isUTXO
+      ? new SwapKitError("toolbox_utxo_invalid_params", {
+          chain,
+          entry,
+          error: `${chain}: a UTXO derivation entry must state its path as an array: { derivationPath, scriptType }.`,
+        })
+      : new SwapKitError("wallet_missing_params", {
+          chain,
+          entry,
+          error: `${chain}: a derivation entry must be a path array or { derivationPath: number[] }.`,
+          param: "derivationPath",
+          wallet: WalletOption.KEYSTORE,
+        });
   }
 
   if (isUTXO && !scriptType) {
@@ -77,7 +76,7 @@ function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | unde
     });
   }
 
-  return { derivationPath, scriptType: isUTXO ? scriptType : undefined };
+  return { chain, derivationPath, scriptType: isUTXO ? scriptType : undefined };
 }
 
 /**
@@ -85,7 +84,7 @@ function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | unde
  * errors that recur on every connect, so they fail the whole connect, in chain order;
  * a chain that fails later for an environmental reason is skipped and logged instead.
  */
-function readDerivations(chains: Chain[], derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex) {
+function readDerivations<C extends Chain>(chains: C[], derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex) {
   const derivationMap =
     derivationPathMapOrIndex && typeof derivationPathMapOrIndex === "object" ? derivationPathMapOrIndex : undefined;
 
@@ -242,10 +241,8 @@ export async function createKeystoreWallet<T extends Chain[]>({
   const walletIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
   const derivations = readDerivations(supportedChains, derivationPathMapOrIndex);
   const walletResults = await Promise.allSettled(
-    supportedChains.map(async (chain, chainIndex) => {
+    derivations.map(async ({ chain, derivationPath: derivationPathFromMap, scriptType }) => {
       const { getToolbox } = await import("@swapkit/toolboxes");
-
-      const { derivationPath: derivationPathFromMap, scriptType } = derivations[chainIndex] ?? {};
 
       const slicedPath: readonly (number | undefined)[] = NetworkDerivationPath[chain].slice(
         0,
