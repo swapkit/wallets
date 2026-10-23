@@ -31,7 +31,7 @@ export function getStellarLedgerPath(derivationPath: DerivationPathArray) {
   }
 
   // hw-app-str hardens every segment, so a leading "m" would become "m'" and fail to parse.
-  return derivationPathToString([purpose, coinType, account] as unknown as DerivationPathArray).replace(/^m\//, "");
+  return derivationPathToString([purpose, coinType, account]).replace(/^m\//, "");
 }
 
 export async function StellarLedger(paramsOrPath?: StellarLedgerParams | DerivationPathArray, transport?: Transport) {
