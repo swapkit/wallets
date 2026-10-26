@@ -4,13 +4,10 @@ import { Chain, SwapKitError } from "@swapkit/helpers";
 const SUI_MAINNET = "sui:mainnet";
 
 type SuiAccount = { address: string; chains: readonly string[] };
-type SuiSignInput = { account: SuiAccount; chain: string; transaction?: unknown; transactionBlock?: unknown };
+type SuiSignInput = { account: SuiAccount; chain: string; transaction: unknown };
 type OkxSuiFeatures = {
   "standard:connect"?: { connect: () => Promise<{ accounts: readonly SuiAccount[] }> };
   "sui:signTransaction"?: { signTransaction: (input: SuiSignInput) => Promise<{ bytes: string; signature: string }> };
-  "sui:signTransactionBlock"?: {
-    signTransactionBlock: (input: SuiSignInput) => Promise<{ transactionBlockBytes: string; signature: string }>;
-  };
 };
 
 export async function getOkxSuiWallet() {
@@ -26,21 +23,8 @@ export async function getOkxSuiWallet() {
   }
 
   const signFeature = features["sui:signTransaction"];
-  const legacyFeature = features["sui:signTransactionBlock"];
-  const signWithWallet = signFeature
-    ? (account: SuiAccount, transaction: unknown) =>
-        signFeature.signTransaction({ account, chain: SUI_MAINNET, transaction })
-    : legacyFeature &&
-      (async (account: SuiAccount, transactionBlock: unknown) => {
-        const { transactionBlockBytes, signature } = await legacyFeature.signTransactionBlock({
-          account,
-          chain: SUI_MAINNET,
-          transactionBlock,
-        });
-        return { bytes: transactionBlockBytes, signature };
-      });
 
-  if (!signWithWallet) {
+  if (!signFeature) {
     throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui });
   }
 
@@ -53,7 +37,8 @@ export async function getOkxSuiWallet() {
 
   const signTransaction = (txBytes: Uint8Array) => {
     const serialized = base64.encode(txBytes);
-    return signWithWallet(account, { serialize: () => serialized, toJSON: () => Promise.resolve(serialized) });
+    const transaction = { serialize: () => serialized, toJSON: () => Promise.resolve(serialized) };
+    return signFeature.signTransaction({ account, chain: SUI_MAINNET, transaction });
   };
 
   const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");
