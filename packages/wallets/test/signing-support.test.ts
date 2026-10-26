@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Chain, EVMChains, WalletOption } from "@swapkit/helpers";
 import type { ChainSigningSupport } from "@swapkit/wallet-core";
 import { loadWallet } from "../src/utils";
@@ -45,6 +45,16 @@ const DIRECT_SIGNING_ON_DEVELOP: Partial<Record<WalletOption, Chain[]>> = {
 };
 
 describe("wallet signing support", () => {
+  // Other test files leave a stub `window` on globalThis. With one present, @passkeys/core (re-exported by the
+  // passkeys connector) builds a DOMParser at import time, which Bun does not provide, so load connectors without it.
+  const leakedWindow = globalThis.window;
+  beforeAll(() => {
+    Reflect.deleteProperty(globalThis, "window");
+  });
+  afterAll(() => {
+    if (leakedWindow !== undefined) globalThis.window = leakedWindow;
+  });
+
   test("no connector declares Bitcoin message signing", async () => {
     for (const option of Object.values(WalletOption)) {
       const { signingSupport } = await getSigningSupport(option);
