@@ -3,9 +3,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { bech32, hex } from "@scure/base";
 import { AssetValue, Chain } from "@swapkit/helpers";
 import { Address, beginCell } from "@ton/core";
+import { getWallets } from "@wallet-standard/app";
 
 import { getWalletMethods } from "../helpers";
 import { okxWallet } from "../index";
+
+const SUI_ADDRESS = `0x${"7".repeat(64)}`;
 
 const RAW_TON_ADDRESS = `0:${"ab".repeat(32)}`;
 
@@ -108,6 +111,65 @@ describe("connectOkx", () => {
 
     expect(await result).toBe(true);
     expect(added[0].address).toBe(address);
+  });
+});
+
+describe("OKX Sui", () => {
+  const unregisterWallets = [];
+
+  function registerSuiWallet({ chains = ["sui:mainnet"], signFeature = true } = {}) {
+    const requests = [];
+    const features = {
+      "standard:connect": {
+        connect: () => {
+          requests.push("connect");
+          return Promise.resolve({ accounts: [{ address: SUI_ADDRESS, chains }] });
+        },
+      },
+    };
+    if (signFeature) {
+      features["sui:signTransaction"] = {
+        signTransaction: async (input) => {
+          requests.push({ ...input, transaction: await input.transaction.toJSON() });
+          return { bytes: "c2lnbmVk", signature: "c2lnbmF0dXJl" };
+        },
+      };
+    }
+    unregisterWallets.push(
+      getWallets().register({ accounts: [], chains: ["sui:mainnet"], features, name: "OKX Wallet" }),
+    );
+    return requests;
+  }
+
+  afterEach(() => {
+    for (const unregister of unregisterWallets.splice(0)) unregister();
+  });
+
+  test("asks the wallet standard account to sign the exact transaction bytes", async () => {
+    const requests = registerSuiWallet();
+
+    const wallet = await getWalletMethods(Chain.Sui);
+    const signed = await wallet.signTransaction(Uint8Array.from([1, 2, 3]));
+
+    expect(wallet.address).toBe(SUI_ADDRESS);
+    expect(requests).toEqual([
+      "connect",
+      { account: { address: SUI_ADDRESS, chains: ["sui:mainnet"] }, chain: "sui:mainnet", transaction: "AQID" },
+    ]);
+    expect(signed).toEqual({ bytes: "c2lnbmVk", signature: "c2lnbmF0dXJl" });
+  });
+
+  test("rejects a wallet that only returns non-mainnet accounts", async () => {
+    registerSuiWallet({ chains: ["sui:testnet"] });
+
+    await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
+  });
+
+  test("rejects a wallet without a Sui signing feature before connecting", async () => {
+    const requests = registerSuiWallet({ signFeature: false });
+
+    await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
+    expect(requests).toEqual([]);
   });
 });
 
