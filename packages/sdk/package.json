@@ -7,7 +7,7 @@
     "@swapkit/plugins": "^5.0.10",
     "@swapkit/server": "^6.0.0",
     "@swapkit/toolboxes": "^6.4.1",
-    "@swapkit/wallet-core": "^5.0.10",
+    "@swapkit/wallet-core": "^5.1.0",
     "@swapkit/wallet-keystore": "^6.0.0",
     "@swapkit/wallets": "workspace:*",
     "cosmjs-types": "0.10.1"

@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Chain, EVMChains, WalletOption } from "@swapkit/helpers";
-import type { ChainSigningSupport } from "@swapkit/wallet-core";
+import type { ChainSigningSupport, DirectSigningSupport } from "@swapkit/wallet-core";
 import { loadWallet } from "../src/utils";
 
 async function getSigningSupport(option: WalletOption) {
   const wallet = await loadWallet(option);
-  const [descriptor] = Object.values(wallet) as [{ signingSupport: ChainSigningSupport; supportedChains: Chain[] }];
+  const [descriptor] = Object.values(wallet) as [
+    { directSigningSupport: DirectSigningSupport; signingSupport: ChainSigningSupport; supportedChains: Chain[] },
+  ];
   return descriptor;
 }
 
@@ -59,6 +61,21 @@ describe("wallet signing support", () => {
     for (const option of Object.values(WalletOption)) {
       const { signingSupport } = await getSigningSupport(option);
       for (const support of Object.values(signingSupport)) expect(support?.btcMessage).toBeUndefined();
+    }
+  });
+
+  test("the legacy directSigningSupport alias mirrors signingSupport direct", async () => {
+    for (const option of Object.values(WalletOption)) {
+      const { directSigningSupport, signingSupport } = await getSigningSupport(option);
+      const directChains = (Object.keys(signingSupport) as Chain[]).filter(
+        (chain) => signingSupport[chain]?.direct === true,
+      );
+
+      expect(Object.keys(directSigningSupport).sort()).toEqual(directChains.sort());
+      for (const [chain, direct] of Object.entries(directSigningSupport) as [Chain, boolean | undefined][]) {
+        expect(direct).toBe(true);
+        expect(signingSupport[chain]?.direct).toBe(true);
+      }
     }
   });
 

@@ -112,6 +112,7 @@ export const walletconnectWallet = createWallet({
             chain,
             disconnect: walletconnect.disconnect,
             signing: {
+              ...SIGNING_SUPPORT[chain],
               direct:
                 SIGNING_SUPPORT[chain]?.direct === true && getSessionDirectSigningSupport(chain, walletconnect.session),
             },
