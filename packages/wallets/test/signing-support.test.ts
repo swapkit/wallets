@@ -34,6 +34,7 @@ const DIRECT_SIGNING_ON_DEVELOP: Partial<Record<WalletOption, Chain[]>> = {
     Chain.Polygon,
     Chain.Ripple,
     Chain.Robinhood,
+    Chain.Stellar,
     Chain.Sui,
     Chain.THORChain,
     Chain.Ton,

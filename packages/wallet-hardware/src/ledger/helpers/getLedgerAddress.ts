@@ -2,6 +2,7 @@ import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 
 import type { CardanoLedger } from "../clients/cardano";
 import type { getNearLedgerClient } from "../clients/near";
+import type { StellarLedger } from "../clients/stellar";
 import type { SuiLedger } from "../clients/sui";
 import type { TONLedger } from "../clients/ton";
 import type { TronLedger } from "../clients/tron";
@@ -64,6 +65,10 @@ export const getLedgerAddress = async <
 
     case Chain.Ripple: {
       return (ledgerClient as Awaited<ReturnType<typeof XRPLedger>>).getAddress();
+    }
+
+    case Chain.Stellar: {
+      return (ledgerClient as Awaited<ReturnType<typeof StellarLedger>>).getAddress();
     }
 
     case Chain.Cardano: {
