@@ -202,13 +202,13 @@ describe("Trezor wallet handling", () => {
     });
   });
 
-  it("fetches Zcash xpubs with Trezor's zcash coin id", async () => {
+  it("fetches Zcash xpubs with Trezor's zec ticker", async () => {
     trezorGetPublicKeyCalls.length = 0;
 
     const info = await getTrezorExtendedPublicKey(Chain.Zcash, [44, 133, 0, 0, 0], { accountIndex: 0 });
 
     expect(info?.xpub).toBe(zcashAccountXpub);
-    expect(trezorGetPublicKeyCalls.at(-1)).toMatchObject({ coin: "zcash", path: "m/44'/133'/0'", showOnTrezor: true });
+    expect(trezorGetPublicKeyCalls.at(-1)).toMatchObject({ coin: "zec", path: "m/44'/133'/0'", showOnTrezor: true });
   });
 
   it("reuses the selected Zcash address during connect", async () => {
