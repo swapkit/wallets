@@ -1,5 +1,6 @@
 import { base64 } from "@scure/base";
 import { Chain, SwapKitError } from "@swapkit/helpers";
+import type { SuiWallet } from "@swapkit/toolboxes/sui";
 
 const SUI_MAINNET = "sui:mainnet";
 
@@ -10,7 +11,7 @@ type OkxSuiFeatures = {
   "sui:signTransaction"?: { signTransaction: (input: SuiSignInput) => Promise<{ bytes: string; signature: string }> };
 };
 
-export async function getOkxSuiWallet() {
+export async function getOkxSuiWallet(): Promise<SuiWallet & { address: string }> {
   const { getWallets } = await import("@wallet-standard/app");
   const wallet = getWallets()
     .get()
