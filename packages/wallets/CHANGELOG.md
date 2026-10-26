@@ -1,5 +1,17 @@
 # @swapkit-dev/wallets
 
+## 6.1.0
+
+### Minor Changes
+
+- [#206](https://github.com/swapkit/wallets/pull/206) [`8b72bc7`](https://github.com/swapkit/wallets/commit/8b72bc72c8a5eb45792ac6af0d05dbec6d554d2d) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Wallet connectors now declare every signing capability they have in one `signingSupport` map on the wallet descriptor, per chain: `direct` (sign a transaction without broadcasting it), `typedData` (EIP-712 typed data) and `btcMessage` (Bitcoin message signing), e.g. `metamaskWallet.connectMetamask.signingSupport[Chain.Ethereum]` is `{ direct: true, typedData: true }`. Each connected chain wallet also carries its entry as `signing`. A capability that is not listed means the connector cannot do it on that chain.
+- [#206](https://github.com/swapkit/wallets/pull/206) [`8b72bc7`](https://github.com/swapkit/wallets/commit/8b72bc72c8a5eb45792ac6af0d05dbec6d554d2d) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Update SwapKit SDK dependencies:
+- [#199](https://github.com/swapkit/wallets/pull/199) [`d8f31cf`](https://github.com/swapkit/wallets/commit/d8f31cf2b8e35d4d2960a77bba9f1d11ca7514f9) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Cardano support to the Ledger wallet for ADA transfers, including native tokens returned as change. (via @swapkit/wallet-hardware@6.2.0)
+- [#197](https://github.com/swapkit/wallets/pull/197) [`9d12547`](https://github.com/swapkit/wallets/commit/9d1254709b882c4f8428e105056b6a607b5dcd19) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Robinhood Chain support to the Ledger wallet. Ledger has not published network metadata for Robinhood yet, so the device shows the transaction as a blind signature on an unknown network. (via @swapkit/wallet-hardware@6.2.0)
+- [#198](https://github.com/swapkit/wallets/pull/198) [`d135c23`](https://github.com/swapkit/wallets/commit/d135c23031bd6abb74e3f7327e40bf237dc0f859) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add Stellar support to the Ledger wallet for XLM and Stellar asset payments, trustlines and fee bump transactions. The device shows the transaction exactly as it will be submitted. (via @swapkit/wallet-hardware@6.2.0)
+- [#200](https://github.com/swapkit/wallets/pull/200) [`905249f`](https://github.com/swapkit/wallets/commit/905249ff52bec255e3c49d3b837e72ac6dcb5e3c) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Add TON support to the Ledger wallet for TON and jetton transfers. The Ledger TON app signs one message per transaction, and payloads it cannot display need blind signing enabled on the device. (via @swapkit/wallet-hardware@6.2.0)
+- [#188](https://github.com/swapkit/wallets/pull/188) [`50b40ae`](https://github.com/swapkit/wallets/commit/50b40ae157d131afd79929725f343ea2a75b5326) Thanks [@mfaizan1](https://github.com/mfaizan1)! - Sign Zcash transactions on Trezor. The connector asked Trezor Connect for the coin `zcash`, which Connect resolves by path when fetching an address but only by ticker when signing, so every Zcash send and swap failed with `Method_UnknownCoin` before reaching the device. It now passes `zec`. (via @swapkit/wallet-hardware@6.2.0)
+
 ## 6.0.0
 
 ### Major Changes
