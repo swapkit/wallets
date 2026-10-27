@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Chain, EVMChains, WalletOption } from "@swapkit/helpers";
+import { type AddChainType, Chain, EVMChains, WalletOption } from "@swapkit/helpers";
 import type { ChainSigningSupport, DirectSigningSupport } from "@swapkit/wallet-core";
+import { keystoreWallet } from "../src/keystore";
 import { loadWallet } from "../src/utils";
 
 async function getSigningSupport(option: WalletOption) {
@@ -57,11 +58,22 @@ describe("wallet signing support", () => {
     if (leakedWindow !== undefined) globalThis.window = leakedWindow;
   });
 
-  test("no connector declares Bitcoin message signing", async () => {
-    for (const option of Object.values(WalletOption)) {
+  test("no connector other than the keystore declares Bitcoin message signing", async () => {
+    for (const option of Object.values(WalletOption).filter((option) => option !== WalletOption.KEYSTORE)) {
       const { signingSupport } = await getSigningSupport(option);
       for (const support of Object.values(signingSupport)) expect(support?.btcMessage).toBeUndefined();
     }
+  });
+
+  test("the keystore declares Bitcoin message signing on Bitcoin only", async () => {
+    const added: Parameters<AddChainType>[0][] = [];
+    await keystoreWallet.connectKeystore.connectWallet({ addChain: (wallet) => added.push(wallet) })(
+      [Chain.Bitcoin, Chain.Litecoin],
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    );
+
+    expect(added.find((wallet) => wallet.chain === Chain.Bitcoin)?.signing?.btcMessage).toBe(true);
+    expect(added.find((wallet) => wallet.chain === Chain.Litecoin)?.signing?.btcMessage).toBeUndefined();
   });
 
   test("the legacy directSigningSupport alias mirrors signingSupport direct", async () => {

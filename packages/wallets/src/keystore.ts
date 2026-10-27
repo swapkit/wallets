@@ -148,6 +148,7 @@ export const keystoreWallet = createWallet({
   signingSupport: {
     ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
     ...Object.fromEntries(UTXOChains.map((chain) => [chain, { direct: true }])),
+    [Chain.Bitcoin]: { btcMessage: true, direct: true },
     ...Object.fromEntries(
       CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, { direct: true }]),
     ),
