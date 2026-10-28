@@ -1,130 +1,7 @@
-import { base64 } from "@scure/base";
-import { Chain, filterSupportedChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
-import { Transaction } from "@swapkit/utxo-signer";
+import { Chain, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
-import type { BitcoinProvider, GetAddressOptions, GetAddressResponse, SignTransactionOptions } from "sats-connect";
-import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import type { ExtensionWallet } from "../walletTypes";
-
-async function getWalletMethodsForExtension(chain: Chain) {
-  switch (chain) {
-    case Chain.Bitcoin: {
-      if (!window.$onekey?.btc) {
-        throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
-      }
-
-      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
-      const {
-        signTransaction: satsSignTransaction,
-        getAddress,
-        AddressPurpose,
-        BitcoinNetworkType,
-      } = await import("sats-connect");
-
-      let address = "";
-
-      const getProvider = () => new Promise<BitcoinProvider>((res) => res(window.$onekey?.btc));
-
-      const getAddressOptions: GetAddressOptions = {
-        getProvider,
-        onCancel: () => {
-          throw new SwapKitError("wallet_connection_rejected_by_user");
-        },
-        onFinish: (response: GetAddressResponse) => {
-          if (response.addresses[0]?.address) {
-            address = response.addresses[0].address;
-          }
-        },
-        payload: {
-          message: "Address for receiving and sending payments",
-          network: { type: BitcoinNetworkType.Mainnet },
-          purposes: [AddressPurpose.Payment],
-        },
-      };
-
-      await getAddress(getAddressOptions);
-
-      async function signTransaction(tx: InstanceType<typeof Transaction>) {
-        let signedTx: InstanceType<typeof Transaction> | undefined;
-        const psbtBytes = tx.toPSBT(0);
-        const psbtBase64 = base64.encode(psbtBytes);
-        const inputCount = tx.inputsLength;
-
-        const signPsbtOptions: SignTransactionOptions = {
-          getProvider,
-          onCancel: () => {
-            throw new SwapKitError("wallet_connection_rejected_by_user");
-          },
-          onFinish: (response) => {
-            signedTx = Transaction.fromPSBT(base64.decode(response.psbtBase64));
-          },
-          payload: {
-            broadcast: false,
-            inputsToSign: [{ address, signingIndexes: Array.from({ length: inputCount }, (_, i) => i) }],
-            message: "Sign transaction",
-            network: { type: BitcoinNetworkType.Mainnet },
-            psbtBase64,
-          },
-        };
-
-        await satsSignTransaction(signPsbtOptions);
-        if (!signedTx) throw new SwapKitError("wallet_onekey_sign_transaction_error");
-        return signedTx;
-      }
-
-      const signer = { getAddress: () => Promise.resolve(address), signTransaction };
-
-      const toolbox = await getUtxoToolbox(chain, { ...(await getUtxoScriptTypeParams({ address, chain })), signer });
-
-      return { ...toolbox, address };
-    }
-
-    case Chain.Solana: {
-      if (!window.$onekey?.sol) {
-        throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
-      }
-
-      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
-
-      const signer = window.$onekey.sol;
-      const address = await signer.getAddress();
-      const toolbox = await getSolanaToolbox({ signer });
-
-      return { ...toolbox, address };
-    }
-
-    case Chain.Arbitrum:
-    case Chain.Aurora:
-    case Chain.Avalanche:
-    case Chain.Base:
-    case Chain.BinanceSmartChain:
-    case Chain.Ethereum:
-    case Chain.Gnosis:
-    case Chain.Optimism:
-    case Chain.Polygon:
-    case Chain.XLayer: {
-      const { getProvider, getEvmToolboxAsync } = await import("@swapkit/toolboxes/evm");
-      if (!window.$onekey?.ethereum) {
-        throw new SwapKitError({ errorKey: "wallet_onekey_not_found", info: { chain } });
-      }
-
-      const { BrowserProvider } = await import("ethers");
-      const provider = new BrowserProvider(window.$onekey.ethereum, "any");
-
-      await provider.send("eth_requestAccounts", []);
-      const jsonRpcProvider = await getProvider(chain);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-
-      const toolbox = await getEvmToolboxAsync(chain, { provider: jsonRpcProvider, signer });
-
-      return { address, ...prepareNetworkSwitch({ chain, provider, toolbox }) };
-    }
-
-    default:
-      throw new SwapKitError({ errorKey: "wallet_chain_not_supported", info: { chain, wallet: WalletOption.ONEKEY } });
-  }
-}
+import { getWalletMethods } from "./helpers";
 
 export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
@@ -137,11 +14,8 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
 
       await Promise.all(
         filteredChains.map(async (chain) => {
-          const walletMethods = await getWalletMethodsForExtension(chain);
-
-          const address = (await walletMethods.getAddress()) || "F";
-
-          addChain({ ...walletMethods, address, chain, walletType });
+          const walletMethods = await getWalletMethods(chain);
+          addChain({ ...walletMethods, chain, walletType });
         }),
       );
 
@@ -155,11 +29,17 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
     [Chain.Base]: { direct: true, typedData: true },
     [Chain.BinanceSmartChain]: { direct: true, typedData: true },
     [Chain.Bitcoin]: { direct: true },
+    [Chain.Cardano]: { direct: true },
     [Chain.Ethereum]: { direct: true, typedData: true },
     [Chain.Gnosis]: { direct: true, typedData: true },
+    [Chain.Near]: { direct: true },
     [Chain.Optimism]: { direct: true, typedData: true },
     [Chain.Polygon]: { direct: true, typedData: true },
     [Chain.Solana]: { direct: true },
+    [Chain.Stellar]: { direct: true },
+    [Chain.Sui]: { direct: true },
+    [Chain.Ton]: { direct: true },
+    [Chain.Tron]: { direct: true },
     [Chain.XLayer]: { direct: true, typedData: true },
   },
   supportedChains: [
@@ -169,11 +49,17 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
     Chain.Base,
     Chain.BinanceSmartChain,
     Chain.Bitcoin,
+    Chain.Cardano,
     Chain.Ethereum,
     Chain.Gnosis,
+    Chain.Near,
     Chain.Optimism,
     Chain.Polygon,
     Chain.Solana,
+    Chain.Stellar,
+    Chain.Sui,
+    Chain.Ton,
+    Chain.Tron,
     Chain.XLayer,
   ],
   walletType: WalletOption.ONEKEY,

@@ -64,7 +64,7 @@ declare global {
   interface Window {
     injectedWeb3?: SubstrateInjectedExtension;
     talismanEth?: EthereumWindowProvider;
-    $onekey?: any;
+    $onekey?: import("./onekey/types").OneKeyProviders;
     braveSolana: any;
     coinbaseWalletExtension: EthereumWindowProvider;
     ethereum: EthereumWindowProvider;
