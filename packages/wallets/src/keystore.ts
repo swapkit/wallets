@@ -11,7 +11,7 @@ import {
   SwapKitError,
   type UTXOChain,
   UTXOChains,
-  type UTXOScriptType,
+  UTXOScriptType,
   updateDerivationPath,
   WalletOption,
 } from "@swapkit/helpers";
@@ -139,7 +139,15 @@ export const keystoreWallet = createWallet({
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
 
       for (const wallet of Object.values(wallets)) {
-        addChain({ ...wallet, chain: wallet.chain, walletType: WalletOption.KEYSTORE });
+        const isTaprootBitcoin =
+          wallet.chain === Chain.Bitcoin && "scriptType" in wallet && wallet.scriptType === UTXOScriptType.P2TR;
+
+        addChain({
+          ...wallet,
+          chain: wallet.chain,
+          walletType: WalletOption.KEYSTORE,
+          ...(isTaprootBitcoin ? { signing: { direct: true } } : {}),
+        });
       }
 
       return true;

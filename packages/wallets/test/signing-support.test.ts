@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { type AddChainType, Chain, EVMChains, WalletOption } from "@swapkit/helpers";
+import { type AddChainType, Chain, EVMChains, UTXOScriptType, WalletOption } from "@swapkit/helpers";
 import type { ChainSigningSupport, DirectSigningSupport } from "@swapkit/wallet-core";
 import { keystoreWallet } from "../src/keystore";
 import { loadWallet } from "../src/utils";
@@ -74,6 +74,19 @@ describe("wallet signing support", () => {
 
     expect(added.find((wallet) => wallet.chain === Chain.Bitcoin)?.signing?.btcMessage).toBe(true);
     expect(added.find((wallet) => wallet.chain === Chain.Litecoin)?.signing?.btcMessage).toBeUndefined();
+  });
+
+  test("a keystore on a Taproot Bitcoin derivation does not declare Bitcoin message signing", async () => {
+    const added: Parameters<AddChainType>[0][] = [];
+    await keystoreWallet.connectKeystore.connectWallet({ addChain: (wallet) => added.push(wallet) })(
+      [Chain.Bitcoin],
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      { [Chain.Bitcoin]: { derivationPath: [86, 0, 0, 0, 0], scriptType: UTXOScriptType.P2TR } },
+    );
+
+    const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
+    expect(bitcoin?.signing?.btcMessage).not.toBe(true);
+    expect(bitcoin?.signing?.direct).toBe(true);
   });
 
   test("the legacy directSigningSupport alias mirrors signingSupport direct", async () => {
