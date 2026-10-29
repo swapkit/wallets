@@ -79,7 +79,17 @@ export {
   xamanWallet,
 };
 
-export const defaultPlugins = {
+// Temporary workaround until @swapkit/plugins exports its limit-order parameter types (TS2883 on declaration emit).
+export const defaultPlugins: typeof ChainflipPlugin &
+  typeof EVMPlugin &
+  typeof MayachainPlugin &
+  typeof ThorchainPlugin &
+  typeof RadixPlugin &
+  typeof SolanaPlugin &
+  typeof NearPlugin &
+  typeof GardenPlugin &
+  typeof SwapKitPlugin &
+  typeof HarborPlugin = {
   ...ChainflipPlugin,
   ...EVMPlugin,
   ...MayachainPlugin,
