@@ -347,14 +347,13 @@ describe("Ledger UTXO transfer", () => {
       ]);
     }
 
-    it("resolves the previous transactions of a raw API route transaction, whose txids fromBytes keeps in wire order", async () => {
+    it("resolves the previous transactions of a raw API route transaction by the display-order txids fromBytes returns", async () => {
       const wallet = await connect(Chain.Zcash);
       const decoded = ZcashTransaction.fromBytes(zcashRouteTransaction(previousTxids).toBytes());
 
       const txHash = await wallet.signAndBroadcastTransaction(decoded);
 
-      // Each input is looked up as given (wire order, unknown to the API) and then reversed.
-      expect([...zcashRawTxRequests].sort()).toEqual([...previousTxids, ...previousTxids.map(reversed)].sort());
+      expect(zcashRawTxRequests).toEqual(previousTxids);
       expect(signedPreviousTransactions()).toEqual(previousTransactions.map((transaction) => [transaction, 0]));
       expect(signedMemos(deviceOutputs(Chain.Zcash))).toEqual([SWAP_MEMO]);
       expect(broadcastTxs).toEqual([v5Transaction(9_000n)]);

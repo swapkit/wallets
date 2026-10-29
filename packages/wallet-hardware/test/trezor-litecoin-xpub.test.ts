@@ -53,6 +53,10 @@ function buildZcashSignedTx(inputScript: Uint8Array) {
     compactSize(0),
     uint32LE(0),
     uint32LE(0),
+    Buffer.alloc(8),
+    compactSize(0),
+    compactSize(0),
+    compactSize(0),
   ]).toString("hex");
 }
 
