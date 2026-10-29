@@ -161,8 +161,8 @@ function parsePreviousTransaction({ bytes, version }: { bytes: Uint8Array; versi
   return { ...transparentFields, extraData: reader.rest(), locktime, nExpiryHeight };
 }
 
-// Either byte order binds a txid equally: toolbox-built transactions keep display-order txids, while
-// ZcashTransaction.fromBytes keeps them in wire order.
+// Either byte order binds a txid equally: transactions keep display-order txids, while older utxo-signer
+// parsers kept them in wire order.
 function matchesTxid({ hash, txid }: { hash: string; txid: Uint8Array }) {
   const normalized = hash.toLowerCase();
   return normalized === hex.encode(txid) || normalized === hex.encode(txid.slice().reverse());

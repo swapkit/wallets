@@ -217,9 +217,9 @@ function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccoun
     .exhaustive();
 }
 
-// Toolbox-built transactions keep input txids in display order, the order the UTXO API looks transactions up by,
-// while ZcashTransaction.fromBytes (raw API route transactions) keeps them in wire order, so try both. A txid and its
-// byte reversal cannot both name real transactions, so the fallback cannot fetch an unrelated one.
+// Input txids are in display order, the order the UTXO API looks transactions up by; older utxo-signer parsers kept
+// them in wire order, so try both. A txid and its byte reversal cannot both name real transactions, so the fallback
+// cannot fetch an unrelated one.
 function resolveZcashInputUtxos(transaction: ZcashTransaction): Promise<UTXOType[]> {
   const zcashApi = getUtxoApi(Chain.Zcash);
   const getRawTx = createCachedRawTxResolver((txid) => zcashApi.getRawTx(txid));

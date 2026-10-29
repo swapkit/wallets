@@ -5,10 +5,10 @@ import { deriveAddressesFromXpub } from "@swapkit/toolboxes/utxo";
 import {
   createPCZT,
   createZcashTransaction,
-  getZcashConsensusBranchId,
+  getZcashTransactionFormat,
   OutScript,
   Script,
-  ZCASH_IRONWOOD_ACTIVATION_HEIGHT,
+  ZCASH_NU7_ACTIVATION_HEIGHT,
   ZcashPSBT,
 } from "@swapkit/utxo-signer";
 
@@ -53,6 +53,10 @@ function buildZcashSignedTx(inputScript: Uint8Array) {
     compactSize(0),
     uint32LE(0),
     uint32LE(0),
+    Buffer.alloc(8),
+    compactSize(0),
+    compactSize(0),
+    compactSize(0),
   ]).toString("hex");
 }
 
@@ -254,7 +258,14 @@ describe("Trezor wallet handling", () => {
     expect(signedSignature).toEqual(signature);
   });
 
-  it("passes the transaction's Ironwood branch id to Trezor for serialized Zcash signing", async () => {
+  it.each([
+    { branchId: 0x37a5165b, height: ZCASH_NU7_ACTIVATION_HEIGHT - 1, version: 4 },
+    { branchId: 0x77190ad9, height: ZCASH_NU7_ACTIVATION_HEIGHT, version: 5 },
+  ])("passes the transaction's v$version header to Trezor for serialized Zcash signing", async ({
+    branchId,
+    height,
+    version,
+  }) => {
     trezorSignTransactionCalls.length = 0;
     trezorSerializedTx = buildZcashSignedTx(new Uint8Array());
 
@@ -265,16 +276,18 @@ describe("Trezor wallet handling", () => {
     const connectedWallet = addChain.mock.calls[0]?.[0] as {
       signTransaction: (tx: ReturnType<typeof createZcashTransaction>) => Promise<unknown>;
     };
-    const branchId = getZcashConsensusBranchId(ZCASH_IRONWOOD_ACTIVATION_HEIGHT);
-    const tx = createZcashTransaction({ consensusBranchId: branchId });
+    const format = getZcashTransactionFormat(height);
+    const tx = createZcashTransaction({ ...format, expiryHeight: 0, lockTime: 0 });
     tx.addInput({ index: 0, txid: new Uint8Array(32).fill(1), value: 1_000n });
     tx.addOutput({ amount: 500n, script: OutScript.encode({ hash: new Uint8Array(20).fill(2), type: "pkh" }) });
 
     await connectedWallet.signTransaction(tx);
 
-    const signParams = trezorSignTransactionCalls.at(-1) as { branchId: number };
-    expect(branchId).toBe(0x37a5165b);
-    expect(signParams.branchId).toBe(0x37a5165b);
+    expect(trezorSignTransactionCalls.at(-1)).toMatchObject({
+      branchId,
+      version,
+      versionGroupId: format.versionGroupId,
+    });
   });
 
   it("passes route Zcash PSBT prev tx ids to Trezor without reversing them or looking up raw txs", async () => {

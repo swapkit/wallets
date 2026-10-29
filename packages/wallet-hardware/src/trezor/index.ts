@@ -415,8 +415,7 @@ async function extractSignaturesFromSignedTx(signedTxHex: string, pczt: PCZT): P
   const signedPczt = pczt.clone();
 
   for (let i = 0; i < signedTx.inputsLength; i++) {
-    const signedInput = signedTx.getInput(i);
-    const script = signedInput.script;
+    const script = signedTx.getInput(i).scriptSig;
     if (script && script.length > 0) {
       const scriptParts = Script.decode(script);
       if (scriptParts.length >= 2) {
@@ -749,7 +748,7 @@ async function getTrezorWallet<T extends Chain>({
 
       const signZcashTransactionWithSerializedTx = async (tx: ZcashTransaction) => {
         const { hex: hexEncode } = await import("@scure/base");
-        const { NETWORKS, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
+        const { NETWORKS } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
 
         const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
@@ -763,12 +762,12 @@ async function getTrezorWallet<T extends Chain>({
 
         const request = {
           branchId: tx.consensusBranchId,
-          expiry: 0,
+          expiry: tx.expiryHeight,
           inputs,
-          locktime: 0,
+          locktime: tx.lockTime,
           outputs,
-          version: 4,
-          versionGroupId: ZcashVersionGroupId.SAPLING,
+          version: tx.version,
+          versionGroupId: tx.versionGroupId,
         };
         const serializedTx = await signWithTrezor(request, "transaction");
 
