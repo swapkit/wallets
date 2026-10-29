@@ -22,16 +22,16 @@ export type OkxCardanoApi = {
   signTx: (transaction: string, partialSign?: boolean) => Promise<string>;
 };
 
-export type OkxTonConnectEvent =
+export type TonConnectEvent =
   | { event: "connect"; payload: { items: { name: string; address?: string; network?: string }[] } }
   | { event: "connect_error"; payload: { code: number; message: string } };
 
-type OkxTonConnectBridge = {
+export type TonConnectBridge = {
   connect: (
     protocolVersion: number,
     request: { manifestUrl: string; items: { name: string }[] },
-  ) => Promise<OkxTonConnectEvent>;
-  restoreConnection: () => Promise<OkxTonConnectEvent>;
+  ) => Promise<TonConnectEvent>;
+  restoreConnection: () => Promise<TonConnectEvent>;
   send: (request: {
     id: string;
     method: string;
@@ -183,6 +183,6 @@ declare global {
         }
       | EthereumWindowProvider;
     tronLink?: TronLinkWindow;
-    okxTonWallet?: { tonconnect: OkxTonConnectBridge };
+    okxTonWallet?: { tonconnect: TonConnectBridge };
   }
 }

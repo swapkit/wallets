@@ -1,7 +1,7 @@
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { TronSignedTransaction, TronTransaction } from "@swapkit/toolboxes/tron";
 import type { Eip1193Provider } from "ethers";
-import type { OkxTonConnectEvent } from "../types";
+import type { TonConnectBridge } from "../types";
 
 export type OneKeyJsBridge = {
   request: (payload: {
@@ -35,19 +35,6 @@ export type OneKeyTronProvider = {
   };
 };
 
-export type OneKeyTonConnectBridge = {
-  connect: (
-    protocolVersion: number,
-    request: { manifestUrl: string; items: { name: string }[] },
-  ) => Promise<OkxTonConnectEvent>;
-  restoreConnection: () => Promise<OkxTonConnectEvent>;
-  send: (request: {
-    id: string;
-    method: string;
-    params: string[];
-  }) => Promise<{ id: string; result?: string; error?: { code: number; message: string } }>;
-};
-
 export type OneKeyCardanoApi = {
   getChangeAddress: () => Promise<string>;
   getNetworkId: () => Promise<number>;
@@ -71,6 +58,6 @@ export type OneKeyProviders = {
   solana?: SolanaProvider;
   stellar?: OneKeyStellarProvider;
   sui?: OneKeySuiProvider;
-  tonconnect?: OneKeyTonConnectBridge;
+  tonconnect?: TonConnectBridge;
   tron?: OneKeyTronProvider;
 };
