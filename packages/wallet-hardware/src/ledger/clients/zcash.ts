@@ -22,7 +22,7 @@ import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "
 import { runLedgerJsOperation } from "../helpers/ledgerJsDmkBridge";
 import { ZcashLedger as LegacyZcashLedger } from "./utxo";
 
-// @swapkit/utxo-signer 3.1.0 exports only the Ironwood activation height.
+// @swapkit/utxo-signer exports no NU6.2 activation height.
 const NU6_2_ACTIVATION_HEIGHT = 3_364_600;
 
 interface ZcashLedgerParams {
@@ -96,8 +96,7 @@ function readUint32LE({ bytes, offset }: { bytes: Uint8Array; offset: number }) 
   return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true);
 }
 
-// @swapkit/utxo-signer 3.1.0 has no bounds-checked, v5-aware decoder (ZcashTransaction.fromBytes reads only the
-// v4 layout and its Reader is not exported), so previous transactions are read here.
+// ZcashTransaction.fromBytes rejects v6 and shielded data, both of which a previous transaction can carry.
 function createPreviousTransactionReader(bytes: Uint8Array) {
   let offset = 0;
 
@@ -161,11 +160,9 @@ function parsePreviousTransaction({ bytes, version }: { bytes: Uint8Array; versi
   return { ...transparentFields, extraData: reader.rest(), locktime, nExpiryHeight };
 }
 
-// Either byte order binds a txid equally: toolbox-built transactions keep display-order txids, while
-// ZcashTransaction.fromBytes keeps them in wire order.
+// UTXO hashes and ZcashTransaction input txids are both in display order.
 function matchesTxid({ hash, txid }: { hash: string; txid: Uint8Array }) {
-  const normalized = hash.toLowerCase();
-  return normalized === hex.encode(txid) || normalized === hex.encode(txid.slice().reverse());
+  return hash.toLowerCase() === hex.encode(txid);
 }
 
 async function serializeOutputs(tx: ZcashTransaction) {
@@ -245,11 +242,11 @@ async function previousTransaction({
   // A v4 txid is the double SHA-256 of its bytes, so bind the transaction to the planned input before the
   // device trusts its amounts.
   const { utils } = await import("@swapkit/utxo-signer");
-  const previousTxid = utils.sha256x2(raw);
+  const previousTxid = utils.sha256x2(raw).reverse();
   if (!matchesTxid({ hash: txid, txid: previousTxid })) {
     throw invalidParams({
       ...context,
-      previousTxid: hex.encode(previousTxid.reverse()),
+      previousTxid: hex.encode(previousTxid),
       reason: "Previous transaction does not hash to the input txid",
     });
   }

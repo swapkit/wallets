@@ -334,7 +334,6 @@ describe("Ledger UTXO transfer", () => {
       hex.encode(Uint8Array.from({ length: 32 }, (_, index) => 0xa0 + index)),
     ];
     const previousTransactions = [v5Transaction(10_000n), v5Transaction(20_000n)];
-    const reversed = (txid: string) => hex.encode(hex.decode(txid).reverse());
 
     beforeEach(() => {
       for (const [index, txid] of previousTxids.entries()) zcashRawTxs.set(txid, previousTransactions[index] ?? "");
@@ -370,15 +369,15 @@ describe("Ledger UTXO transfer", () => {
       expect(broadcastTxs).toEqual([v5Transaction(9_000n)]);
     });
 
-    it("refuses a previous transaction the API knows in neither byte order before reaching the device", async () => {
+    it("refuses a previous transaction the API does not know before reaching the device", async () => {
       const wallet = await connect(Chain.Zcash);
       const unknownTxid = hex.encode(Uint8Array.from({ length: 32 }, (_, index) => 0x40 + index));
 
       await expect(wallet.signAndBroadcastTransaction(zcashRouteTransaction([unknownTxid]))).rejects.toMatchObject({
-        cause: { inputIndex: 0, reversedTxid: reversed(unknownTxid), txid: unknownTxid },
+        cause: { inputIndex: 0, txid: unknownTxid },
         errorKey: "wallet_ledger_invalid_params",
       });
-      expect(zcashRawTxRequests).toEqual([unknownTxid, reversed(unknownTxid)]);
+      expect(zcashRawTxRequests).toEqual([unknownTxid]);
       expect(zcashSignCalls).toHaveLength(0);
       expect(broadcastTxs).toHaveLength(0);
     });
