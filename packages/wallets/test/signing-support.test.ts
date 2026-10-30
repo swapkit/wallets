@@ -72,7 +72,9 @@ describe("wallet signing support", () => {
       "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
     );
 
-    expect(added.find((wallet) => wallet.chain === Chain.Bitcoin)?.signing?.btcMessage).toBe(true);
+    const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
+    expect(bitcoin?.signing?.btcMessage).toBe(true);
+    expect(Buffer.from((await bitcoin?.signMessage?.("swapkit")) ?? "", "base64")).toHaveLength(65);
     expect(added.find((wallet) => wallet.chain === Chain.Litecoin)?.signing?.btcMessage).toBeUndefined();
   });
 
@@ -87,6 +89,7 @@ describe("wallet signing support", () => {
     const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
     expect(bitcoin?.signing?.btcMessage).not.toBe(true);
     expect(bitcoin?.signing?.direct).toBe(true);
+    await expect(bitcoin?.signMessage?.("swapkit")).rejects.toThrow("toolbox_utxo_unsupported_script_type");
   });
 
   test("the legacy directSigningSupport alias mirrors signingSupport direct", async () => {
