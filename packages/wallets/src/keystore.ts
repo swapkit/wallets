@@ -137,7 +137,6 @@ export const keystoreWallet = createWallet({
       derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
-
       const bitcoinScriptType = wallets[Chain.Bitcoin]?.scriptType;
       const bitcoinSigning =
         bitcoinScriptType && !(await import("@swapkit/toolboxes/utxo")).canSignBitcoinMessage(bitcoinScriptType)

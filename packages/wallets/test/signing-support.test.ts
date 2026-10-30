@@ -74,7 +74,10 @@ describe("wallet signing support", () => {
 
     const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
     expect(bitcoin?.signing?.btcMessage).toBe(true);
-    expect(Buffer.from((await bitcoin?.signMessage?.("swapkit")) ?? "", "base64")).toHaveLength(65);
+
+    const signature = Buffer.from((await bitcoin?.signMessage?.("SwapKit BIP-137")) ?? "", "base64");
+    expect(signature).toHaveLength(65);
+    expect(signature[0]).toBeWithin(39, 43);
     expect(added.find((wallet) => wallet.chain === Chain.Litecoin)?.signing?.btcMessage).toBeUndefined();
   });
 
