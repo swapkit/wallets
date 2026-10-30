@@ -416,7 +416,8 @@ async function extractSignaturesFromSignedTx(signedTxHex: string, pczt: PCZT): P
 
   for (let i = 0; i < signedTx.inputsLength; i++) {
     const signedInput = signedTx.getInput(i);
-    const script = signedInput.script;
+    // utxo-signer 3.2 parses the signature script into scriptSig; 3.1 put it in script.
+    const script = signedInput.scriptSig ?? signedInput.script;
     if (script && script.length > 0) {
       const scriptParts = Script.decode(script);
       if (scriptParts.length >= 2) {
