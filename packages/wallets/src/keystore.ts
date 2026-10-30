@@ -137,9 +137,19 @@ export const keystoreWallet = createWallet({
       derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
+      const bitcoinScriptType = wallets[Chain.Bitcoin]?.scriptType;
+      const bitcoinSigning =
+        bitcoinScriptType && !(await import("@swapkit/toolboxes/utxo")).canSignBitcoinMessage(bitcoinScriptType)
+          ? { direct: true }
+          : undefined;
 
       for (const wallet of Object.values(wallets)) {
-        addChain({ ...wallet, chain: wallet.chain, walletType: WalletOption.KEYSTORE });
+        addChain({
+          ...wallet,
+          chain: wallet.chain,
+          walletType: WalletOption.KEYSTORE,
+          ...(wallet.chain === Chain.Bitcoin && bitcoinSigning ? { signing: bitcoinSigning } : {}),
+        });
       }
 
       return true;
@@ -148,6 +158,7 @@ export const keystoreWallet = createWallet({
   signingSupport: {
     ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
     ...Object.fromEntries(UTXOChains.map((chain) => [chain, { direct: true }])),
+    [Chain.Bitcoin]: { btcMessage: true, direct: true },
     ...Object.fromEntries(
       CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, { direct: true }]),
     ),
