@@ -1,5 +1,12 @@
 # @swapkit/sdk
 
+## 5.1.5
+
+### Patch Changes
+
+- [#213](https://github.com/swapkit/wallets/pull/213) [`d4d0241`](https://github.com/swapkit/wallets/commit/d4d02416789608b8c81ce11f989bd91bda199505) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+- [#209](https://github.com/swapkit/wallets/pull/209) [`542e1f8`](https://github.com/swapkit/wallets/commit/542e1f8126b4045c9b38e8a4371380223745aa49) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - The keystore wallet now declares that it can sign Bitcoin messages (`signingSupport[Chain.Bitcoin].btcMessage`, carried on the connected Bitcoin wallet as `signing.btcMessage`), so flows that need one, like cancelling a Harbor Bitcoin limit order, can use it. A keystore using a Bitcoin address type that Bitcoin message signatures cannot express, such as Taproot, does not declare it. (via @swapkit/wallets@6.2.0)
+
 ## 5.1.4
 
 ### Patch Changes
