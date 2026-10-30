@@ -302,7 +302,7 @@ describe("Ledger Zcash Device Signer Kit client", () => {
       additionals: ["zcash", "sapling"],
       associatedKeysets: ["44'/133'/0'/0/0"],
       blockHeight: 3_364_600,
-      changePath: "44'/133'/0'/0/0",
+      changePath: undefined,
       lockTime: 12,
       outputScriptHex: "0194110000000000000151",
     });
@@ -330,6 +330,28 @@ describe("Ledger Zcash Device Signer Kit client", () => {
       associatedKeysets: ["44'/133'/4'/0/2", "44'/133'/4'/1/9"],
       blockHeight: 3_428_143,
     });
+  });
+
+  it("sends a change path only when it is on the internal chain", async () => {
+    const client = ZcashLedger({ derivationPath: "44'/133'/0'/1/2", dmkSession });
+
+    await client.signTransaction({ inputUtxos: [inputUtxo()], tx: targetTransaction() });
+    await client.signTransaction({
+      changePath: "m/44'/133'/0'/0/3",
+      inputUtxos: [inputUtxo()],
+      tx: targetTransaction(),
+    });
+    await client.signTransaction({
+      changePath: "m/44'/133'/0'/1/3",
+      inputUtxos: [inputUtxo()],
+      tx: targetTransaction(),
+    });
+
+    expect(signCalls.map((args) => (args as LegacyCreateTransactionArg).changePath)).toEqual([
+      "44'/133'/0'/1/2",
+      undefined,
+      "44'/133'/0'/1/3",
+    ]);
   });
 
   it("fails before device signing when an input has no real txHex", async () => {
