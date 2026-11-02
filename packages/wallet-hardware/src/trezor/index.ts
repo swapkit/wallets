@@ -409,8 +409,7 @@ async function decodeOutputAddress(script: Uint8Array): Promise<string | undefin
   return undefined;
 }
 
-// Trezor signs every Zcash transaction as v5, so the signed PCZT takes the header it actually signed
-// and the transaction extracted from it matches the signatures even when the PCZT arrived as v4.
+// The signed PCZT takes the v5 header Trezor signed, so the extracted transaction matches the signatures
 async function extractSignaturesFromSignedTx(signedTxHex: string, pczt: PCZT): Promise<PCZT> {
   const { ZcashTransaction: ZcashTx, Script, createPCZT } = await import("@swapkit/utxo-signer");
   const signedTx = ZcashTx.fromHex(signedTxHex, { allowUnknownOutputs: true });
@@ -733,9 +732,7 @@ async function getTrezorWallet<T extends Chain>({
         return result.payload.serializedTx;
       };
 
-      // Always v5: signing as v4 makes Connect fetch and parse every previous transaction, and it
-      // cannot read the v6 ones in use since Ironwood, while v5 commits to the input amounts directly.
-      // v5 is valid on both sides of NU7; the branch id comes from the transaction, resolved per height.
+      // Always v5: v4 signing makes Connect fetch previous transactions, and it cannot parse v6 ones
       const signPCZTWithSerializedTx = async (pczt: PCZT) => {
         const { hex: hexEncode } = await import("@scure/base");
         const { ZcashVersion, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
