@@ -6,10 +6,38 @@ import type { EthereumWindowProvider } from "@swapkit/helpers";
 // replacing the @cosmjs ones — type the handles with those.
 import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
+import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
+
+type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
+
+export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
+
+export type OkxCardanoApi = {
+  getChangeAddress: () => Promise<string>;
+  getNetworkId: () => Promise<number>;
+  signTx: (transaction: string, partialSign?: boolean) => Promise<string>;
+};
+
+export type OkxTonConnectEvent =
+  | { event: "connect"; payload: { items: { name: string; address?: string; network?: string }[] } }
+  | { event: "connect_error"; payload: { code: number; message: string } };
+
+type OkxTonConnectBridge = {
+  connect: (
+    protocolVersion: number,
+    request: { manifestUrl: string; items: { name: string }[] },
+  ) => Promise<OkxTonConnectEvent>;
+  restoreConnection: () => Promise<OkxTonConnectEvent>;
+  send: (request: {
+    id: string;
+    method: string;
+    params: string[];
+  }) => Promise<{ id: string; result?: string; error?: { code: number; message: string } }>;
+};
 
 type UnisatToSignInputs = { index: number; sighashTypes?: number[]; disableTweakSigner?: boolean } & (
   | { address: string }
@@ -129,6 +157,9 @@ declare global {
             ) => Promise<boolean>;
             getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
           };
+          solana: SolanaProvider;
+          starknet: OkxStarknetProvider;
+          cardano: { enable: () => Promise<OkxCardanoApi> };
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
               contractId?: string;
@@ -152,5 +183,6 @@ declare global {
         }
       | EthereumWindowProvider;
     tronLink?: TronLinkWindow;
+    okxTonWallet?: { tonconnect: OkxTonConnectBridge };
   }
 }

@@ -1,12 +1,13 @@
 import type Transport from "@ledgerhq/hw-transport";
 import { hex } from "@scure/base";
 import {
-  type AssetValue,
+  AssetValue,
   Chain,
   type DerivationPathArray,
   derivationPathToString,
   FeeOption,
   filterSupportedChains,
+  type GenericTransferParams,
   getUTXOScriptTypeForPath,
   NetworkDerivationPath,
   SwapKitError,
@@ -14,6 +15,7 @@ import {
   UTXOScriptType,
   WalletOption,
 } from "@swapkit/helpers";
+import type { TONTransactionInput } from "@swapkit/toolboxes/ton";
 import {
   addInputsAndOutputs,
   assertDerivationIndex,
@@ -92,6 +94,7 @@ const LEDGER_SUPPORTED_CHAINS_CONFIG = [
   Chain.BinanceSmartChain,
   Chain.Bitcoin,
   Chain.BitcoinCash,
+  Chain.Cardano,
   Chain.Cosmos,
   Chain.Dash,
   Chain.Dogecoin,
@@ -103,8 +106,11 @@ const LEDGER_SUPPORTED_CHAINS_CONFIG = [
   Chain.Optimism,
   Chain.Polygon,
   Chain.Ripple,
+  Chain.Robinhood,
+  Chain.Stellar,
   Chain.Sui,
   Chain.THORChain,
+  Chain.Ton,
   Chain.XLayer,
   Chain.Tron,
   Chain.Zcash,
@@ -134,6 +140,7 @@ const LEDGER_EVM_CHAINS = [
   Chain.Aurora,
   Chain.Gnosis,
   Chain.Monad,
+  Chain.Robinhood,
   Chain.XLayer,
 ] as const satisfies readonly LedgerSupportedChain[];
 
@@ -169,35 +176,26 @@ export const ledgerWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Arc]: true,
-    [Chain.Aurora]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Gnosis]: true,
-    [Chain.Monad]: true,
-    [Chain.Bitcoin]: true,
-    [Chain.BitcoinCash]: true,
-    [Chain.Cosmos]: true,
-    [Chain.Dash]: true,
-    [Chain.Dogecoin]: true,
-    [Chain.Litecoin]: true,
-    [Chain.Near]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.Ripple]: true,
-    [Chain.Sui]: true,
-    [Chain.THORChain]: true,
-    [Chain.Tron]: true,
-    [Chain.XLayer]: true,
-    // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
-  },
   getExtendedPublicKey: getLedgerExtendedPublicKey,
   name: "connectLedger",
+  signingSupport: {
+    ...Object.fromEntries(LEDGER_EVM_CHAINS.map((chain) => [chain, { direct: true, typedData: true }])),
+    [Chain.Bitcoin]: { direct: true },
+    [Chain.BitcoinCash]: { direct: true },
+    [Chain.Cardano]: { direct: true },
+    [Chain.Cosmos]: { direct: true },
+    [Chain.Dash]: { direct: true },
+    [Chain.Dogecoin]: { direct: true },
+    [Chain.Litecoin]: { direct: true },
+    [Chain.Near]: { direct: true },
+    [Chain.Ripple]: { direct: true },
+    [Chain.Stellar]: { direct: true },
+    [Chain.Sui]: { direct: true },
+    [Chain.THORChain]: { direct: true },
+    [Chain.Ton]: { direct: true },
+    [Chain.Tron]: { direct: true },
+    // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
+  },
   supportedChains: [...LEDGER_SUPPORTED_CHAINS_CONFIG],
   walletType: WalletOption.LEDGER,
 });
@@ -219,8 +217,8 @@ function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccoun
     .exhaustive();
 }
 
-// Toolbox-built transactions keep input txids in display order, the order the UTXO API looks transactions up by,
-// while ZcashTransaction.fromBytes (raw API route transactions) keeps them in wire order, so try both. A txid and its
+// Txids are looked up in display order, the order the UTXO API names transactions by. utxo-signer below 3.2
+// parsed raw transactions with wire-order txids, so the reversed order is tried as a fallback. A txid and its
 // byte reversal cannot both name real transactions, so the fallback cannot fetch an unrelated one.
 function resolveZcashInputUtxos(transaction: ZcashTransaction): Promise<UTXOType[]> {
   const zcashApi = getUtxoApi(Chain.Zcash);
@@ -649,6 +647,21 @@ async function getNearWalletMethods({
   return { ...toolbox, address: accountId };
 }
 
+async function getCardanoWalletMethods({
+  chain,
+  derivationPath,
+  dmkSession,
+  onDeviceActionState,
+  transport,
+}: WalletMethodsParams<Chain.Cardano>) {
+  const { getCardanoToolbox } = await import("@swapkit/toolboxes/cardano");
+  const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
+  const address = signer.getAddress();
+  const toolbox = getCardanoToolbox({ signer });
+
+  return { ...toolbox, address };
+}
+
 async function getRippleWalletMethods({
   chain,
   derivationPath,
@@ -660,6 +673,21 @@ async function getRippleWalletMethods({
   const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
   const address = signer.getAddress();
   const toolbox = getRippleToolbox({ signer });
+
+  return { ...toolbox, address };
+}
+
+async function getStellarWalletMethods({
+  chain,
+  derivationPath,
+  dmkSession,
+  onDeviceActionState,
+  transport,
+}: WalletMethodsParams<Chain.Stellar>) {
+  const { getStellarToolbox } = await import("@swapkit/toolboxes/stellar");
+  const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
+  const address = await getLedgerAddress({ chain, ledgerClient: signer });
+  const toolbox = getStellarToolbox({ signer });
 
   return { ...toolbox, address };
 }
@@ -694,6 +722,47 @@ async function getSuiWalletMethods({
   return { ...toolbox, address };
 }
 
+async function getTONWalletMethods({
+  chain,
+  derivationPath,
+  dmkSession,
+  onDeviceActionState,
+  transport,
+}: WalletMethodsParams<Chain.Ton>) {
+  const { getTONToolbox } = await import("@swapkit/toolboxes/ton");
+  const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
+  const address = await getLedgerAddress({ chain, ledgerClient: signer });
+  // Signerless toolbox: it builds messages and reads balances, the device signs the external message.
+  const toolbox = getTONToolbox();
+
+  const signAndBroadcastTransaction = async (transaction: TONTransactionInput) =>
+    toolbox.broadcastTransaction(await signer.signTransaction(transaction));
+
+  const transfer = async ({ assetValue, memo, recipient, sweep }: GenericTransferParams) =>
+    signAndBroadcastTransaction(
+      await toolbox.createTransaction({ assetValue, memo, recipient, sender: address, sweep }),
+    );
+
+  // Same budget as TON Connect: the signerless toolbox underestimates jetton fees
+  const estimateTransactionFee = ({ assetValue }: GenericTransferParams) =>
+    Promise.resolve(AssetValue.from({ chain: Chain.Ton, value: assetValue.isGasAsset ? "0.01" : "0.06" }));
+
+  const sign = () => {
+    throw new SwapKitError("wallet_ledger_method_not_supported", { method: "sign", wallet: WalletOption.LEDGER });
+  };
+
+  return {
+    ...toolbox,
+    address,
+    estimateTransactionFee,
+    getAddress: () => address,
+    getBalance: () => toolbox.getBalance(address),
+    sign,
+    signAndBroadcastTransaction,
+    transfer,
+  };
+}
+
 function getWalletMethods(params: WalletMethodsParams) {
   if (!isLedgerSupportedChain(params.chain)) {
     throw new SwapKitError("wallet_ledger_chain_not_supported", { chain: params.chain });
@@ -706,8 +775,11 @@ function getWalletMethods(params: WalletMethodsParams) {
     .with(Chain.THORChain, (chain) => getTHORChainWalletMethods({ ...params, chain }))
     .with(Chain.Near, (chain) => getNearWalletMethods({ ...params, chain }))
     .with(Chain.Ripple, (chain) => getRippleWalletMethods({ ...params, chain }))
+    .with(Chain.Stellar, (chain) => getStellarWalletMethods({ ...params, chain }))
+    .with(Chain.Cardano, (chain) => getCardanoWalletMethods({ ...params, chain }))
     .with(Chain.Tron, (chain) => getTronWalletMethods({ ...params, chain }))
     .with(Chain.Sui, (chain) => getSuiWalletMethods({ ...params, chain }))
+    .with(Chain.Ton, (chain) => getTONWalletMethods({ ...params, chain }))
     .exhaustive();
 }
 

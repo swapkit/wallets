@@ -25,22 +25,22 @@ export const talismanWallet: ExtensionWallet<"connectTalisman"> = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Chainflip]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Gnosis]: true,
-    [Chain.Monad]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.XLayer]: true,
+  name: "connectTalisman",
+  signingSupport: {
+    [Chain.Arbitrum]: { direct: true, typedData: true },
+    [Chain.Avalanche]: { direct: true, typedData: true },
+    [Chain.Base]: { direct: true, typedData: true },
+    [Chain.Berachain]: { direct: true, typedData: true },
+    [Chain.BinanceSmartChain]: { direct: true, typedData: true },
+    [Chain.Chainflip]: { direct: true },
+    [Chain.Ethereum]: { direct: true, typedData: true },
+    [Chain.Gnosis]: { direct: true, typedData: true },
+    [Chain.Monad]: { direct: true, typedData: true },
+    [Chain.Optimism]: { direct: true, typedData: true },
+    [Chain.Polygon]: { direct: true, typedData: true },
+    [Chain.XLayer]: { direct: true, typedData: true },
     // Polkadot: not in V3 chain list
   },
-  name: "connectTalisman",
   supportedChains: [
     Chain.Berachain,
     Chain.Ethereum,

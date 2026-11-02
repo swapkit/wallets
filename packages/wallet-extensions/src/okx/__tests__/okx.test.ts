@@ -1,0 +1,171 @@
+// @ts-nocheck - Test file with intentional mocking of browser globals
+import { afterEach, describe, expect, test } from "bun:test";
+import { bech32, hex } from "@scure/base";
+import { AssetValue, Chain } from "@swapkit/helpers";
+import { Address, beginCell } from "@ton/core";
+
+import { getWalletMethods } from "../helpers";
+import { okxWallet } from "../index";
+
+const RAW_TON_ADDRESS = `0:${"ab".repeat(32)}`;
+
+// CIP-19 mainnet base address test vector
+const CARDANO_ADDRESS =
+  "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x";
+
+const SOLANA_ADDRESS = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+
+function mockSolanaConnect() {
+  return Promise.resolve({ publicKey: { toString: () => SOLANA_ADDRESS } });
+}
+
+function mockCardano() {
+  return {
+    enable: async () => ({
+      getChangeAddress: async () => hex.encode(bech32.fromWords(bech32.decode(CARDANO_ADDRESS, 120).words)),
+      getNetworkId: async () => 1,
+    }),
+  };
+}
+
+afterEach(() => {
+  globalThis.window = undefined;
+});
+
+describe("connectOkx", () => {
+  function connect(chains: Chain[]) {
+    const added = [];
+    const connectOkx = okxWallet.connectOkx.connectWallet({ addChain: (wallet) => added.push(wallet) });
+
+    return { added, result: connectOkx(chains) };
+  }
+
+  test("keeps the available chains when another chain is missing in the wallet", async () => {
+    globalThis.window = { okxwallet: { cardano: mockCardano() } };
+    const { added, result } = connect([Chain.Cardano, Chain.Solana]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Cardano]);
+    expect(added[0].address).toBe(CARDANO_ADDRESS);
+  });
+
+  test("fails when no chain can be connected", async () => {
+    globalThis.window = { okxwallet: {} };
+
+    await expect(connect([Chain.Solana]).result).rejects.toThrow();
+  });
+
+  test("fails when the user rejects a chain even if another one connects", async () => {
+    const rejection = new Error("User rejected the request");
+    globalThis.window = { okxwallet: { cardano: mockCardano(), solana: { connect: () => Promise.reject(rejection) } } };
+
+    await expect(connect([Chain.Cardano, Chain.Solana]).result).rejects.toBe(rejection);
+  });
+
+  test("keeps the other chains when TON has no TON Connect manifest", async () => {
+    globalThis.window = {
+      okxTonWallet: { tonconnect: { restoreConnection: () => Promise.reject(new Error("No session")) } },
+      okxwallet: { cardano: mockCardano() },
+    };
+    const { added, result } = connect([Chain.Ton, Chain.Cardano]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Cardano]);
+  });
+
+  test("asks the wallet for one chain at a time", async () => {
+    let pending = 0;
+    let maxPending = 0;
+    const approve = async <T>(value: T) => {
+      pending += 1;
+      maxPending = Math.max(maxPending, pending);
+      await Bun.sleep(1);
+      pending -= 1;
+      return value;
+    };
+    globalThis.window = {
+      okxwallet: {
+        cardano: { enable: () => approve(mockCardano().enable()) },
+        solana: { connect: () => approve(mockSolanaConnect()) },
+      },
+    };
+
+    await connect([Chain.Cardano, Chain.Solana]).result;
+
+    expect(maxPending).toBe(1);
+  });
+
+  test("reads the Starknet account once the wallet has been enabled", async () => {
+    const address = `0x${"1".repeat(64)}`;
+    const starknet = {
+      enable() {
+        this.account = { address };
+        return Promise.resolve([address]);
+      },
+    };
+    globalThis.window = { okxwallet: { starknet } };
+    const { added, result } = connect([Chain.Starknet]);
+
+    expect(await result).toBe(true);
+    expect(added[0].address).toBe(address);
+  });
+});
+
+describe("OKX TON", () => {
+  function mockTonBridge(requests: unknown[]) {
+    globalThis.window = {
+      okxTonWallet: {
+        tonconnect: {
+          restoreConnection: async () => ({
+            event: "connect",
+            payload: { items: [{ address: RAW_TON_ADDRESS, name: "ton_addr", network: "-239" }] },
+          }),
+          send: (request) => {
+            requests.push(JSON.parse(request.params[0]));
+            return Promise.resolve({ id: request.id, result: beginCell().endCell().toBoc().toString("base64") });
+          },
+        },
+      },
+    };
+  }
+
+  test("sends friendly destinations and returns the message hash", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const hash = await wallet.signAndBroadcastTransaction([{ address: RAW_TON_ADDRESS, amount: "1000" }]);
+
+    expect(wallet.address).toBe(Address.parse(RAW_TON_ADDRESS).toString({ bounceable: false, urlSafe: true }));
+    expect(requests[0].messages).toEqual([
+      { address: Address.parse(RAW_TON_ADDRESS).toString({ bounceable: true, urlSafe: true }), amount: "1000" },
+    ]);
+    expect(hash).toBe(beginCell().endCell().hash().toString("hex"));
+  });
+
+  test.each([0, 130])("rejects send mode %d before reaching the wallet", async (sendMode) => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const transaction = { messages: [{ address: RAW_TON_ADDRESS, amount: "1000" }], sendMode };
+
+    await expect(wallet.signAndBroadcastTransaction(transaction)).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("rejects a TON balance sweep before reaching the wallet", async () => {
+    const requests = [];
+    mockTonBridge(requests);
+
+    const wallet = await getWalletMethods(Chain.Ton);
+    const sweep = wallet.transfer({
+      assetValue: AssetValue.from({ chain: Chain.Ton, value: "1" }),
+      recipient: RAW_TON_ADDRESS,
+      sweep: true,
+    });
+
+    await expect(sweep).rejects.toThrow("core_swap_invalid_params");
+    expect(requests).toHaveLength(0);
+  });
+});

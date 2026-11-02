@@ -53,6 +53,11 @@ function buildZcashSignedTx(inputScript: Uint8Array) {
     compactSize(0),
     uint32LE(0),
     uint32LE(0),
+    // Sapling tail: valueBalance, nShieldedSpend, nShieldedOutput, nJoinSplit
+    Buffer.alloc(8),
+    compactSize(0),
+    compactSize(0),
+    compactSize(0),
   ]).toString("hex");
 }
 
@@ -142,10 +147,10 @@ describe("Trezor wallet handling", () => {
   });
 
   it("marks BCH, DASH, DOGE, and ZEC direct signing as available for testing", () => {
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.BitcoinCash]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dash]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Dogecoin]).toBe(true);
-    expect(trezorWallet.connectTrezor.directSigningSupport[Chain.Zcash]).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.BitcoinCash]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Dash]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Dogecoin]?.direct).toBe(true);
+    expect(trezorWallet.connectTrezor.signingSupport[Chain.Zcash]?.direct).toBe(true);
   });
 
   it.each([
@@ -202,13 +207,13 @@ describe("Trezor wallet handling", () => {
     });
   });
 
-  it("fetches Zcash xpubs with Trezor's zcash coin id", async () => {
+  it("fetches Zcash xpubs with Trezor's zec ticker", async () => {
     trezorGetPublicKeyCalls.length = 0;
 
     const info = await getTrezorExtendedPublicKey(Chain.Zcash, [44, 133, 0, 0, 0], { accountIndex: 0 });
 
     expect(info?.xpub).toBe(zcashAccountXpub);
-    expect(trezorGetPublicKeyCalls.at(-1)).toMatchObject({ coin: "zcash", path: "m/44'/133'/0'", showOnTrezor: true });
+    expect(trezorGetPublicKeyCalls.at(-1)).toMatchObject({ coin: "zec", path: "m/44'/133'/0'", showOnTrezor: true });
   });
 
   it("reuses the selected Zcash address during connect", async () => {

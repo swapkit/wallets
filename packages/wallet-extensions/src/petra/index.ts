@@ -24,8 +24,8 @@ export const petraWallet: ExtensionWallet<"connectPetra"> = createWallet({
       }
     },
   // [Chain.Aptos]: blocked on toolbox — getAptosToolbox needs to accept AptosExtensionProvider
-  directSigningSupport: {},
   name: "connectPetra",
+  signingSupport: {},
   supportedChains: [Chain.Aptos],
   walletType: WalletOption.PETRA,
 });

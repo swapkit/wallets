@@ -416,7 +416,8 @@ async function extractSignaturesFromSignedTx(signedTxHex: string, pczt: PCZT): P
 
   for (let i = 0; i < signedTx.inputsLength; i++) {
     const signedInput = signedTx.getInput(i);
-    const script = signedInput.script;
+    // utxo-signer 3.2 parses the signature script into scriptSig; 3.1 put it in script.
+    const script = signedInput.scriptSig ?? signedInput.script;
     if (script && script.length > 0) {
       const scriptParts = Script.decode(script);
       if (scriptParts.length >= 2) {
@@ -484,6 +485,35 @@ async function buildZcashTxOutputsForTrezor({
     outputs.push({ ...outputParam, amount: output.amount?.toString() || "0", script_type: "PAYTOADDRESS" as const });
   }
   return outputs;
+}
+
+type ZcashTrezorSignRequest = {
+  branchId: number;
+  expiry: number;
+  inputs: { amount: string; prev_hash: string; prev_index: number }[];
+  locktime: number;
+  outputs: { address?: string; amount: string; script_type: string }[];
+  version: number;
+  versionGroupId: number;
+};
+
+function describeZcashSignRequest({ inputs, outputs, ...header }: ZcashTrezorSignRequest) {
+  const sum = (amounts: { amount: string }[]) => amounts.reduce((total, { amount }) => total + BigInt(amount), 0n);
+  const inputTotal = sum(inputs);
+  const outputTotal = sum(outputs);
+
+  return {
+    ...header,
+    fee: (inputTotal - outputTotal).toString(),
+    inputAmounts: inputs.map(({ amount }) => amount),
+    inputs: inputs.map(({ prev_hash, prev_index }) => `${prev_hash}:${prev_index}`),
+    inputTotal: inputTotal.toString(),
+    outputs: outputs.map(({ address, amount, script_type }) => ({
+      amount,
+      kind: script_type === "PAYTOOPRETURN" ? "op_return" : address ? "external" : "change",
+    })),
+    outputTotal: outputTotal.toString(),
+  };
 }
 
 async function buildUtxoOutputsForTrezor(
@@ -598,6 +628,18 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Cardano: {
+      const { getCardanoToolbox } = await import("@swapkit/toolboxes/cardano");
+      const { getCardanoSigner } = await import("./cardanoSigner");
+
+      const connect = await import("@trezor/connect-web");
+      const signer = await getCardanoSigner({ connect, derivationPath });
+      const address = signer.getAddress();
+      const toolbox = getCardanoToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Hype: {
       const { getHyperCoreToolbox } = await import("@swapkit/toolboxes/hypercore");
       const { getHyperCoreSigner } = await import("./hypercoreSigner");
@@ -620,6 +662,28 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Solana: {
+      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
+      const { getSolanaSigner } = await import("./solanaSigner");
+
+      const signer = getSolanaSigner({ address: providedAddress, derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
+      const toolbox = getSolanaToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
+    case Chain.Stellar: {
+      const { getStellarToolbox } = await import("@swapkit/toolboxes/stellar");
+      const { getStellarSigner } = await import("./stellarSigner");
+
+      const signer = getStellarSigner({ derivationPath });
+      const address = providedAddress ?? (await signer.getAddress());
+      const toolbox = getStellarToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Tron: {
       const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
       const { getTronSigner } = await import("./tronSigner");
@@ -634,11 +698,12 @@ async function getTrezorWallet<T extends Chain>({
     case Chain.Zcash: {
       const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
 
+      const coin = chain.toLowerCase();
       const derivationPathStr = derivationPathToString(derivationPath);
 
       const getAddress = async () => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
-        const { success, payload } = await TrezorConnect.getAddress({ coin: "zcash", path: derivationPathStr });
+        const { success, payload } = await TrezorConnect.getAddress({ coin, path: derivationPathStr });
 
         if (!success) {
           throw new SwapKitError({
@@ -652,37 +717,41 @@ async function getTrezorWallet<T extends Chain>({
 
       const address = providedAddress ?? (await getAddress());
 
-      const signPCZTWithSerializedTx = async (pczt: PCZT) => {
+      const signWithTrezor = async (request: ZcashTrezorSignRequest, signingPath: "pczt" | "transaction") => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
+        const result = await TrezorConnect.signTransaction({ ...request, coin, overwintered: true } as Parameters<
+          typeof TrezorConnect.signTransaction
+        >[0]);
+
+        if (!result.success) {
+          throw new SwapKitError({
+            errorKey: "wallet_trezor_failed_to_sign_transaction",
+            info: { ...result.payload, chain, derivationPath, request: describeZcashSignRequest(request), signingPath },
+          });
+        }
+
+        return result.payload.serializedTx;
+      };
+
+      const signPCZTWithSerializedTx = async (pczt: PCZT) => {
         const { hex: hexEncode } = await import("@scure/base");
         const address_n = hardenDerivationPath(derivationPath);
         const global = pczt.getGlobal();
 
         const inputs = buildPCZTInputsForTrezor(pczt, address_n, hexEncode);
         const outputs = await buildPCZTOutputsForTrezor(pczt, address_n, address, chain);
-        const result = await TrezorConnect.signTransaction({
+        const request = {
           branchId: global.consensusBranchId,
-          coin: "zcash",
           expiry: global.expiryHeight,
           inputs,
           locktime: global.lockTime,
-          outputs: outputs as any,
-          overwintered: true,
+          outputs,
           version: global.txVersion,
           versionGroupId: global.versionGroupId,
-        });
-
-        if (!result.success) {
-          throw new SwapKitError({
-            errorKey: "wallet_trezor_failed_to_sign_transaction",
-            info: { chain, error: (result.payload as { error: string; code?: string }).error },
-          });
-        }
-
-        return {
-          serializedTx: result.payload.serializedTx,
-          signedPczt: await extractSignaturesFromSignedTx(result.payload.serializedTx, pczt),
         };
+        const serializedTx = await signWithTrezor(request, "pczt");
+
+        return { serializedTx, signedPczt: await extractSignaturesFromSignedTx(serializedTx, pczt) };
       };
 
       const parseSignedZcashTransaction = async (signedTxHex: string) => {
@@ -691,7 +760,6 @@ async function getTrezorWallet<T extends Chain>({
       };
 
       const signZcashTransactionWithSerializedTx = async (tx: ZcashTransaction) => {
-        const TrezorConnect = (await import("@trezor/connect-web")).default;
         const { hex: hexEncode } = await import("@scure/base");
         const { NETWORKS, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
@@ -705,29 +773,18 @@ async function getTrezorWallet<T extends Chain>({
           tx,
         });
 
-        const result = await TrezorConnect.signTransaction({
+        const request = {
           branchId: tx.consensusBranchId,
-          coin: "zcash",
           expiry: 0,
           inputs,
           locktime: 0,
-          outputs: outputs as any,
-          overwintered: true,
+          outputs,
           version: 4,
           versionGroupId: ZcashVersionGroupId.SAPLING,
-        });
+        };
+        const serializedTx = await signWithTrezor(request, "transaction");
 
-        if (result.success) {
-          return {
-            serializedTx: result.payload.serializedTx,
-            signedTx: await parseSignedZcashTransaction(result.payload.serializedTx),
-          };
-        }
-
-        throw new SwapKitError({
-          errorKey: "wallet_trezor_failed_to_sign_transaction",
-          info: { chain, error: (result.payload as { error: string; code?: string }).error },
-        });
+        return { serializedTx, signedTx: await parseSignedZcashTransaction(serializedTx) };
       };
 
       const signer = {
@@ -1404,7 +1461,7 @@ export async function getTrezorExtendedPublicKey(
   const { TrezorConnect } = await initTrezorConnect();
   const utxoChain = chain as UTXOChain;
   const resolvedDerivationPath = derivationPath ?? (NetworkDerivationPath[chain] as DerivationPathArray);
-  const coin = chain === Chain.Zcash ? "zcash" : chain.toLowerCase();
+  const coin = chain.toLowerCase();
 
   const resolvedAccountPath = getUTXOAccountPath({
     accountIndex,
@@ -1508,34 +1565,37 @@ export const trezorWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Arc]: true,
-    [Chain.Aurora]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Bitcoin]: true,
-    [Chain.BitcoinCash]: true,
-    [Chain.Dash]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Gnosis]: true,
-    [Chain.Dogecoin]: true,
-    [Chain.Hype]: true,
-    [Chain.Hyperevm]: true,
-    [Chain.Litecoin]: true,
-    [Chain.Monad]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.Ripple]: true,
-    [Chain.Robinhood]: true,
-    [Chain.Tron]: true,
-    [Chain.XLayer]: true,
-    [Chain.Zcash]: true,
-  },
   getExtendedPublicKey: getTrezorExtendedPublicKey,
   name: "connectTrezor",
+  signingSupport: {
+    [Chain.Arbitrum]: { direct: true, typedData: true },
+    [Chain.Arc]: { direct: true, typedData: true },
+    [Chain.Aurora]: { direct: true, typedData: true },
+    [Chain.Avalanche]: { direct: true, typedData: true },
+    [Chain.Base]: { direct: true, typedData: true },
+    [Chain.Berachain]: { direct: true, typedData: true },
+    [Chain.BinanceSmartChain]: { direct: true, typedData: true },
+    [Chain.Bitcoin]: { direct: true },
+    [Chain.BitcoinCash]: { direct: true },
+    [Chain.Cardano]: { direct: true },
+    [Chain.Dash]: { direct: true },
+    [Chain.Ethereum]: { direct: true, typedData: true },
+    [Chain.Gnosis]: { direct: true, typedData: true },
+    [Chain.Dogecoin]: { direct: true },
+    [Chain.Hype]: { direct: true },
+    [Chain.Hyperevm]: { direct: true, typedData: true },
+    [Chain.Litecoin]: { direct: true },
+    [Chain.Monad]: { direct: true, typedData: true },
+    [Chain.Optimism]: { direct: true, typedData: true },
+    [Chain.Polygon]: { direct: true, typedData: true },
+    [Chain.Ripple]: { direct: true },
+    [Chain.Robinhood]: { direct: true, typedData: true },
+    [Chain.Solana]: { direct: true },
+    [Chain.Stellar]: { direct: true },
+    [Chain.Tron]: { direct: true },
+    [Chain.XLayer]: { direct: true, typedData: true },
+    [Chain.Zcash]: { direct: true },
+  },
   supportedChains: [
     Chain.Arbitrum,
     Chain.Arc,
@@ -1546,6 +1606,7 @@ export const trezorWallet = createWallet({
     Chain.BinanceSmartChain,
     Chain.Bitcoin,
     Chain.BitcoinCash,
+    Chain.Cardano,
     Chain.Dash,
     Chain.Dogecoin,
     Chain.Ethereum,
@@ -1558,6 +1619,8 @@ export const trezorWallet = createWallet({
     Chain.Polygon,
     Chain.Ripple,
     Chain.Robinhood,
+    Chain.Solana,
+    Chain.Stellar,
     Chain.Tron,
     Chain.XLayer,
     Chain.Zcash,

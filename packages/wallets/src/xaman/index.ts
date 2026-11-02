@@ -51,8 +51,8 @@ export const xamanWallet = createWallet({
         xumm.authorize();
       });
     },
-  directSigningSupport: { [Chain.Ripple]: true },
   name: "connectXaman",
+  signingSupport: { [Chain.Ripple]: { direct: true } },
   supportedChains: [Chain.Ripple],
   walletType: WalletOption.XAMAN,
 });

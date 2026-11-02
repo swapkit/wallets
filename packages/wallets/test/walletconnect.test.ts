@@ -14,14 +14,14 @@ const compressedPublicKey = Uint8Array.from([2, ...Array.from({ length: 32 }, (_
 
 describe("WalletConnect direct signing support", () => {
   it("marks non-EVM chains with WalletConnect signers as direct signing capable", () => {
-    const directSigningSupport = walletconnectWallet.connectWalletconnect.directSigningSupport;
+    const { signingSupport } = walletconnectWallet.connectWalletconnect;
 
-    expect(directSigningSupport[Chain.Cosmos]).toBe(true);
-    expect(directSigningSupport[Chain.Kujira]).toBe(true);
-    expect(directSigningSupport[Chain.Maya]).toBe(true);
-    expect(directSigningSupport[Chain.Near]).toBe(true);
-    expect(directSigningSupport[Chain.THORChain]).toBe(true);
-    expect(directSigningSupport[Chain.Tron]).toBe(true);
+    expect(signingSupport[Chain.Cosmos]?.direct).toBe(true);
+    expect(signingSupport[Chain.Kujira]?.direct).toBe(true);
+    expect(signingSupport[Chain.Maya]?.direct).toBe(true);
+    expect(signingSupport[Chain.Near]?.direct).toBe(true);
+    expect(signingSupport[Chain.THORChain]?.direct).toBe(true);
+    expect(signingSupport[Chain.Tron]?.direct).toBe(true);
   });
 });
 

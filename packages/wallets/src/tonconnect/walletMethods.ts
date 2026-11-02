@@ -7,9 +7,8 @@ import type { Account, CHAIN, TonConnectUI } from "@tonconnect/ui";
 import type { TonConnectConfig } from "./types";
 
 const DEFAULT_VALID_SECONDS = 300;
-// SendMode.CARRY_ALL_REMAINING_BALANCE — cannot be expressed over TON Connect,
-// where the wallet chooses the send mode (typically PAY_GAS_SEPARATELY + IGNORE_ERRORS).
-const CARRY_ALL_REMAINING_BALANCE = 128;
+// TON Connect cannot carry a send mode: the wallet signs with PAY_GAS_SEPARATELY + IGNORE_ERRORS.
+const SUPPORTED_SEND_MODE = 3;
 // CHAIN.MAINNET from @tonconnect/protocol; inlined so this module never loads
 // @tonconnect/ui at evaluation time.
 const TON_MAINNET = "-239" as CHAIN.MAINNET;
@@ -122,17 +121,17 @@ export async function sendTonConnectTransaction({
 }): Promise<string> {
   const messages = Array.isArray(transaction) ? transaction : transaction.messages;
   // The legacy bare-array shape carries sendMode per message (the toolbox reads
-  // messages[0].sendMode the same way) — the sweep guard must see it too.
+  // messages[0].sendMode the same way) — the send mode guard must see it too.
   const sendMode = Array.isArray(transaction) ? transaction[0]?.sendMode : transaction.sendMode;
 
   if (!messages.length) {
     throw new SwapKitError("wallet_missing_params", { param: "messages", wallet: "TON Connect" });
   }
 
-  if (sendMode !== undefined && (sendMode & CARRY_ALL_REMAINING_BALANCE) !== 0) {
+  if (sendMode !== undefined && sendMode !== SUPPORTED_SEND_MODE) {
     throw new SwapKitError({
       errorKey: "core_swap_invalid_params",
-      info: { reason: "TON Connect does not support sweep (CARRY_ALL_REMAINING_BALANCE) transactions", sendMode },
+      info: { reason: "TON Connect does not support this send mode", sendMode },
     });
   }
 

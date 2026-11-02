@@ -45,7 +45,7 @@ export type SKWallets = {
   [WalletOption.METAMASK]: typeof metamaskWallet;
   [WalletOption.NOIR_WALLET]: typeof noirWallet;
   [WalletOption.OKX]: typeof okxWallet;
-  [WalletOption.OKX_MOBILE]: typeof evmWallet;
+  [WalletOption.OKX_MOBILE]: typeof okxWallet;
   [WalletOption.ONEKEY]: typeof onekeyWallet;
   [WalletOption.PASSKEYS]: typeof passkeysWallet;
   [WalletOption.PASSKEY_WALLET]: typeof passkeysWallet;
@@ -122,7 +122,7 @@ export type SKWalletsSupportedChains = {
   [WalletOption.METAMASK]: typeof metamaskWallet.connectMetamask.supportedChains;
   [WalletOption.NOIR_WALLET]: typeof noirWallet.connectNoirWallet.supportedChains;
   [WalletOption.OKX]: typeof okxWallet.connectOkx.supportedChains;
-  [WalletOption.OKX_MOBILE]: typeof evmWallet.connectEVMWallet.supportedChains;
+  [WalletOption.OKX_MOBILE]: typeof okxWallet.connectOkx.supportedChains;
   [WalletOption.ONEKEY]: typeof onekeyWallet.connectOnekeyWallet.supportedChains;
   [WalletOption.PASSKEYS]: typeof passkeysWallet.connectPasskeys.supportedChains;
   [WalletOption.PASSKEY_WALLET]: typeof passkeysWallet.connectPasskeys.supportedChains;

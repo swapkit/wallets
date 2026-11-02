@@ -10,7 +10,7 @@ import type {
 
 const LEDGER_WALLET_PROVIDER_RDNS = "com.ledger.wallet.provider";
 const DEFAULT_DISCOVERY_TIMEOUT = 10_000;
-const ANNOUNCED_PROVIDER_PROBE_TIMEOUT = 250;
+const DISCOVERY_PROBE_TIMEOUT = 250;
 
 export function discoverLedgerWalletProvider({
   timeout = DEFAULT_DISCOVERY_TIMEOUT,
@@ -91,44 +91,57 @@ async function mountLedgerWalletProvider(options: InitializeLedgerWalletProvider
     });
   }
 
-  const [{ initializeLedgerProvider }] = await Promise.all([
-    import("@ledgerhq/ledger-wallet-provider"),
-    import("@ledgerhq/ledger-wallet-provider/styles.css"),
-  ]);
+  const [{ initializeLedgerProvider }, { evmBlockchainProviderFactory }, { solanaBlockchainProviderFactory }] =
+    await Promise.all([
+      import("@ledgerhq/ledger-wallet-provider"),
+      import("@ledgerhq/ledger-wallet-provider-evm"),
+      import("@ledgerhq/ledger-wallet-provider-solana"),
+      import("@ledgerhq/ledger-wallet-provider/styles.css"),
+    ]);
 
-  return initializeLedgerProvider(options);
+  return initializeLedgerProvider({
+    ...options,
+    blockchainProviderFactories: [evmBlockchainProviderFactory, solanaBlockchainProviderFactory],
+  });
 }
 
-export async function resolveLedgerWalletProvider({
-  provider,
-  initialize = true,
-  discoveryTimeout = DEFAULT_DISCOVERY_TIMEOUT,
-  ...initializeOptions
-}: ConnectLedgerWalletProviderOptions = {}) {
-  if (provider) return provider;
-
-  const announced = await discoverLedgerWalletProvider({
-    timeout: initialize ? ANNOUNCED_PROVIDER_PROBE_TIMEOUT : discoveryTimeout,
-  });
+export async function discoverAfterInitialization<T>({
+  discover,
+  notAnnouncedMessage,
+  notInitializedMessage,
+  options: { initialize = true, discoveryTimeout = DEFAULT_DISCOVERY_TIMEOUT, ...initializeOptions },
+}: {
+  discover: (options: { timeout: number }) => Promise<T | undefined>;
+  notAnnouncedMessage: string;
+  notInitializedMessage: string;
+  options: Omit<ConnectLedgerWalletProviderOptions, "provider">;
+}) {
+  const announced = await discover({ timeout: initialize ? DISCOVERY_PROBE_TIMEOUT : discoveryTimeout });
   if (announced) return announced;
 
   if (!initialize) {
-    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message: "No Ledger provider announced; initialize the SDK or pass provider.",
-    });
+    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", { message: notInitializedMessage });
   }
 
   await initializeLedgerWalletProvider(initializeOptions);
 
-  const initialized = await discoverLedgerWalletProvider({ timeout: discoveryTimeout });
-
+  const initialized = await discover({ timeout: discoveryTimeout });
   if (!initialized) {
-    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", {
-      message: "Ledger provider did not announce; WebHID or Bluetooth unavailable.",
-    });
+    throw new SwapKitError("wallet_ledger_wallet_provider_not_announced", { message: notAnnouncedMessage });
   }
 
   return initialized;
+}
+
+export function resolveLedgerWalletProvider({ provider, ...options }: ConnectLedgerWalletProviderOptions = {}) {
+  if (provider) return Promise.resolve(provider);
+
+  return discoverAfterInitialization({
+    discover: discoverLedgerWalletProvider,
+    notAnnouncedMessage: "Ledger provider did not announce; WebHID or Bluetooth unavailable.",
+    notInitializedMessage: "No Ledger provider announced; initialize the SDK or pass provider.",
+    options,
+  });
 }
 
 const LEDGER_HANDLED_METHODS = new Set([

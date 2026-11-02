@@ -18,8 +18,8 @@ export const polkadotWallet: ExtensionWallet<"connectPolkadotJs"> = createWallet
       return true;
     },
   // Polkadot is not in V3 swap chain list
-  directSigningSupport: {},
   name: "connectPolkadotJs",
+  signingSupport: {},
   supportedChains: [Chain.Polkadot],
   walletType: WalletOption.POLKADOT_JS,
 });

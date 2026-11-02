@@ -137,30 +137,43 @@ export const keystoreWallet = createWallet({
       derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
+      const bitcoinScriptType = wallets[Chain.Bitcoin]?.scriptType;
+      const bitcoinSigning =
+        bitcoinScriptType && !(await import("@swapkit/toolboxes/utxo")).canSignBitcoinMessage(bitcoinScriptType)
+          ? { direct: true }
+          : undefined;
 
       for (const wallet of Object.values(wallets)) {
-        addChain({ ...wallet, chain: wallet.chain, walletType: WalletOption.KEYSTORE });
+        addChain({
+          ...wallet,
+          chain: wallet.chain,
+          walletType: WalletOption.KEYSTORE,
+          ...(wallet.chain === Chain.Bitcoin && bitcoinSigning ? { signing: bitcoinSigning } : {}),
+        });
       }
 
       return true;
     },
-  directSigningSupport: {
-    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
-    ...Object.fromEntries(UTXOChains.map((chain) => [chain, true])),
-    ...Object.fromEntries(CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, true])),
-    [Chain.Aleo]: true,
-    [Chain.Aptos]: true,
-    [Chain.Cardano]: true,
-    [Chain.Hype]: true,
-    [Chain.Near]: true,
-    [Chain.Ripple]: true,
-    [Chain.Solana]: true,
-    [Chain.Stellar]: true,
-    [Chain.Sui]: true,
-    [Chain.Ton]: true,
-    [Chain.Tron]: true,
-  },
   name: "connectKeystore",
+  signingSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
+    ...Object.fromEntries(UTXOChains.map((chain) => [chain, { direct: true }])),
+    [Chain.Bitcoin]: { btcMessage: true, direct: true },
+    ...Object.fromEntries(
+      CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, { direct: true }]),
+    ),
+    [Chain.Aleo]: { direct: true },
+    [Chain.Aptos]: { direct: true },
+    [Chain.Cardano]: { direct: true },
+    [Chain.Hype]: { direct: true },
+    [Chain.Near]: { direct: true },
+    [Chain.Ripple]: { direct: true },
+    [Chain.Solana]: { direct: true },
+    [Chain.Stellar]: { direct: true },
+    [Chain.Sui]: { direct: true },
+    [Chain.Ton]: { direct: true },
+    [Chain.Tron]: { direct: true },
+  },
   supportedChains: [
     ...EVMChains,
     ...UTXOChains,

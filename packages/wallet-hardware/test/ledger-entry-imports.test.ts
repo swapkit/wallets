@@ -9,7 +9,10 @@ const transpiler = new Bun.Transpiler({ loader: "ts" });
 // The LedgerJS packages stay external and their lib-es builds (hw-transport, errors, most hw-app-*) use extensionless
 // relative imports that Node ESM cannot resolve, so a static import breaks `import "@swapkit/wallet-hardware/ledger"`
 // in SSR, scripts and test runners. The DMK packages are bundled into lazy chunks that a static import would load with
-// the entry. An entry point may therefore reach `@ledgerhq/*` only through `import()`.
+// the entry. An entry point may therefore reach `@ledgerhq/*` only through `import()`. The TON libraries follow the
+// same rule so that their CommonJS builds load only when a TON account is used.
+const LAZY_PACKAGE_PREFIXES = ["@ledgerhq/", "@ton-community/", "@ton/"];
+
 async function collectEagerPackageImports(entry: string) {
   const visited = new Set<string>();
   const pending = [entry];
@@ -36,10 +39,10 @@ async function collectEagerPackageImports(entry: string) {
 
 describe("wallet-hardware entry points", () => {
   for (const [subpath, { bun: entry }] of Object.entries(packageJson.exports)) {
-    it(`${subpath} loads @ledgerhq packages lazily`, async () => {
+    it(`${subpath} loads the @ledgerhq and TON packages lazily`, async () => {
       const packageImports = await collectEagerPackageImports(join(packageRoot, entry));
       const eagerLedgerImports = packageImports
-        .filter(({ specifier }) => specifier.startsWith("@ledgerhq/"))
+        .filter(({ specifier }) => LAZY_PACKAGE_PREFIXES.some((prefix) => specifier.startsWith(prefix)))
         .map(({ importer, specifier }) => `${specifier} <- ${importer}`);
 
       expect(eagerLedgerImports).toEqual([]);

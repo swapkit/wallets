@@ -4,6 +4,7 @@ import { DeviceActionStatus, type DeviceManagementKit } from "@ledgerhq/device-m
 import * as realBitcoinApp from "@ledgerhq/hw-app-btc";
 import type Transport from "@ledgerhq/hw-transport";
 import { Chain, UTXOScriptType, WalletOption } from "@swapkit/helpers";
+import * as realEvmToolbox from "@swapkit/toolboxes/evm";
 import { hexlify, Signature, Transaction } from "ethers";
 import { of } from "rxjs";
 
@@ -97,6 +98,11 @@ mock.module("@ledgerhq/context-module", () => ({
     }
   },
 }));
+
+// The real getProvider pings the chain RPCs through getRPCUrl, which timed out on slow CI runs.
+const realEvmToolboxSnapshot = { ...realEvmToolbox };
+
+mock.module("@swapkit/toolboxes/evm", () => ({ ...realEvmToolboxSnapshot, getProvider: async () => ({}) }));
 
 mock.module("@ledgerhq/device-signer-kit-ethereum", () => ({
   SignerEthBuilder: class MockSignerEthBuilder {
@@ -561,4 +567,5 @@ describe("wallet-hardware/ledger", () => {
 afterAll(() => {
   mock.module("@ledgerhq/hw-app-btc", () => realBitcoinAppSnapshot);
   mock.module("@ledgerhq/context-module", () => realContextModuleSnapshot);
+  mock.module("@swapkit/toolboxes/evm", () => realEvmToolboxSnapshot);
 });

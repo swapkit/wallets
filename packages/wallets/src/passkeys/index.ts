@@ -168,12 +168,12 @@ export const passkeysWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    ...Object.fromEntries(EVMChains.map((chain) => [chain, true])),
-    [Chain.Bitcoin]: true,
-    [Chain.Solana]: true,
-  },
   name: "connectPasskeys",
+  signingSupport: {
+    ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
+    [Chain.Bitcoin]: { direct: true },
+    [Chain.Solana]: { direct: true },
+  },
   supportedChains: [...EVMChains, Chain.Bitcoin, Chain.Solana],
   walletType: WalletOption.PASSKEYS,
 });

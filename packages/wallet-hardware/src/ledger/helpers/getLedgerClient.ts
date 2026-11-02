@@ -9,6 +9,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import { BitcoinLedger } from "../clients/bitcoin";
+import { CardanoLedger } from "../clients/cardano";
 import { CosmosLedger } from "../clients/cosmos";
 import {
   ArbitrumLedger,
@@ -23,11 +24,14 @@ import {
   MonadLedger,
   OptimismLedger,
   PolygonLedger,
+  RobinhoodLedger,
   XLayerLedger,
 } from "../clients/evm";
 import { getNearLedgerClient } from "../clients/near";
+import { StellarLedger } from "../clients/stellar";
 import { SuiLedger } from "../clients/sui";
 import { THORChainLedger } from "../clients/thorchain";
+import { TONLedger } from "../clients/ton";
 import { TronLedger } from "../clients/tron";
 import { BitcoinCashLedger, DashLedger, DogecoinLedger, LitecoinLedger } from "../clients/utxo";
 import { XRPLedger } from "../clients/xrp";
@@ -45,6 +49,7 @@ type LedgerSignerMap = {
   [Chain.BinanceSmartChain]: ReturnType<typeof BinanceSmartChainLedger>;
   [Chain.BitcoinCash]: ReturnType<typeof BitcoinCashLedger>;
   [Chain.Bitcoin]: ReturnType<typeof BitcoinLedger>;
+  [Chain.Cardano]: ReturnType<typeof CardanoLedger>;
   [Chain.Cosmos]: CosmosLedger;
   [Chain.Dash]: ReturnType<typeof DashLedger>;
   [Chain.Dogecoin]: ReturnType<typeof DogecoinLedger>;
@@ -56,8 +61,11 @@ type LedgerSignerMap = {
   [Chain.Optimism]: ReturnType<typeof OptimismLedger>;
   [Chain.Polygon]: ReturnType<typeof PolygonLedger>;
   [Chain.Ripple]: ReturnType<typeof XRPLedger>;
+  [Chain.Robinhood]: ReturnType<typeof RobinhoodLedger>;
+  [Chain.Stellar]: ReturnType<typeof StellarLedger>;
   [Chain.Sui]: ReturnType<typeof SuiLedger>;
   [Chain.THORChain]: THORChainLedger;
+  [Chain.Ton]: ReturnType<typeof TONLedger>;
   [Chain.Tron]: ReturnType<typeof TronLedger>;
   [Chain.XLayer]: ReturnType<typeof XLayerLedger>;
   [Chain.Zcash]: ReturnType<typeof ZcashLedger>;
@@ -114,8 +122,11 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
     .with(Chain.Litecoin, () => Promise.resolve(LitecoinLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Zcash, () => Promise.resolve(ZcashLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Ripple, () => Promise.resolve(XRPLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Stellar, () => Promise.resolve(StellarLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Cardano, () => Promise.resolve(CardanoLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Tron, () => Promise.resolve(TronLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Sui, () => Promise.resolve(SuiLedger(clientParams) as LedgerSignerMap[T]))
+    .with(Chain.Ton, () => Promise.resolve(TONLedger(clientParams) as LedgerSignerMap[T]))
     .with(Chain.Near, () => Promise.resolve(getNearLedgerClient(clientParams) as LedgerSignerMap[T]))
     .with(
       Chain.Arbitrum,
@@ -130,6 +141,7 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
       Chain.Optimism,
       Chain.Polygon,
       Chain.Base,
+      Chain.Robinhood,
       Chain.XLayer,
       async () => {
         const { getProvider } = await import("@swapkit/toolboxes/evm");
@@ -154,6 +166,7 @@ export async function getLedgerClient<T extends LedgerSupportedChain>({
           .with(Chain.Aurora, () => AuroraLedger(params) as LedgerSignerMap[T])
           .with(Chain.Gnosis, () => GnosisLedger(params) as LedgerSignerMap[T])
           .with(Chain.Monad, () => MonadLedger(params) as LedgerSignerMap[T])
+          .with(Chain.Robinhood, () => RobinhoodLedger(params) as LedgerSignerMap[T])
           .with(Chain.XLayer, () => XLayerLedger(params) as LedgerSignerMap[T])
           .otherwise(() => EthereumLedger(params) as LedgerSignerMap[T]);
       },
