@@ -74,6 +74,11 @@ function parseZcashPath(path: DerivationPathArray | string): ParsedZcashPath {
   return { account, accountPath, fullPath: `${accountPath}/${match[2] ?? 0}/${match[3] ?? 0}` };
 }
 
+function deviceChangePath(path: DerivationPathArray | string) {
+  const { fullPath } = parseZcashPath(path);
+  return fullPath.split("/")[3] === "1" ? fullPath : undefined;
+}
+
 function uint32LE(value: number) {
   const bytes = new Uint8Array(4);
   new DataView(bytes.buffer).setUint32(0, value >>> 0, true);
@@ -400,7 +405,7 @@ export function ZcashLedger({
       additionals: ["zcash", "sapling"],
       associatedKeysets: paths,
       blockHeight,
-      changePath: changePath ? parseZcashPath(changePath).fullPath : configuredPath.fullPath,
+      changePath: deviceChangePath(changePath ?? configuredPath.fullPath),
       expiryHeight: uint32LE(tx.expiryHeight),
       inputs,
       lockTime: tx.lockTime,
