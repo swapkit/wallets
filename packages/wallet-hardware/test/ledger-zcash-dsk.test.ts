@@ -166,13 +166,13 @@ function v4Transaction({ header = 0x80000004 }: { header?: number } = {}) {
 }
 
 // What the device must be streamed for a v4 that, like both fixtures, carries 11 bytes after nExpiryHeight:
-// version | nVersionGroupId | consensus branch id (the DSK default, Ironwood, without a per-input block height) |
+// version | nVersionGroupId | consensus branch id (the target's, from the per-input block height) |
 // transparent body | three empty shielded counts | nLockTime | compact size | nExpiryHeight | the bytes after it.
-function ledgerV4TrustedInputStream(wire: Uint8Array) {
+function ledgerV4TrustedInputStream(wire: Uint8Array, branchId: number = ZcashConsensusBranchId.IRONWOOD) {
   const transparentEnd = wire.length - 19;
   return Uint8Array.from([
     ...wire.slice(0, 8),
-    ...uint32LE(ZcashConsensusBranchId.IRONWOOD),
+    ...uint32LE(branchId),
     ...wire.slice(8, transparentEnd),
     0,
     0,
@@ -240,10 +240,16 @@ function emulatedZcashApp(trustedOutpoints: Uint8Array[]) {
   return { api: api as unknown as InternalApi, trustedInputStreams };
 }
 
+const EXPIRY_HEIGHTS: Record<number, number> = {
+  [ZcashConsensusBranchId.IRONWOOD]: 3_428_200,
+  [ZcashConsensusBranchId.NU6_2]: 3_364_701,
+  [ZcashConsensusBranchId.NU7]: 3_543_500,
+};
+
 function targetTransaction(consensusBranchId: number = ZcashConsensusBranchId.NU6_2) {
   const tx = new ZcashTransaction({
     consensusBranchId,
-    expiryHeight: consensusBranchId === ZcashConsensusBranchId.NU6_2 ? 3_364_701 : 3_428_200,
+    expiryHeight: EXPIRY_HEIGHTS[consensusBranchId],
     lockTime: 12,
     version: 5,
     versionGroupId: ZcashVersionGroupId.NU5,
@@ -258,11 +264,15 @@ function inputUtxo(txHex = realV5Transaction(), hash = "07".repeat(32)): UTXOTyp
 }
 
 // A planned transaction spending output 1 of a previous transaction, with a display-order txid as the toolbox builds.
-function spendOutputOne(previous: Uint8Array, amount: bigint) {
+function spendOutputOne(
+  previous: Uint8Array,
+  amount: bigint,
+  consensusBranchId: number = ZcashConsensusBranchId.IRONWOOD,
+) {
   const txid = displayTxid(previous);
   const tx = new ZcashTransaction({
-    consensusBranchId: ZcashConsensusBranchId.IRONWOOD,
-    expiryHeight: 3_428_200,
+    consensusBranchId,
+    expiryHeight: EXPIRY_HEIGHTS[consensusBranchId],
     version: 5,
     versionGroupId: ZcashVersionGroupId.NU5,
   });
@@ -302,13 +312,14 @@ describe("Ledger Zcash Device Signer Kit client", () => {
       additionals: ["zcash", "sapling"],
       associatedKeysets: ["44'/133'/0'/0/0"],
       blockHeight: 3_364_600,
-      changePath: "44'/133'/0'/0/0",
+      changePath: undefined,
       lockTime: 12,
       outputScriptHex: "0194110000000000000151",
     });
     expect(args.expiryHeight).toEqual(uint32LE(3_364_701));
     expect(args.inputs[0]?.[1]).toBe(0);
     expect(args.inputs[0]?.[3]).toBe(0xfffffffd);
+    expect(args.inputs[0]?.[4]).toBe(3_364_600);
     expect(args.inputs[0]?.[0].serializedPreviousTransactionOverride).toEqual(hex.decode(previousRaw));
     expect(args.inputs[0]?.[0].outputs?.[0]).toEqual({ amount: uint64LE(5_000n), script: Uint8Array.of(0x51) });
     expect(states).toEqual(["pending", "completed"]);
@@ -330,6 +341,46 @@ describe("Ledger Zcash Device Signer Kit client", () => {
       associatedKeysets: ["44'/133'/4'/0/2", "44'/133'/4'/1/9"],
       blockHeight: 3_428_143,
     });
+  });
+
+  it("uses the NU7 activation height for a transaction built under NU7", async () => {
+    const client = ZcashLedger({ dmkSession });
+
+    await client.signTransaction({ inputUtxos: [inputUtxo()], tx: targetTransaction(ZcashConsensusBranchId.NU7) });
+
+    expect(signCalls[0]).toMatchObject({ blockHeight: 3_543_405 });
+    expect((signCalls[0] as LegacyCreateTransactionArg).inputs.map((input) => input[4])).toEqual([3_543_405]);
+  });
+
+  it("refuses a branch id the kit cannot map to an activation height", async () => {
+    const client = ZcashLedger({ dmkSession });
+
+    await expect(
+      client.signTransaction({ inputUtxos: [inputUtxo()], tx: targetTransaction(ZcashConsensusBranchId.NU6) }),
+    ).rejects.toThrow("wallet_ledger_invalid_params");
+    expect(signCalls).toHaveLength(0);
+  });
+
+  it("sends a change path only when it is on the internal chain", async () => {
+    const client = ZcashLedger({ derivationPath: "44'/133'/0'/1/2", dmkSession });
+
+    await client.signTransaction({ inputUtxos: [inputUtxo()], tx: targetTransaction() });
+    await client.signTransaction({
+      changePath: "m/44'/133'/0'/0/3",
+      inputUtxos: [inputUtxo()],
+      tx: targetTransaction(),
+    });
+    await client.signTransaction({
+      changePath: "m/44'/133'/0'/1/3",
+      inputUtxos: [inputUtxo()],
+      tx: targetTransaction(),
+    });
+
+    expect(signCalls.map((args) => (args as LegacyCreateTransactionArg).changePath)).toEqual([
+      "44'/133'/0'/1/2",
+      undefined,
+      "44'/133'/0'/1/3",
+    ]);
   });
 
   it("fails before device signing when an input has no real txHex", async () => {
@@ -386,6 +437,20 @@ describe("Ledger Zcash Device Signer Kit client", () => {
     expect(legacyPrevious?.outputs).toHaveLength(2);
     expect(emulatedApp.trustedInputStreams).toEqual([ledgerV4TrustedInputStream(previous)]);
     // The signed v5 spends the outpoint the device attested in its trusted input.
+    expect(hex.decode(raw).slice(21, 57)).toEqual(outpoint);
+  });
+
+  it("frames a v4 previous transaction with the NU7 branch id once the target spends under NU7", async () => {
+    const previous = MAINNET_V4_TRANSACTION;
+    const { inputUtxos, tx } = spendOutputOne(previous, 1_921_761_200n, ZcashConsensusBranchId.NU7);
+    const outpoint = Uint8Array.from([...hex.decode(displayTxid(previous)).reverse(), ...uint32LE(1)]);
+    emulatedApp = emulatedZcashApp([outpoint]);
+    const client = ZcashLedger({ dmkSession });
+
+    const raw = await client.signTransaction({ inputUtxos, tx });
+
+    expect(emulatedApp.trustedInputStreams).toEqual([ledgerV4TrustedInputStream(previous, ZcashConsensusBranchId.NU7)]);
+    expect(hex.decode(raw).slice(8, 12)).toEqual(uint32LE(ZcashConsensusBranchId.NU7));
     expect(hex.decode(raw).slice(21, 57)).toEqual(outpoint);
   });
 

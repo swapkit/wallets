@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Chain, EVMChains, WalletOption } from "@swapkit/helpers";
+import { type AddChainType, Chain, EVMChains, UTXOScriptType, WalletOption } from "@swapkit/helpers";
 import type { ChainSigningSupport, DirectSigningSupport } from "@swapkit/wallet-core";
+import { keystoreWallet } from "../src/keystore";
 import { loadWallet } from "../src/utils";
 
 async function getSigningSupport(option: WalletOption) {
@@ -57,11 +58,41 @@ describe("wallet signing support", () => {
     if (leakedWindow !== undefined) globalThis.window = leakedWindow;
   });
 
-  test("no connector declares Bitcoin message signing", async () => {
-    for (const option of Object.values(WalletOption)) {
+  test("no connector other than the keystore declares Bitcoin message signing", async () => {
+    for (const option of Object.values(WalletOption).filter((option) => option !== WalletOption.KEYSTORE)) {
       const { signingSupport } = await getSigningSupport(option);
       for (const support of Object.values(signingSupport)) expect(support?.btcMessage).toBeUndefined();
     }
+  });
+
+  test("the keystore declares Bitcoin message signing on Bitcoin only", async () => {
+    const added: Parameters<AddChainType>[0][] = [];
+    await keystoreWallet.connectKeystore.connectWallet({ addChain: (wallet) => added.push(wallet) })(
+      [Chain.Bitcoin, Chain.Litecoin],
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    );
+
+    const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
+    expect(bitcoin?.signing?.btcMessage).toBe(true);
+
+    const signature = Buffer.from((await bitcoin?.signMessage?.("SwapKit BIP-137")) ?? "", "base64");
+    expect(signature).toHaveLength(65);
+    expect(signature[0]).toBeWithin(39, 43);
+    expect(added.find((wallet) => wallet.chain === Chain.Litecoin)?.signing?.btcMessage).toBeUndefined();
+  });
+
+  test("a keystore on a Taproot Bitcoin derivation does not declare Bitcoin message signing", async () => {
+    const added: Parameters<AddChainType>[0][] = [];
+    await keystoreWallet.connectKeystore.connectWallet({ addChain: (wallet) => added.push(wallet) })(
+      [Chain.Bitcoin],
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      { [Chain.Bitcoin]: { derivationPath: [86, 0, 0, 0, 0], scriptType: UTXOScriptType.P2TR } },
+    );
+
+    const bitcoin = added.find((wallet) => wallet.chain === Chain.Bitcoin);
+    expect(bitcoin?.signing?.btcMessage).not.toBe(true);
+    expect(bitcoin?.signing?.direct).toBe(true);
+    await expect(bitcoin?.signMessage?.("swapkit")).rejects.toThrow("toolbox_utxo_unsupported_script_type");
   });
 
   test("the legacy directSigningSupport alias mirrors signingSupport direct", async () => {

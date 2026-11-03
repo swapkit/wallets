@@ -22,7 +22,7 @@ import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "
 import { runLedgerJsOperation } from "../helpers/ledgerJsDmkBridge";
 import { ZcashLedger as LegacyZcashLedger } from "./utxo";
 
-// @swapkit/utxo-signer 3.1.0 exports only the Ironwood activation height.
+// @swapkit/utxo-signer exports no NU6.2 activation height.
 const NU6_2_ACTIVATION_HEIGHT = 3_364_600;
 
 interface ZcashLedgerParams {
@@ -72,6 +72,11 @@ function parseZcashPath(path: DerivationPathArray | string): ParsedZcashPath {
   const account = Number(match[1]);
   const accountPath = `44'/133'/${account}'`;
   return { account, accountPath, fullPath: `${accountPath}/${match[2] ?? 0}/${match[3] ?? 0}` };
+}
+
+function deviceChangePath(path: DerivationPathArray | string) {
+  const { fullPath } = parseZcashPath(path);
+  return fullPath.split("/")[3] === "1" ? fullPath : undefined;
 }
 
 function uint32LE(value: number) {
@@ -161,8 +166,7 @@ function parsePreviousTransaction({ bytes, version }: { bytes: Uint8Array; versi
   return { ...transparentFields, extraData: reader.rest(), locktime, nExpiryHeight };
 }
 
-// Either byte order binds a txid equally: toolbox-built transactions keep display-order txids, while
-// ZcashTransaction.fromBytes keeps them in wire order.
+// Either byte order binds a txid equally: utxo-signer below 3.2 parsed raw transactions with wire-order txids.
 function matchesTxid({ hash, txid }: { hash: string; txid: Uint8Array }) {
   const normalized = hash.toLowerCase();
   return normalized === hex.encode(txid) || normalized === hex.encode(txid.slice().reverse());
@@ -178,17 +182,21 @@ async function serializeOutputs(tx: ZcashTransaction) {
 }
 
 async function activationHeight(consensusBranchId: number) {
-  const { ZCASH_IRONWOOD_ACTIVATION_HEIGHT, ZcashConsensusBranchId } = await import("@swapkit/utxo-signer");
+  const { ZCASH_IRONWOOD_ACTIVATION_HEIGHT, ZCASH_NU7_ACTIVATION_HEIGHT, ZcashConsensusBranchId } = await import(
+    "@swapkit/utxo-signer"
+  );
 
   switch (consensusBranchId) {
     case ZcashConsensusBranchId.NU6_2:
       return NU6_2_ACTIVATION_HEIGHT;
     case ZcashConsensusBranchId.IRONWOOD:
       return ZCASH_IRONWOOD_ACTIVATION_HEIGHT;
+    case ZcashConsensusBranchId.NU7:
+      return ZCASH_NU7_ACTIVATION_HEIGHT;
     default:
       throw new SwapKitError("wallet_ledger_invalid_params", {
         consensusBranchId,
-        reason: "Ledger Zcash DSK signing supports NU6.2 and Ironwood target branches",
+        reason: "Ledger Zcash DSK signing supports NU6.2, Ironwood and NU7 target branches",
       });
   }
 }
@@ -394,6 +402,8 @@ export function ZcashLedger({
           utxo.index,
           null,
           tx.getInput(inputIndex).sequence ?? 0xffffffff,
+          // Frames a v4 previous transaction with this branch id; unset, the kit assumes the latest upgrade
+          blockHeight,
         ],
       ),
     );
@@ -401,7 +411,7 @@ export function ZcashLedger({
       additionals: ["zcash", "sapling"],
       associatedKeysets: paths,
       blockHeight,
-      changePath: changePath ? parseZcashPath(changePath).fullPath : configuredPath.fullPath,
+      changePath: deviceChangePath(changePath ?? configuredPath.fullPath),
       expiryHeight: uint32LE(tx.expiryHeight),
       inputs,
       lockTime: tx.lockTime,
