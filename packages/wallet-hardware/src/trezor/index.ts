@@ -503,11 +503,11 @@ type ZcashTrezorSignRequest = {
   inputs: { amount: string; prev_hash: string; prev_index: number }[];
   locktime: number;
   outputs: { address?: string; amount: string; script_type: string }[];
-  version: number;
-  versionGroupId: number;
 };
 
-function describeZcashSignRequest({ inputs, outputs, ...header }: ZcashTrezorSignRequest) {
+type ZcashTrezorHeader = { version: number; versionGroupId: number };
+
+function describeZcashSignRequest({ inputs, outputs, ...header }: ZcashTrezorSignRequest & ZcashTrezorHeader) {
   const sum = (amounts: { amount: string }[]) => amounts.reduce((total, { amount }) => total + BigInt(amount), 0n);
   const inputTotal = sum(inputs);
   const outputTotal = sum(outputs);
@@ -716,26 +716,33 @@ async function getTrezorWallet<T extends Chain>({
 
       const address = providedAddress ?? (await getAddress());
 
+      // Always v5: v4 signing makes Connect fetch previous transactions, and it cannot parse v6 ones
       const signWithTrezor = async (request: ZcashTrezorSignRequest, signingPath: "pczt" | "transaction") => {
         const TrezorConnect = (await import("@trezor/connect-web")).default;
-        const result = await TrezorConnect.signTransaction({ ...request, coin, overwintered: true } as Parameters<
+        const { ZcashVersion, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
+        const signRequest = { ...request, version: ZcashVersion.NU5, versionGroupId: ZcashVersionGroupId.NU5 };
+        const result = await TrezorConnect.signTransaction({ ...signRequest, coin, overwintered: true } as Parameters<
           typeof TrezorConnect.signTransaction
         >[0]);
 
         if (!result.success) {
           throw new SwapKitError({
             errorKey: "wallet_trezor_failed_to_sign_transaction",
-            info: { ...result.payload, chain, derivationPath, request: describeZcashSignRequest(request), signingPath },
+            info: {
+              ...result.payload,
+              chain,
+              derivationPath,
+              request: describeZcashSignRequest(signRequest),
+              signingPath,
+            },
           });
         }
 
         return result.payload.serializedTx;
       };
 
-      // Always v5: v4 signing makes Connect fetch previous transactions, and it cannot parse v6 ones
       const signPCZTWithSerializedTx = async (pczt: PCZT) => {
         const { hex: hexEncode } = await import("@scure/base");
-        const { ZcashVersion, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
         const global = pczt.getGlobal();
 
@@ -747,8 +754,6 @@ async function getTrezorWallet<T extends Chain>({
           inputs,
           locktime: global.lockTime,
           outputs,
-          version: ZcashVersion.NU5,
-          versionGroupId: ZcashVersionGroupId.NU5,
         };
         const serializedTx = await signWithTrezor(request, "pczt");
 
@@ -762,7 +767,7 @@ async function getTrezorWallet<T extends Chain>({
 
       const signZcashTransactionWithSerializedTx = async (tx: ZcashTransaction) => {
         const { hex: hexEncode } = await import("@scure/base");
-        const { NETWORKS, ZcashVersion, ZcashVersionGroupId } = await import("@swapkit/utxo-signer");
+        const { NETWORKS } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
 
         const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
@@ -780,8 +785,6 @@ async function getTrezorWallet<T extends Chain>({
           inputs,
           locktime: tx.lockTime,
           outputs,
-          version: ZcashVersion.NU5,
-          versionGroupId: ZcashVersionGroupId.NU5,
         };
         const serializedTx = await signWithTrezor(request, "transaction");
 
