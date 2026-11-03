@@ -174,8 +174,8 @@
         "@cosmjs/stargate": "0.37.0",
         "@keplr-wallet/types": "0.13.24",
         "@near-js/accounts": "2.5.1",
-        "@near-js/crypto": "2.5.0",
-        "@near-js/transactions": "2.5.0",
+        "@near-js/crypto": "~2.5.0",
+        "@near-js/transactions": "~2.5.0",
         "@scure/base": "2.2.0",
         "@solana/web3.js": "1.98.4",
         "@wallet-standard/app": "1.1.1",
@@ -240,8 +240,8 @@
         "@ledgerhq/hw-transport-webhid": "6.31.0",
         "@ledgerhq/hw-transport-webusb": "6.30.0",
         "@ledgerhq/wallet-api-client": "1.13.1",
-        "@near-js/crypto": "2.5.0",
-        "@near-js/transactions": "2.5.0",
+        "@near-js/crypto": "~2.5.0",
+        "@near-js/transactions": "~2.5.0",
         "@scure/base": "2.2.0",
         "@scure/bip32": "2.2.0",
         "@trezor/connect-web": "9.7.3",
@@ -298,7 +298,7 @@
         "@coinbase/wallet-sdk": "4.3.7",
         "@cosmjs/amino": "0.37.0",
         "@cosmjs/proto-signing": "0.37.0",
-        "@near-js/transactions": "2.5.0",
+        "@near-js/transactions": "~2.5.0",
         "@near-wallet-selector/bitget-wallet": "10.1.4",
         "@near-wallet-selector/core": "10.1.4",
         "@near-wallet-selector/modal-ui-js": "10.1.4",
@@ -3174,23 +3174,13 @@
 
     "@swapkit/wallet-extensions/@cosmjs/stargate": ["@cosmjs/stargate@0.37.1", "", { "dependencies": { "@cosmjs/amino": "^0.37.1", "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/proto-signing": "^0.37.1", "@cosmjs/stream": "^0.37.1", "@cosmjs/tendermint-rpc": "^0.37.1", "@cosmjs/utils": "^0.37.1", "cosmjs-types": "^0.10.1" } }, "sha512-nQgaJB7A81cRYtmDrcIySq8hbd+QLXJTGFEs6R1xMdxascaABX0x86nS44ALk+EZojQQRnwupOsw1dKLlQmIFg=="],
 
-    "@swapkit/wallet-extensions/@near-js/crypto": ["@near-js/crypto@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/curves": "1.8.1", "@noble/hashes": "^1.7.1", "borsh": "1.0.0", "secp256k1": "5.0.1" } }, "sha512-bsMCasnjRne9j0u5DuKeO0/xwS49GgRrVxzmW9WRZ7yWWh0U8IidTxNHTL1QCDFJNwwzt9HDnuj8XeVhlpixww=="],
-
-    "@swapkit/wallet-extensions/@near-js/transactions": ["@near-js/transactions@2.5.0", "", { "dependencies": { "@near-js/crypto": "2.5.0", "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/hashes": "1.7.1", "borsh": "1.0.0" } }, "sha512-gVhWS4T5VcLjyVaW8nxWxK7kcgbGgyJ0YVS+VmaFzQbSZKuYgNnQXxynTycFc34awTNbp3a4/MqAd8RgX9VIcg=="],
-
     "@swapkit/wallet-hardware/@cosmjs/amino": ["@cosmjs/amino@0.37.1", "", { "dependencies": { "@cosmjs/crypto": "^0.37.1", "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1" } }, "sha512-z3QSfw2S2kGbi5XBahOdAIu2Nnb7XiLgTOphZQoOJXJcTQemAG/wYHLJD9TcQ48SX+eDTJ4i7XRyJaIdg0ClcA=="],
 
     "@swapkit/wallet-hardware/@cosmjs/proto-signing": ["@cosmjs/proto-signing@0.37.1", "", { "dependencies": { "@cosmjs/amino": "^0.37.1", "@cosmjs/crypto": "^0.37.1", "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "cosmjs-types": "^0.10.1" } }, "sha512-cCUfejHOfjx6L/noF9QnXIy4dKoTKl56NFIqz2cizx+kZKszdL0yOtQlu0dD9nR+uMafRHU7aok6v5HH4RZIDw=="],
 
-    "@swapkit/wallet-hardware/@near-js/crypto": ["@near-js/crypto@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/curves": "1.8.1", "@noble/hashes": "^1.7.1", "borsh": "1.0.0", "secp256k1": "5.0.1" } }, "sha512-bsMCasnjRne9j0u5DuKeO0/xwS49GgRrVxzmW9WRZ7yWWh0U8IidTxNHTL1QCDFJNwwzt9HDnuj8XeVhlpixww=="],
-
-    "@swapkit/wallet-hardware/@near-js/transactions": ["@near-js/transactions@2.5.0", "", { "dependencies": { "@near-js/crypto": "2.5.0", "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/hashes": "1.7.1", "borsh": "1.0.0" } }, "sha512-gVhWS4T5VcLjyVaW8nxWxK7kcgbGgyJ0YVS+VmaFzQbSZKuYgNnQXxynTycFc34awTNbp3a4/MqAd8RgX9VIcg=="],
-
     "@swapkit/wallets/@cosmjs/amino": ["@cosmjs/amino@0.37.1", "", { "dependencies": { "@cosmjs/crypto": "^0.37.1", "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1" } }, "sha512-z3QSfw2S2kGbi5XBahOdAIu2Nnb7XiLgTOphZQoOJXJcTQemAG/wYHLJD9TcQ48SX+eDTJ4i7XRyJaIdg0ClcA=="],
 
     "@swapkit/wallets/@cosmjs/proto-signing": ["@cosmjs/proto-signing@0.37.1", "", { "dependencies": { "@cosmjs/amino": "^0.37.1", "@cosmjs/crypto": "^0.37.1", "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "cosmjs-types": "^0.10.1" } }, "sha512-cCUfejHOfjx6L/noF9QnXIy4dKoTKl56NFIqz2cizx+kZKszdL0yOtQlu0dD9nR+uMafRHU7aok6v5HH4RZIDw=="],
-
-    "@swapkit/wallets/@near-js/transactions": ["@near-js/transactions@2.5.0", "", { "dependencies": { "@near-js/crypto": "2.5.0", "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/hashes": "1.7.1", "borsh": "1.0.0" } }, "sha512-gVhWS4T5VcLjyVaW8nxWxK7kcgbGgyJ0YVS+VmaFzQbSZKuYgNnQXxynTycFc34awTNbp3a4/MqAd8RgX9VIcg=="],
 
     "@ton/ton/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
@@ -3772,49 +3762,13 @@
 
     "@swapkit/wallet-extensions/@cosmjs/proto-signing/@cosmjs/crypto": ["@cosmjs/crypto@0.37.1", "", { "dependencies": { "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "@noble/ciphers": "^1.3.0", "@noble/curves": "^1.9.2", "@noble/hashes": "^1.8.0", "@scure/bip39": "^1.6.0", "hash-wasm": "^4.12.0" } }, "sha512-CdLOKQVJM422UegKpi4T/xkdNwvLZwJwSC7NyYi7tAyty0NzP67u+vNqar7Ok22ECkKLj6N9uRcIl4g62oZThA=="],
 
-    "@swapkit/wallet-extensions/@near-js/crypto/@near-js/types": ["@near-js/types@2.5.0", "", {}, "sha512-U0HgAnRwN/XKJ1O4Htac+G5bvkMalBJ8i/kwAPJpoOI1MUtP9dhbCG4GBErADCpczukhrAWlDBHHdfhPnhgyzQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/crypto/@near-js/utils": ["@near-js/utils@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@scure/base": "^1.2.4", "depd": "2.0.0", "mustache": "4.0.0" } }, "sha512-hifdeZVzV9TFcgLNekRVVnB6q7zxdCQPmC9cybT1SjfeiIP/5jPabOZXGWNJPSloRcrTMluCTtaWinIw1HXanQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/crypto/@noble/curves": ["@noble/curves@1.8.1", "", { "dependencies": { "@noble/hashes": "1.7.1" } }, "sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
-
-    "@swapkit/wallet-extensions/@near-js/transactions/@near-js/types": ["@near-js/types@2.5.0", "", {}, "sha512-U0HgAnRwN/XKJ1O4Htac+G5bvkMalBJ8i/kwAPJpoOI1MUtP9dhbCG4GBErADCpczukhrAWlDBHHdfhPnhgyzQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/transactions/@near-js/utils": ["@near-js/utils@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@scure/base": "^1.2.4", "depd": "2.0.0", "mustache": "4.0.0" } }, "sha512-hifdeZVzV9TFcgLNekRVVnB6q7zxdCQPmC9cybT1SjfeiIP/5jPabOZXGWNJPSloRcrTMluCTtaWinIw1HXanQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/transactions/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
-
     "@swapkit/wallet-hardware/@cosmjs/amino/@cosmjs/crypto": ["@cosmjs/crypto@0.37.1", "", { "dependencies": { "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "@noble/ciphers": "^1.3.0", "@noble/curves": "^1.9.2", "@noble/hashes": "^1.8.0", "@scure/bip39": "^1.6.0", "hash-wasm": "^4.12.0" } }, "sha512-CdLOKQVJM422UegKpi4T/xkdNwvLZwJwSC7NyYi7tAyty0NzP67u+vNqar7Ok22ECkKLj6N9uRcIl4g62oZThA=="],
 
     "@swapkit/wallet-hardware/@cosmjs/proto-signing/@cosmjs/crypto": ["@cosmjs/crypto@0.37.1", "", { "dependencies": { "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "@noble/ciphers": "^1.3.0", "@noble/curves": "^1.9.2", "@noble/hashes": "^1.8.0", "@scure/bip39": "^1.6.0", "hash-wasm": "^4.12.0" } }, "sha512-CdLOKQVJM422UegKpi4T/xkdNwvLZwJwSC7NyYi7tAyty0NzP67u+vNqar7Ok22ECkKLj6N9uRcIl4g62oZThA=="],
 
-    "@swapkit/wallet-hardware/@near-js/crypto/@near-js/types": ["@near-js/types@2.5.0", "", {}, "sha512-U0HgAnRwN/XKJ1O4Htac+G5bvkMalBJ8i/kwAPJpoOI1MUtP9dhbCG4GBErADCpczukhrAWlDBHHdfhPnhgyzQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/crypto/@near-js/utils": ["@near-js/utils@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@scure/base": "^1.2.4", "depd": "2.0.0", "mustache": "4.0.0" } }, "sha512-hifdeZVzV9TFcgLNekRVVnB6q7zxdCQPmC9cybT1SjfeiIP/5jPabOZXGWNJPSloRcrTMluCTtaWinIw1HXanQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/crypto/@noble/curves": ["@noble/curves@1.8.1", "", { "dependencies": { "@noble/hashes": "1.7.1" } }, "sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
-
-    "@swapkit/wallet-hardware/@near-js/transactions/@near-js/types": ["@near-js/types@2.5.0", "", {}, "sha512-U0HgAnRwN/XKJ1O4Htac+G5bvkMalBJ8i/kwAPJpoOI1MUtP9dhbCG4GBErADCpczukhrAWlDBHHdfhPnhgyzQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/transactions/@near-js/utils": ["@near-js/utils@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@scure/base": "^1.2.4", "depd": "2.0.0", "mustache": "4.0.0" } }, "sha512-hifdeZVzV9TFcgLNekRVVnB6q7zxdCQPmC9cybT1SjfeiIP/5jPabOZXGWNJPSloRcrTMluCTtaWinIw1HXanQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/transactions/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
-
     "@swapkit/wallets/@cosmjs/amino/@cosmjs/crypto": ["@cosmjs/crypto@0.37.1", "", { "dependencies": { "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "@noble/ciphers": "^1.3.0", "@noble/curves": "^1.9.2", "@noble/hashes": "^1.8.0", "@scure/bip39": "^1.6.0", "hash-wasm": "^4.12.0" } }, "sha512-CdLOKQVJM422UegKpi4T/xkdNwvLZwJwSC7NyYi7tAyty0NzP67u+vNqar7Ok22ECkKLj6N9uRcIl4g62oZThA=="],
 
     "@swapkit/wallets/@cosmjs/proto-signing/@cosmjs/crypto": ["@cosmjs/crypto@0.37.1", "", { "dependencies": { "@cosmjs/encoding": "^0.37.1", "@cosmjs/math": "^0.37.1", "@cosmjs/utils": "^0.37.1", "@noble/ciphers": "^1.3.0", "@noble/curves": "^1.9.2", "@noble/hashes": "^1.8.0", "@scure/bip39": "^1.6.0", "hash-wasm": "^4.12.0" } }, "sha512-CdLOKQVJM422UegKpi4T/xkdNwvLZwJwSC7NyYi7tAyty0NzP67u+vNqar7Ok22ECkKLj6N9uRcIl4g62oZThA=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/crypto": ["@near-js/crypto@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@near-js/utils": "2.5.0", "@noble/curves": "1.8.1", "@noble/hashes": "^1.7.1", "borsh": "1.0.0", "secp256k1": "5.0.1" } }, "sha512-bsMCasnjRne9j0u5DuKeO0/xwS49GgRrVxzmW9WRZ7yWWh0U8IidTxNHTL1QCDFJNwwzt9HDnuj8XeVhlpixww=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/types": ["@near-js/types@2.5.0", "", {}, "sha512-U0HgAnRwN/XKJ1O4Htac+G5bvkMalBJ8i/kwAPJpoOI1MUtP9dhbCG4GBErADCpczukhrAWlDBHHdfhPnhgyzQ=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/utils": ["@near-js/utils@2.5.0", "", { "dependencies": { "@near-js/types": "2.5.0", "@scure/base": "^1.2.4", "depd": "2.0.0", "mustache": "4.0.0" } }, "sha512-hifdeZVzV9TFcgLNekRVVnB6q7zxdCQPmC9cybT1SjfeiIP/5jPabOZXGWNJPSloRcrTMluCTtaWinIw1HXanQ=="],
-
-    "@swapkit/wallets/@near-js/transactions/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
 
     "@trezor/blockchain-link-utils/@stellar/stellar-sdk/@stellar/stellar-base": ["@stellar/stellar-base@14.1.0", "", { "dependencies": { "@noble/curves": "^1.9.6", "@stellar/js-xdr": "^3.1.2", "base32.js": "^0.1.0", "bignumber.js": "^9.3.1", "buffer": "^6.0.3", "sha.js": "^2.4.12" } }, "sha512-A8kFli6QGy22SRF45IjgPAJfUNGjnI+R7g4DF5NZYVsD1kGf7B4ITyc4OPclLV9tqNI4/lXxafGEw0JEUbHixw=="],
 
@@ -4016,12 +3970,6 @@
 
     "@swapkit/wallet-extensions/@cosmjs/proto-signing/@cosmjs/crypto/@scure/bip39": ["@scure/bip39@1.6.0", "", { "dependencies": { "@noble/hashes": "~1.8.0", "@scure/base": "~1.2.5" } }, "sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A=="],
 
-    "@swapkit/wallet-extensions/@near-js/crypto/@near-js/utils/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
-
-    "@swapkit/wallet-extensions/@near-js/crypto/@noble/curves/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
-
-    "@swapkit/wallet-extensions/@near-js/transactions/@near-js/utils/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
-
     "@swapkit/wallet-hardware/@cosmjs/amino/@cosmjs/crypto/@noble/curves": ["@noble/curves@1.9.7", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw=="],
 
     "@swapkit/wallet-hardware/@cosmjs/amino/@cosmjs/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
@@ -4034,12 +3982,6 @@
 
     "@swapkit/wallet-hardware/@cosmjs/proto-signing/@cosmjs/crypto/@scure/bip39": ["@scure/bip39@1.6.0", "", { "dependencies": { "@noble/hashes": "~1.8.0", "@scure/base": "~1.2.5" } }, "sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A=="],
 
-    "@swapkit/wallet-hardware/@near-js/crypto/@near-js/utils/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
-
-    "@swapkit/wallet-hardware/@near-js/crypto/@noble/curves/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
-
-    "@swapkit/wallet-hardware/@near-js/transactions/@near-js/utils/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
-
     "@swapkit/wallets/@cosmjs/amino/@cosmjs/crypto/@noble/curves": ["@noble/curves@1.9.7", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw=="],
 
     "@swapkit/wallets/@cosmjs/amino/@cosmjs/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
@@ -4051,12 +3993,6 @@
     "@swapkit/wallets/@cosmjs/proto-signing/@cosmjs/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
 
     "@swapkit/wallets/@cosmjs/proto-signing/@cosmjs/crypto/@scure/bip39": ["@scure/bip39@1.6.0", "", { "dependencies": { "@noble/hashes": "~1.8.0", "@scure/base": "~1.2.5" } }, "sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/crypto/@noble/curves": ["@noble/curves@1.8.1", "", { "dependencies": { "@noble/hashes": "1.7.1" } }, "sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/crypto/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/utils/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
 
     "@trezor/blockchain-link-utils/@stellar/stellar-sdk/@stellar/stellar-base/@noble/curves": ["@noble/curves@1.9.7", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw=="],
 
@@ -4139,8 +4075,6 @@
     "@swapkit/wallets/@cosmjs/amino/@cosmjs/crypto/@scure/bip39/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
 
     "@swapkit/wallets/@cosmjs/proto-signing/@cosmjs/crypto/@scure/bip39/@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
-
-    "@swapkit/wallets/@near-js/transactions/@near-js/crypto/@noble/curves/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="],
 
     "@trezor/blockchain-link-utils/@stellar/stellar-sdk/@stellar/stellar-base/@noble/curves/@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
 
