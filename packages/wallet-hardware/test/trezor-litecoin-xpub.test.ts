@@ -6,10 +6,14 @@ import {
   createPCZT,
   createZcashTransaction,
   getZcashConsensusBranchId,
+  getZcashTransactionFormat,
   OutScript,
   Script,
   ZCASH_IRONWOOD_ACTIVATION_HEIGHT,
+  ZCASH_NU7_ACTIVATION_HEIGHT,
   ZcashPSBT,
+  ZcashVersion,
+  ZcashVersionGroupId,
 } from "@swapkit/utxo-signer";
 
 const trezorGetPublicKeyCalls: unknown[] = [];
@@ -29,36 +33,15 @@ const trezorEthereumSignedTxPayload = {
   v: "0x14985",
 };
 
-function uint32LE(value: number) {
-  const buffer = Buffer.alloc(4);
-  buffer.writeUInt32LE(value >>> 0);
-  return buffer;
-}
-
-function compactSize(value: number) {
-  if (value < 253) return Buffer.from([value]);
-  throw new Error("Test compactSize helper only supports one-byte values");
-}
-
-function buildZcashSignedTx(inputScript: Uint8Array) {
-  return Buffer.concat([
-    uint32LE(0x80000004),
-    uint32LE(0x892f2085),
-    compactSize(1),
-    Buffer.alloc(32),
-    uint32LE(0),
-    compactSize(inputScript.length),
-    Buffer.from(inputScript),
-    uint32LE(0xffffffff),
-    compactSize(0),
-    uint32LE(0),
-    uint32LE(0),
-    // Sapling tail: valueBalance, nShieldedSpend, nShieldedOutput, nJoinSplit
-    Buffer.alloc(8),
-    compactSize(0),
-    compactSize(0),
-    compactSize(0),
-  ]).toString("hex");
+function buildZcashSignedTx(inputScript: Uint8Array, consensusBranchId?: number) {
+  const tx = createZcashTransaction({
+    consensusBranchId,
+    version: ZcashVersion.NU5,
+    versionGroupId: ZcashVersionGroupId.NU5,
+  });
+  tx.addInput({ index: 0, script: inputScript, txid: new Uint8Array(32).fill(4), value: 1n });
+  tx.addOutput({ amount: 1n, script: OutScript.encode({ hash: new Uint8Array(20).fill(1), type: "pkh" }) });
+  return tx.toHex();
 }
 
 mock.module("@trezor/connect-web", () => ({
@@ -255,8 +238,16 @@ describe("Trezor wallet handling", () => {
     const [signedPublicKey, signedSignature] = signed.getInput(0).partialSig?.[0] ?? [];
 
     expect(trezorSignTransactionCalls).toHaveLength(1);
+    expect(trezorSignTransactionCalls[0]).toMatchObject({
+      version: ZcashVersion.NU5,
+      versionGroupId: ZcashVersionGroupId.NU5,
+    });
     expect(signedPublicKey).toEqual(publicKey);
     expect(signedSignature).toEqual(signature);
+    expect(signed.getGlobal()).toMatchObject({ txVersion: ZcashVersion.NU5, versionGroupId: ZcashVersionGroupId.NU5 });
+
+    signed.finalizeAllInputs();
+    expect(signed.extract().toHex()).toBe(trezorSerializedTx);
   });
 
   it("passes the transaction's Ironwood branch id to Trezor for serialized Zcash signing", async () => {
@@ -279,7 +270,40 @@ describe("Trezor wallet handling", () => {
 
     const signParams = trezorSignTransactionCalls.at(-1) as { branchId: number };
     expect(branchId).toBe(0x37a5165b);
-    expect(signParams.branchId).toBe(0x37a5165b);
+    expect(signParams).toMatchObject({
+      branchId: 0x37a5165b,
+      expiry: 0,
+      version: ZcashVersion.NU5,
+      versionGroupId: ZcashVersionGroupId.NU5,
+    });
+  });
+
+  it("signs a transaction built under NU7 as v5 with its branch id and expiry", async () => {
+    trezorSignTransactionCalls.length = 0;
+    const { consensusBranchId, version, versionGroupId } = getZcashTransactionFormat(ZCASH_NU7_ACTIVATION_HEIGHT);
+    trezorSerializedTx = buildZcashSignedTx(new Uint8Array(), consensusBranchId);
+
+    const addChain = mock(() => undefined);
+    const connect = trezorWallet.connectTrezor.connectWallet({ addChain: addChain as never });
+    await connect([Chain.Zcash], [44, 133, 0, 0, 0], { address: "t1SelectedDerivedAddress" });
+
+    const connectedWallet = addChain.mock.calls[0]?.[0] as {
+      signTransaction: (tx: ReturnType<typeof createZcashTransaction>) => Promise<{ consensusBranchId: number }>;
+    };
+    const tx = createZcashTransaction({ consensusBranchId, expiryHeight: 3_543_700, version, versionGroupId });
+    tx.addInput({ index: 0, txid: new Uint8Array(32).fill(1), value: 1_000n });
+    tx.addOutput({ amount: 500n, script: OutScript.encode({ hash: new Uint8Array(20).fill(2), type: "pkh" }) });
+
+    const signed = await connectedWallet.signTransaction(tx);
+
+    expect(consensusBranchId).toBe(0x77190ad9);
+    expect(trezorSignTransactionCalls.at(-1)).toMatchObject({
+      branchId: 0x77190ad9,
+      expiry: 3_543_700,
+      version: ZcashVersion.NU5,
+      versionGroupId: ZcashVersionGroupId.NU5,
+    });
+    expect(signed.consensusBranchId).toBe(0x77190ad9);
   });
 
   it("passes route Zcash PSBT prev tx ids to Trezor without reversing them or looking up raw txs", async () => {
