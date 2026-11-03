@@ -75,17 +75,10 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
 
 export const ONEKEY_WALLET_SUPPORTED_CHAINS = getWalletSupportedChains(onekeyWallet);
 
-// TON Connect reports a rejected approval as 300 and manifest problems with other codes
-const TON_CONNECT_USER_REJECTS_ERROR = 300;
-
 function isUserRejection(error: unknown) {
-  if (error instanceof SwapKitError) {
-    const code = error.info?.code;
-    return (
-      error.errorKey === "wallet_connection_rejected_by_user" &&
-      (code === undefined || code === TON_CONNECT_USER_REJECTS_ERROR)
-    );
-  }
+  if (error instanceof SwapKitError) return error.errorKey === "wallet_connection_rejected_by_user";
 
-  return (error as { code?: unknown } | null)?.code === 4001;
+  // ethers wraps the EIP-1193 4001 rejection of the EVM provider as ACTION_REJECTED
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === 4001 || code === "ACTION_REJECTED";
 }

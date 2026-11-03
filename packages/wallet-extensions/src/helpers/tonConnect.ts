@@ -5,6 +5,8 @@ import type { TonConnectBridge } from "../types";
 const TON_MAINNET = "-239";
 const SUPPORTED_SEND_MODE = 3;
 const VALID_SECONDS = 300;
+// TON Connect reports a declined approval with this code; manifest and request problems use others
+const TON_CONNECT_USER_REJECTS_ERROR = 300;
 
 type TonConnectWalletParams = {
   bridge: TonConnectBridge;
@@ -98,10 +100,12 @@ async function connect({ bridge, wallet, noAccountError, mainnetOnlyError }: Ton
   const event = restored?.event === "connect" ? restored : await requestConnection(bridge, wallet);
 
   if (event.event !== "connect") {
-    throw new SwapKitError({
-      errorKey: "wallet_connection_rejected_by_user",
-      info: { code: event.payload.code, message: event.payload.message, wallet },
-    });
+    const info = { code: event.payload.code, message: event.payload.message, wallet };
+    const errorKey =
+      event.payload.code === TON_CONNECT_USER_REJECTS_ERROR
+        ? "wallet_connection_rejected_by_user"
+        : "core_wallet_connection_failed";
+    throw new SwapKitError({ errorKey, info });
   }
 
   const account = event.payload.items.find((item) => item.name === "ton_addr");
