@@ -3,10 +3,10 @@ import { WalletOption } from "@swapkit/helpers";
 
 const getAssetsBaseUrl = () => {
   if (import.meta.env?.MODE === "development") {
-    return "https://storage.googleapis.com/token-list-swapkit-dev";
+    return "https://storage.googleapis.com/sk-apiv2-dev-token-list-swapkit";
   }
 
-  return "https://storage.googleapis.com/token-list-swapkit";
+  return "https://tokens.swapkit.dev";
 };
 
 export const getTokenLogoUrl = (token: TokenNames | (string & {})) => {
