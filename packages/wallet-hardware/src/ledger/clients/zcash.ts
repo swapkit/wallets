@@ -22,7 +22,7 @@ import { executeLedgerDeviceAction, type LedgerDeviceActionStateHandler } from "
 import { runLedgerJsOperation } from "../helpers/ledgerJsDmkBridge";
 import { ZcashLedger as LegacyZcashLedger } from "./utxo";
 
-// @swapkit/utxo-signer 3.1.0 exports only the Ironwood activation height.
+// @swapkit/utxo-signer exports no NU6.2 activation height.
 const NU6_2_ACTIVATION_HEIGHT = 3_364_600;
 
 interface ZcashLedgerParams {
@@ -182,17 +182,21 @@ async function serializeOutputs(tx: ZcashTransaction) {
 }
 
 async function activationHeight(consensusBranchId: number) {
-  const { ZCASH_IRONWOOD_ACTIVATION_HEIGHT, ZcashConsensusBranchId } = await import("@swapkit/utxo-signer");
+  const { ZCASH_IRONWOOD_ACTIVATION_HEIGHT, ZCASH_NU7_ACTIVATION_HEIGHT, ZcashConsensusBranchId } = await import(
+    "@swapkit/utxo-signer"
+  );
 
   switch (consensusBranchId) {
     case ZcashConsensusBranchId.NU6_2:
       return NU6_2_ACTIVATION_HEIGHT;
     case ZcashConsensusBranchId.IRONWOOD:
       return ZCASH_IRONWOOD_ACTIVATION_HEIGHT;
+    case ZcashConsensusBranchId.NU7:
+      return ZCASH_NU7_ACTIVATION_HEIGHT;
     default:
       throw new SwapKitError("wallet_ledger_invalid_params", {
         consensusBranchId,
-        reason: "Ledger Zcash DSK signing supports NU6.2 and Ironwood target branches",
+        reason: "Ledger Zcash DSK signing supports NU6.2, Ironwood and NU7 target branches",
       });
   }
 }
@@ -398,6 +402,8 @@ export function ZcashLedger({
           utxo.index,
           null,
           tx.getInput(inputIndex).sequence ?? 0xffffffff,
+          // Frames a v4 previous transaction with this branch id; unset, the kit assumes the latest upgrade
+          blockHeight,
         ],
       ),
     );
