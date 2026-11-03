@@ -1,29 +1,18 @@
 import { base64, hex } from "@scure/base";
-import { Chain, type EVMChain, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { Chain, type EVMChain, EVMChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { StellarSigner } from "@swapkit/toolboxes/stellar";
 import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
 import type { TronSigner } from "@swapkit/toolboxes/tron";
 import { Transaction } from "@swapkit/utxo-signer";
+import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
-import { getOneKeyTonWallet } from "./ton";
 
 const SUI_MAINNET = "sui:mainnet";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
-const ONEKEY_EVM_CHAINS = [
-  Chain.Arbitrum,
-  Chain.Aurora,
-  Chain.Avalanche,
-  Chain.Base,
-  Chain.BinanceSmartChain,
-  Chain.Ethereum,
-  Chain.Gnosis,
-  Chain.Optimism,
-  Chain.Polygon,
-  Chain.XLayer,
-] as const;
+const TRON_USER_REJECTED = 4000;
 
 function getProvider<Key extends keyof NonNullable<Window["$onekey"]>>(key: Key, chain: Chain) {
   const provider = window.$onekey?.[key];
@@ -47,6 +36,13 @@ function mainnetOnlyError(chain: Chain) {
 
 function connectionRejectedError(chain: Chain) {
   return new SwapKitError("wallet_connection_rejected_by_user", { chain, wallet: WalletOption.ONEKEY });
+}
+
+function connectionFailedError(chain: Chain, info?: Record<string, unknown>) {
+  return new SwapKitError({
+    errorKey: "core_wallet_connection_failed",
+    info: { chain, wallet: WalletOption.ONEKEY, ...info },
+  });
 }
 
 async function getBitcoinWalletMethods() {
@@ -125,11 +121,14 @@ async function getSuiWalletMethods() {
 async function getTronWalletMethods() {
   const provider = getProvider("tron", Chain.Tron);
   const response = await provider.request({ method: "tron_requestAccounts" });
-  if (response.code !== 200) throw connectionRejectedError(Chain.Tron);
+  // OneKey answers 4000 when the user declines and other codes, such as a request already queued, otherwise
+  if (response.code === TRON_USER_REJECTED) throw connectionRejectedError(Chain.Tron);
+  if (response.code !== 200)
+    throw connectionFailedError(Chain.Tron, { code: response.code, message: response.message });
 
   // The injected tronWeb can lag behind an existing connection, so the address comes from OneKey itself
   const [address] = await provider.request({ method: "tron_accounts" });
-  if (!address) throw connectionRejectedError(Chain.Tron);
+  if (!address) throw connectionFailedError(Chain.Tron);
 
   const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
 
@@ -224,8 +223,17 @@ async function getNearWalletMethods() {
   return { ...getNearToolbox({ signer: signer as unknown as NearSigner }), address: account.accountId };
 }
 
+function getTonWalletMethods() {
+  return getTonConnectWallet({
+    bridge: getProvider("tonconnect", Chain.Ton),
+    mainnetOnlyError: () => mainnetOnlyError(Chain.Ton),
+    noAccountError: () => connectionFailedError(Chain.Ton),
+    wallet: WalletOption.ONEKEY,
+  });
+}
+
 export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress> {
-  if ((ONEKEY_EVM_CHAINS as readonly Chain[]).includes(chain)) return getEvmWalletMethods(chain as EVMChain);
+  if (EVMChains.includes(chain as EVMChain)) return getEvmWalletMethods(chain as EVMChain);
 
   switch (chain) {
     case Chain.Bitcoin:
@@ -239,7 +247,7 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
     case Chain.Sui:
       return getSuiWalletMethods();
     case Chain.Ton:
-      return getOneKeyTonWallet();
+      return getTonWalletMethods();
     case Chain.Tron:
       return getTronWalletMethods();
     default:

@@ -225,6 +225,39 @@ describe("connectOnekeyWallet", () => {
     expect(stellarRequested).toBe(false);
   });
 
+  test("stops asking for more chains once the user rejects the EVM approval", async () => {
+    let stellarRequested = false;
+    globalThis.window = {
+      $onekey: {
+        ethereum: {
+          request: ({ method }) =>
+            method === "eth_requestAccounts"
+              ? Promise.reject(Object.assign(new Error("User rejected the request."), { code: 4001 }))
+              : Promise.resolve("0x1"),
+        },
+        stellar: {
+          getAddress: () => {
+            stellarRequested = true;
+            return Promise.resolve({ address: Keypair.random().publicKey() });
+          },
+        },
+      },
+    };
+
+    await expect(connect([Chain.Ethereum, Chain.Stellar]).result).rejects.toMatchObject({ code: "ACTION_REJECTED" });
+    expect(stellarRequested).toBe(false);
+  });
+
+  test("skips TRON when OneKey refuses for a reason other than a rejection", async () => {
+    globalThis.window = {
+      $onekey: { solana, tron: { request: () => Promise.resolve({ code: 4001, message: "in the request queue" }) } },
+    };
+    const { added, result } = connect([Chain.Tron, Chain.Solana]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+  });
+
   test("skips a chain OneKey refuses to connect and keeps the rest", async () => {
     const freshAddressError = Object.assign(new Error("Connection requires single address mode."), { code: -99999 });
     globalThis.window = { $onekey: { btc: { requestAccounts: () => Promise.reject(freshAddressError) }, solana } };
