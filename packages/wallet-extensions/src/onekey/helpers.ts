@@ -150,30 +150,6 @@ async function getTronWalletMethods() {
   return { ...getTronToolbox({ signer }), address };
 }
 
-async function getCardanoWalletMethods() {
-  const api = await getProvider("cardano", Chain.Cardano).enable();
-  if ((await api.getNetworkId()) !== 1) throw mainnetOnlyError(Chain.Cardano);
-
-  const { addCardanoVkeyWitnesses, decodeCardanoWitnessSet, getCardanoAddressFromBytes, getCardanoToolbox } =
-    await import("@swapkit/toolboxes/cardano");
-
-  const changeAddress = await api.getChangeAddress();
-  const address = changeAddress.startsWith("addr")
-    ? changeAddress
-    : await getCardanoAddressFromBytes(hex.decode(changeAddress));
-
-  const signer = {
-    address,
-    connect: () => Promise.resolve({ address }),
-    disconnect: () => Promise.resolve(),
-    getAddress: () => Promise.resolve(address),
-    signTransaction: async (transaction: string) =>
-      addCardanoVkeyWitnesses(transaction, await decodeCardanoWitnessSet(await api.signTx(transaction))),
-  };
-
-  return { ...getCardanoToolbox({ signer }), address };
-}
-
 async function getStellarWalletMethods() {
   const provider = getProvider("stellar", Chain.Stellar);
   const { address } = await provider.getAddress();
@@ -254,8 +230,6 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
   switch (chain) {
     case Chain.Bitcoin:
       return getBitcoinWalletMethods();
-    case Chain.Cardano:
-      return getCardanoWalletMethods();
     case Chain.Near:
       return getNearWalletMethods();
     case Chain.Solana:
