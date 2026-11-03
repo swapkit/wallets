@@ -134,15 +134,20 @@ async function getTronWalletMethods() {
   const signer: TronSigner = {
     getAddress: () => Promise.resolve(address),
     signTransaction: async (transaction) => {
+      // The provider only sees a copy, so the check and the result use the transaction that was requested
+      const requested = structuredClone(transaction);
       // OneKey's injected sign() calls a tronWeb.utils.isString that its TronWeb no longer has
-      const { signature, txID } = await provider.request({ method: "tron_signTransaction", params: transaction });
+      const { signature, txID } = await provider.request({
+        method: "tron_signTransaction",
+        params: structuredClone(transaction),
+      });
 
-      if (txID !== transaction.txID) {
+      if (txID !== requested.txID) {
         throw signingError(Chain.Tron, "OneKey signed a different transaction than the one requested");
       }
       if (!signature?.length) throw signingError(Chain.Tron, "OneKey returned no signature");
 
-      return { ...transaction, signature };
+      return { ...requested, signature };
     },
   };
 

@@ -113,6 +113,18 @@ describe("OneKey Tron signer", () => {
 
     await expect(wallet.signTransaction(tronTransaction("0a02abcd"))).rejects.toThrow("different transaction");
   });
+
+  test("rejects a signature when the provider rewrites the transaction it was given", async () => {
+    const other = tronTransaction("0a02ffff");
+    mockTron(async (tx) => Object.assign(tx, other, { signature: ["sig"] }));
+    const transaction = tronTransaction("0a02abcd");
+    const original = structuredClone(transaction);
+
+    const wallet = await getWalletMethods(Chain.Tron);
+
+    await expect(wallet.signTransaction(transaction)).rejects.toThrow("different transaction");
+    expect(transaction).toEqual(original);
+  });
 });
 
 describe("OneKey Stellar signer", () => {
