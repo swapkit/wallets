@@ -121,21 +121,21 @@ async function getSuiWalletMethods() {
 async function getTronWalletMethods() {
   const provider = getProvider("tron", Chain.Tron);
   const response = await provider.request({ method: "tron_requestAccounts" });
-  // OneKey answers 4000 when the user declines and other codes, such as a request already queued, otherwise
-  if (response.code === TRON_USER_REJECTED) throw connectionRejectedError(Chain.Tron);
-  if (response.code !== 200)
-    throw connectionFailedError(Chain.Tron, { code: response.code, message: response.message });
 
-  // The injected tronWeb can lag behind an existing connection, so the address comes from OneKey itself
+  // OneKey can answer 4000 right after an approval, so the connected account decides; tronWeb can lag behind too
   const [address] = await provider.request({ method: "tron_accounts" });
-  if (!address) throw connectionFailedError(Chain.Tron);
+  if (!address) {
+    if (response.code === TRON_USER_REJECTED) throw connectionRejectedError(Chain.Tron);
+    throw connectionFailedError(Chain.Tron, { code: response.code, message: response.message });
+  }
 
   const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
 
   const signer: TronSigner = {
     getAddress: () => Promise.resolve(address),
     signTransaction: async (transaction) => {
-      const { signature, txID } = await provider.sign(transaction);
+      // OneKey's injected sign() calls a tronWeb.utils.isString that its TronWeb no longer has
+      const { signature, txID } = await provider.request({ method: "tron_signTransaction", params: transaction });
 
       if (txID !== transaction.txID) {
         throw signingError(Chain.Tron, "OneKey signed a different transaction than the one requested");

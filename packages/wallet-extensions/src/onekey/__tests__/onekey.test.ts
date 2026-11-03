@@ -69,19 +69,30 @@ describe("OneKey Sui signer", () => {
 });
 
 describe("OneKey Tron signer", () => {
-  function mockTron(sign) {
+  function mockTron(sign, requestAccountsCode = 200) {
     globalThis.window = {
       $onekey: {
         tron: {
-          request: ({ method }) =>
-            Promise.resolve(method === "tron_accounts" ? [TRON_ADDRESS] : { code: 200, message: "ok" }),
-          sign,
-          // OneKey's injected tronWeb can still have no address right after an existing connection
+          request: ({ method, params }) => {
+            if (method === "tron_signTransaction") return sign(params);
+            if (method === "tron_accounts") return Promise.resolve([TRON_ADDRESS]);
+            return Promise.resolve({ code: requestAccountsCode, message: "" });
+          },
+          // OneKey's own sign() is broken and its tronWeb can still have no address after an existing connection
+          sign: () => Promise.reject(new TypeError("tronWeb.utils.isString is not a function")),
           tronWeb: { defaultAddress: { base58: false } },
         },
       },
     };
   }
+
+  test("connects when OneKey answers 4000 to an approval that did connect the account", async () => {
+    mockTron(async () => ({}), 4000);
+
+    const wallet = await getWalletMethods(Chain.Tron);
+
+    expect(wallet.address).toBe(TRON_ADDRESS);
+  });
 
   test("returns the original transaction with the wallet signature", async () => {
     const transaction = tronTransaction("0a02abcd");
@@ -250,7 +261,13 @@ describe("connectOnekeyWallet", () => {
 
   test("skips TRON when OneKey refuses for a reason other than a rejection", async () => {
     globalThis.window = {
-      $onekey: { solana, tron: { request: () => Promise.resolve({ code: 4001, message: "in the request queue" }) } },
+      $onekey: {
+        solana,
+        tron: {
+          request: ({ method }) =>
+            Promise.resolve(method === "tron_accounts" ? [] : { code: 4001, message: "in the request queue" }),
+        },
+      },
     };
     const { added, result } = connect([Chain.Tron, Chain.Solana]);
 
