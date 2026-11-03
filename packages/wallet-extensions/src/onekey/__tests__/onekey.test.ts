@@ -5,9 +5,10 @@ import { KeyPair } from "@near-js/crypto";
 import { actionCreators, createTransaction } from "@near-js/transactions";
 import { base64 } from "@scure/base";
 import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
-import { Chain } from "@swapkit/helpers";
+import { Chain, SKConfig } from "@swapkit/helpers";
 
 import { getWalletMethods } from "../helpers";
+import { onekeyWallet } from "../index";
 
 const SUI_ADDRESS = `0x${"ab".repeat(32)}`;
 const TRON_ADDRESS = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
@@ -190,4 +191,61 @@ test("connects Solana through the provider OneKey injects", async () => {
   const wallet = await getWalletMethods(Chain.Solana);
 
   expect(wallet.address).toBe(address);
+});
+
+describe("connectOnekeyWallet", () => {
+  const SOLANA_ADDRESS = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+  const solana = { connect: () => Promise.resolve({ publicKey: { toString: () => SOLANA_ADDRESS } }) };
+
+  function connect(chains: Chain[]) {
+    const added = [];
+    const result = onekeyWallet.connectOnekeyWallet.connectWallet({ addChain: (wallet) => added.push(wallet) })(chains);
+    return { added, result };
+  }
+
+  test("stops asking for more chains once the user rejects one", async () => {
+    const rejection = Object.assign(new Error("User rejected the request."), { code: 4001 });
+    let suiRequested = false;
+    globalThis.window = {
+      $onekey: {
+        solana: { connect: () => Promise.reject(rejection) },
+        sui: {
+          getAccounts: () => {
+            suiRequested = true;
+            return Promise.resolve([{ address: SUI_ADDRESS, publicKey: "" }]);
+          },
+        },
+      },
+    };
+
+    await expect(connect([Chain.Solana, Chain.Sui]).result).rejects.toBe(rejection);
+    expect(suiRequested).toBe(false);
+  });
+
+  test("skips a chain OneKey refuses to connect and keeps the rest", async () => {
+    const freshAddressError = Object.assign(new Error("Connection requires single address mode."), { code: -99999 });
+    globalThis.window = { $onekey: { btc: { requestAccounts: () => Promise.reject(freshAddressError) }, solana } };
+    const { added, result } = connect([Chain.Bitcoin, Chain.Solana]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+  });
+
+  test("does not treat a TON Connect manifest error as a user rejection", async () => {
+    SKConfig.set({ integrations: { tonConnect: { manifestUrl: "https://app.example/manifest.json" } } });
+    globalThis.window = {
+      $onekey: {
+        solana,
+        tonconnect: {
+          connect: () =>
+            Promise.resolve({ event: "connect_error", payload: { code: 3, message: "App manifest content error" } }),
+          restoreConnection: () => Promise.reject(new Error("No session")),
+        },
+      },
+    };
+    const { added, result } = connect([Chain.Ton, Chain.Solana]);
+
+    expect(await result).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+  });
 });

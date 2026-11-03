@@ -12,12 +12,24 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
 
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
 
-      await Promise.all(
-        filteredChains.map(async (chain) => {
+      const failedChains: unknown[] = [];
+
+      // OneKey queues every pending approval, so asking one chain at a time lets a cancel stop the rest
+      for (const chain of filteredChains) {
+        try {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
-        }),
-      );
+        } catch (error) {
+          if (isUserRejection(error)) throw error;
+          failedChains.push(error);
+        }
+      }
+
+      if (failedChains.length > 0 && failedChains.length === filteredChains.length) throw failedChains[0];
+
+      for (const error of failedChains) {
+        console.warn("connectOnekeyWallet: skipping a chain OneKey cannot connect", error);
+      }
 
       return true;
     },
@@ -66,3 +78,18 @@ export const onekeyWallet: ExtensionWallet<"connectOnekeyWallet"> = createWallet
 });
 
 export const ONEKEY_WALLET_SUPPORTED_CHAINS = getWalletSupportedChains(onekeyWallet);
+
+// TON Connect reports a rejected approval as 300 and manifest problems with other codes
+const TON_CONNECT_USER_REJECTS_ERROR = 300;
+
+function isUserRejection(error: unknown) {
+  if (error instanceof SwapKitError) {
+    const code = error.info?.code;
+    return (
+      error.errorKey === "wallet_connection_rejected_by_user" &&
+      (code === undefined || code === TON_CONNECT_USER_REJECTS_ERROR)
+    );
+  }
+
+  return (error as { code?: unknown } | null)?.code === 4001;
+}

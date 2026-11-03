@@ -98,7 +98,10 @@ async function connect({ bridge, wallet, noAccountError, mainnetOnlyError }: Ton
   const event = restored?.event === "connect" ? restored : await requestConnection(bridge, wallet);
 
   if (event.event !== "connect") {
-    throw new SwapKitError("wallet_connection_rejected_by_user", { message: event.payload.message, wallet });
+    throw new SwapKitError({
+      errorKey: "wallet_connection_rejected_by_user",
+      info: { code: event.payload.code, message: event.payload.message, wallet },
+    });
   }
 
   const account = event.payload.items.find((item) => item.name === "ton_addr");
