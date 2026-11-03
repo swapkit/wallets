@@ -640,6 +640,17 @@ async function getTrezorWallet<T extends Chain>({
       return { ...toolbox, address };
     }
 
+    case Chain.Hype: {
+      const { getHyperCoreToolbox } = await import("@swapkit/toolboxes/hypercore");
+      const { getHyperCoreSigner } = await import("./hypercoreSigner");
+
+      const signer = getHyperCoreSigner({ address: providedAddress, derivationPath });
+      const address = await signer.getAddress();
+      const toolbox = getHyperCoreToolbox({ signer });
+
+      return { ...toolbox, address };
+    }
+
     case Chain.Ripple: {
       const { getRippleToolbox } = await import("@swapkit/toolboxes/ripple");
       const { getRippleSigner } = await import("./rippleSigner");
@@ -1571,6 +1582,7 @@ export const trezorWallet = createWallet({
     [Chain.Ethereum]: { direct: true, typedData: true },
     [Chain.Gnosis]: { direct: true, typedData: true },
     [Chain.Dogecoin]: { direct: true },
+    [Chain.Hype]: { direct: true },
     [Chain.Hyperevm]: { direct: true, typedData: true },
     [Chain.Litecoin]: { direct: true },
     [Chain.Monad]: { direct: true, typedData: true },
@@ -1599,6 +1611,7 @@ export const trezorWallet = createWallet({
     Chain.Dogecoin,
     Chain.Ethereum,
     Chain.Gnosis,
+    Chain.Hype,
     Chain.Hyperevm,
     Chain.Litecoin,
     Chain.Monad,
