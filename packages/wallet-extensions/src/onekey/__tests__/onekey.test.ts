@@ -245,7 +245,11 @@ describe("connectOnekeyWallet", () => {
     };
     const { added, result } = connect([Chain.Ton, Chain.Solana]);
 
-    expect(await result).toBe(true);
-    expect(added.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+    try {
+      expect(await result).toBe(true);
+      expect(added.map(({ chain }) => chain)).toEqual([Chain.Solana]);
+    } finally {
+      SKConfig.set({ integrations: { tonConnect: undefined } });
+    }
   });
 });
