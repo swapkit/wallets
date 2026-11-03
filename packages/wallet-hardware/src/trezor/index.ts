@@ -438,6 +438,33 @@ async function extractSignaturesFromSignedTx(signedTxHex: string, pczt: PCZT): P
   return signedPczt;
 }
 
+// A transaction parsed from raw bytes carries no input amounts, and v5 signing commits to them
+async function resolveZcashInputAmounts(tx: ZcashTransaction): Promise<UTXOType[]> {
+  const { hex: hexEncode } = await import("@scure/base");
+  const zcashApi = getUtxoApi(Chain.Zcash);
+  const previousTransactions = new Map<string, ReturnType<typeof zcashApi.getTransactionDetails>>();
+
+  return Promise.all(
+    Array.from({ length: tx.inputsLength }, async (_, inputIndex) => {
+      const input = tx.getInput(inputIndex);
+      const hash = hexEncode.encode(input.txid);
+      if (input.value > 0n) return { hash, index: input.index, value: Number(input.value) };
+
+      const previous = previousTransactions.get(hash) ?? zcashApi.getTransactionDetails(hash);
+      previousTransactions.set(hash, previous);
+      const output = (await previous).outputs.find(({ index }) => index === input.index);
+      if (!output || !(output.value > 0)) {
+        throw new SwapKitError({
+          errorKey: "wallet_missing_params",
+          info: { chain: Chain.Zcash, inputIndex, reason: "Unable to resolve the Zcash input amount", txid: hash },
+        });
+      }
+
+      return { hash, index: input.index, value: output.value };
+    }),
+  );
+}
+
 function buildZcashTxInputsForTrezor(
   tx: ZcashTransaction,
   utxoInputs: UTXOType[],
@@ -781,7 +808,7 @@ async function getTrezorWallet<T extends Chain>({
         const { NETWORKS } = await import("@swapkit/utxo-signer");
         const address_n = hardenDerivationPath(derivationPath);
 
-        const inputs = buildZcashTxInputsForTrezor(tx, [], address_n, hexEncode);
+        const inputs = buildZcashTxInputsForTrezor(tx, await resolveZcashInputAmounts(tx), address_n, hexEncode);
         const outputs = await buildZcashTxOutputsForTrezor({
           addressN: address_n,
           chain,
