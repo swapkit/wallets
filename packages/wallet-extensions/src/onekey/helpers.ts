@@ -127,16 +127,16 @@ async function getTronWalletMethods() {
   const response = await provider.request({ method: "tron_requestAccounts" });
   if (response.code !== 200) throw connectionRejectedError(Chain.Tron);
 
-  const tronWeb = provider.tronWeb;
-  const address = tronWeb?.defaultAddress?.base58;
-  if (!(tronWeb && address)) throw connectionRejectedError(Chain.Tron);
+  // The injected tronWeb can lag behind an existing connection, so the address comes from OneKey itself
+  const [address] = await provider.request({ method: "tron_accounts" });
+  if (!address) throw connectionRejectedError(Chain.Tron);
 
   const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
 
   const signer: TronSigner = {
     getAddress: () => Promise.resolve(address),
     signTransaction: async (transaction) => {
-      const { signature, txID } = await tronWeb.trx.sign(transaction);
+      const { signature, txID } = await provider.sign(transaction);
 
       if (txID !== transaction.txID) {
         throw signingError(Chain.Tron, "OneKey signed a different transaction than the one requested");

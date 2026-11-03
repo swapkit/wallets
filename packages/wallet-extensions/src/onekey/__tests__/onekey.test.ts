@@ -73,8 +73,11 @@ describe("OneKey Tron signer", () => {
     globalThis.window = {
       $onekey: {
         tron: {
-          request: async () => ({ code: 200, message: "ok" }),
-          tronWeb: { defaultAddress: { base58: TRON_ADDRESS }, trx: { sign } },
+          request: ({ method }) =>
+            Promise.resolve(method === "tron_accounts" ? [TRON_ADDRESS] : { code: 200, message: "ok" }),
+          sign,
+          // OneKey's injected tronWeb can still have no address right after an existing connection
+          tronWeb: { defaultAddress: { base58: false } },
         },
       },
     };

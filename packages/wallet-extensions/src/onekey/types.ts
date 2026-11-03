@@ -28,11 +28,11 @@ export type OneKeySuiProvider = {
 };
 
 export type OneKeyTronProvider = {
-  request: (args: { method: string }) => Promise<{ code: number; message: string }>;
-  tronWeb?: {
-    defaultAddress?: { base58?: string | false };
-    trx: { sign: (transaction: TronTransaction) => Promise<TronSignedTransaction> };
+  request: {
+    (args: { method: "tron_requestAccounts" }): Promise<{ code: number; message: string }>;
+    (args: { method: "tron_accounts" }): Promise<string[]>;
   };
+  sign: (transaction: TronTransaction) => Promise<TronSignedTransaction>;
 };
 
 export type OneKeyCardanoApi = {
