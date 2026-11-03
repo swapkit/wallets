@@ -20,8 +20,8 @@ export type OneKeyTronProvider = {
   request: {
     (args: { method: "tron_requestAccounts" }): Promise<{ code: number; message: string }>;
     (args: { method: "tron_accounts" }): Promise<string[]>;
+    (args: { method: "tron_signTransaction"; params: TronTransaction }): Promise<TronSignedTransaction>;
   };
-  sign: (transaction: TronTransaction) => Promise<TronSignedTransaction>;
 };
 
 export type OneKeyStellarProvider = {
