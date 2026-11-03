@@ -16,17 +16,6 @@ export type OneKeyBtcProvider = {
   signPsbt: (psbtHex: string, options: { autoFinalized: boolean }) => Promise<string>;
 };
 
-export type OneKeySuiAccount = { address: string; publicKey: string };
-
-export type OneKeySuiProvider = {
-  getAccounts: () => Promise<OneKeySuiAccount[]>;
-  signTransaction: (input: {
-    account: OneKeySuiAccount;
-    chain: string;
-    transaction: { serialize: () => string };
-  }) => Promise<{ bytes: string; signature: string }>;
-};
-
 export type OneKeyTronProvider = {
   request: {
     (args: { method: "tron_requestAccounts" }): Promise<{ code: number; message: string }>;
@@ -57,7 +46,6 @@ export type OneKeyProviders = {
   jsBridge?: OneKeyJsBridge;
   solana?: SolanaProvider;
   stellar?: OneKeyStellarProvider;
-  sui?: OneKeySuiProvider;
   tonconnect?: TonConnectBridge;
   tron?: OneKeyTronProvider;
 };
