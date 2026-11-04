@@ -7,6 +7,7 @@ import {
   Script,
   ZcashConsensusBranchId,
   type ZcashTransaction,
+  ZcashVersion,
   ZcashVersionGroupId,
 } from "@swapkit/utxo-signer";
 
@@ -90,8 +91,8 @@ describe("a Trezor refusing to sign a Zcash transaction", () => {
           { amount: "0", kind: "op_return" },
         ],
         outputTotal: "190000",
-        version: 4,
-        versionGroupId: ZcashVersionGroupId.SAPLING,
+        version: ZcashVersion.NU5,
+        versionGroupId: ZcashVersionGroupId.NU5,
       },
       signingPath: "transaction",
     });

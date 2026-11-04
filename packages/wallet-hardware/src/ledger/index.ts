@@ -176,39 +176,26 @@ export const ledgerWallet = createWallet({
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Arbitrum]: true,
-    [Chain.Arc]: true,
-    [Chain.Aurora]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Base]: true,
-    [Chain.Berachain]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.Gnosis]: true,
-    [Chain.Monad]: true,
-    [Chain.Bitcoin]: true,
-    [Chain.BitcoinCash]: true,
-    [Chain.Cardano]: true,
-    [Chain.Cosmos]: true,
-    [Chain.Dash]: true,
-    [Chain.Dogecoin]: true,
-    [Chain.Litecoin]: true,
-    [Chain.Near]: true,
-    [Chain.Optimism]: true,
-    [Chain.Polygon]: true,
-    [Chain.Ripple]: true,
-    [Chain.Robinhood]: true,
-    [Chain.Stellar]: true,
-    [Chain.Sui]: true,
-    [Chain.THORChain]: true,
-    [Chain.Ton]: true,
-    [Chain.Tron]: true,
-    [Chain.XLayer]: true,
-    // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
-  },
   getExtendedPublicKey: getLedgerExtendedPublicKey,
   name: "connectLedger",
+  signingSupport: {
+    ...Object.fromEntries(LEDGER_EVM_CHAINS.map((chain) => [chain, { direct: true, typedData: true }])),
+    [Chain.Bitcoin]: { direct: true },
+    [Chain.BitcoinCash]: { direct: true },
+    [Chain.Cardano]: { direct: true },
+    [Chain.Cosmos]: { direct: true },
+    [Chain.Dash]: { direct: true },
+    [Chain.Dogecoin]: { direct: true },
+    [Chain.Litecoin]: { direct: true },
+    [Chain.Near]: { direct: true },
+    [Chain.Ripple]: { direct: true },
+    [Chain.Stellar]: { direct: true },
+    [Chain.Sui]: { direct: true },
+    [Chain.THORChain]: { direct: true },
+    [Chain.Ton]: { direct: true },
+    [Chain.Tron]: { direct: true },
+    // ZEC transparent transfers use DSK, but route-level PCZT signing remains unsupported.
+  },
   supportedChains: [...LEDGER_SUPPORTED_CHAINS_CONFIG],
   walletType: WalletOption.LEDGER,
 });
@@ -230,8 +217,8 @@ function getLedgerAccountXpub({ chain, path, signer, xpubVersion }: LedgerAccoun
     .exhaustive();
 }
 
-// Toolbox-built transactions keep input txids in display order, the order the UTXO API looks transactions up by,
-// while ZcashTransaction.fromBytes (raw API route transactions) keeps them in wire order, so try both. A txid and its
+// Txids are looked up in display order, the order the UTXO API names transactions by. utxo-signer below 3.2
+// parsed raw transactions with wire-order txids, so the reversed order is tried as a fallback. A txid and its
 // byte reversal cannot both name real transactions, so the fallback cannot fetch an unrelated one.
 function resolveZcashInputUtxos(transaction: ZcashTransaction): Promise<UTXOType[]> {
   const zcashApi = getUtxoApi(Chain.Zcash);

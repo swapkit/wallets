@@ -110,21 +110,14 @@ export const cosmostationWallet: ExtensionWallet<"connectCosmostation"> = create
 
       return true;
     },
-  directSigningSupport: {
-    [Chain.Cosmos]: true,
-    [Chain.Kujira]: true,
-    [Chain.Noble]: true,
-    [Chain.THORChain]: true,
-    [Chain.Ethereum]: true,
-    [Chain.BinanceSmartChain]: true,
-    [Chain.Avalanche]: true,
-    [Chain.Polygon]: true,
-    [Chain.Arbitrum]: true,
-    [Chain.Optimism]: true,
-    [Chain.Base]: true,
-    [Chain.XLayer]: true,
-  },
   name: "connectCosmostation",
+  signingSupport: {
+    [Chain.Cosmos]: { direct: true },
+    [Chain.Kujira]: { direct: true },
+    [Chain.Noble]: { direct: true },
+    [Chain.THORChain]: { direct: true },
+    ...Object.fromEntries(cosmostationSupportedEVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
+  },
   supportedChains: [
     Chain.Cosmos,
     Chain.Kujira,
