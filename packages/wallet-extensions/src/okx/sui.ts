@@ -26,7 +26,7 @@ export async function getOkxSuiWallet(): Promise<SuiWallet & { address: string }
   const signFeature = features["sui:signTransaction"];
 
   if (!signFeature) {
-    throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui });
+    throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Sui, message: "No Sui signing feature" });
   }
 
   const { accounts } = await connect.connect();
@@ -36,10 +36,19 @@ export async function getOkxSuiWallet(): Promise<SuiWallet & { address: string }
     throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Sui, message: "Mainnet only" });
   }
 
-  const signTransaction = (txBytes: Uint8Array) => {
+  const signTransaction = async (txBytes: Uint8Array) => {
     const serialized = base64.encode(txBytes);
     const transaction = { serialize: () => serialized, toJSON: () => Promise.resolve(serialized) };
-    return signFeature.signTransaction({ account, chain: SUI_MAINNET, transaction });
+    const signed = await signFeature.signTransaction({ account, chain: SUI_MAINNET, transaction });
+
+    if (signed.bytes !== serialized) {
+      throw new SwapKitError("wallet_okx_chain_not_supported", {
+        chain: Chain.Sui,
+        message: "Wallet modified the transaction",
+      });
+    }
+
+    return signed;
   };
 
   const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");

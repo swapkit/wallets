@@ -117,7 +117,7 @@ describe("connectOkx", () => {
 describe("OKX Sui", () => {
   const unregisterWallets = [];
 
-  function registerSuiWallet({ chains = ["sui:mainnet"], signFeature = true } = {}) {
+  function registerSuiWallet({ chains = ["sui:mainnet"], signFeature = true, signedBytes = undefined } = {}) {
     const requests = [];
     const features = {
       "standard:connect": {
@@ -130,8 +130,9 @@ describe("OKX Sui", () => {
     if (signFeature) {
       features["sui:signTransaction"] = {
         signTransaction: async (input) => {
-          requests.push({ ...input, transaction: await input.transaction.toJSON() });
-          return { bytes: "c2lnbmVk", signature: "c2lnbmF0dXJl" };
+          const transaction = await input.transaction.toJSON();
+          requests.push({ ...input, transaction });
+          return { bytes: signedBytes ?? transaction, signature: "c2lnbmF0dXJl" };
         },
       };
     }
@@ -156,7 +157,15 @@ describe("OKX Sui", () => {
       "connect",
       { account: { address: SUI_ADDRESS, chains: ["sui:mainnet"] }, chain: "sui:mainnet", transaction: "AQID" },
     ]);
-    expect(signed).toEqual({ bytes: "c2lnbmVk", signature: "c2lnbmF0dXJl" });
+    expect(signed).toEqual({ bytes: "AQID", signature: "c2lnbmF0dXJl" });
+  });
+
+  test("rejects a signature over bytes the wallet changed", async () => {
+    registerSuiWallet({ signedBytes: "c2lnbmVk" });
+
+    const wallet = await getWalletMethods(Chain.Sui);
+
+    await expect(wallet.signTransaction(Uint8Array.from([1, 2, 3]))).rejects.toThrow("wallet_okx_chain_not_supported");
   });
 
   test("rejects a wallet that only returns non-mainnet accounts", async () => {
@@ -165,10 +174,14 @@ describe("OKX Sui", () => {
     await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
   });
 
-  test("rejects a wallet without a Sui signing feature before connecting", async () => {
+  test("skips Sui without a signing feature and keeps the other chains", async () => {
     const requests = registerSuiWallet({ signFeature: false });
+    globalThis.window = { okxwallet: { cardano: mockCardano() } };
+    const added = [];
+    const connectOkx = okxWallet.connectOkx.connectWallet({ addChain: (wallet) => added.push(wallet) });
 
-    await expect(getWalletMethods(Chain.Sui)).rejects.toThrow("wallet_okx_chain_not_supported");
+    expect(await connectOkx([Chain.Cardano, Chain.Sui])).toBe(true);
+    expect(added.map(({ chain }) => chain)).toEqual([Chain.Cardano]);
     expect(requests).toEqual([]);
   });
 });
