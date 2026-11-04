@@ -12,6 +12,7 @@ import type { TronSignedTransaction, TronSigner, TronTransaction } from "@swapki
 import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
+import { getOkxSuiWallet } from "./sui";
 import { getOkxTonWallet } from "./ton";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
@@ -195,6 +196,7 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
 
         return { ...getCardanoToolbox({ signer }), address };
       })
+      .with(Chain.Sui, () => getOkxSuiWallet())
       .with(Chain.Ton, () => getOkxTonWallet())
       .with(Chain.Cosmos, async () => {
         if (!(window.okxwallet && "keplr" in window.okxwallet)) {
