@@ -106,7 +106,7 @@ async function getSuiWalletMethods() {
         transaction: { serialize: () => serialized },
       });
 
-      if (base64.encode(base64.decode(result.bytes)) !== serialized) {
+      if (result.bytes !== serialized) {
         throw signingError(Chain.Sui, "OneKey signed a different transaction than the one requested");
       }
 
