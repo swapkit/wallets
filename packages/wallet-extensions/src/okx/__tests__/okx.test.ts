@@ -165,7 +165,7 @@ describe("OKX Sui", () => {
 
     const wallet = await getWalletMethods(Chain.Sui);
 
-    await expect(wallet.signTransaction(Uint8Array.from([1, 2, 3]))).rejects.toThrow("wallet_okx_chain_not_supported");
+    await expect(wallet.signTransaction(Uint8Array.from([1, 2, 3]))).rejects.toThrow("toolbox_sui_signing_error");
   });
 
   test("rejects a wallet that only returns non-mainnet accounts", async () => {
