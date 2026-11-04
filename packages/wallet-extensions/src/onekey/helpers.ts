@@ -2,10 +2,13 @@ import { base64, hex } from "@scure/base";
 import { Chain, type EVMChain, EVMChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { StellarSigner } from "@swapkit/toolboxes/stellar";
+import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
 import type { TronSigner } from "@swapkit/toolboxes/tron";
 import { Transaction } from "@swapkit/utxo-signer";
 import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
+
+const SUI_MAINNET = "sui:mainnet";
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
@@ -84,6 +87,35 @@ async function getEvmWalletMethods(chain: EVMChain) {
   const toolbox = await getEvmToolboxAsync(chain, { provider: await getEvmProvider(chain), signer });
 
   return { address, ...prepareNetworkSwitch({ chain, provider, toolbox }) };
+}
+
+async function getSuiWalletMethods() {
+  const provider = getProvider("sui", Chain.Sui);
+  const [account] = await provider.getAccounts();
+  if (!account?.address) throw connectionRejectedError(Chain.Sui);
+
+  const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");
+
+  const signer: SuiChainSigner = {
+    getAddress: () => Promise.resolve(account.address),
+    signTransaction: async (txBytes: Uint8Array) => {
+      const serialized = base64.encode(txBytes);
+      const result = await provider.signTransaction({
+        account,
+        chain: SUI_MAINNET,
+        transaction: { serialize: () => serialized },
+      });
+
+      if (result.bytes !== serialized) {
+        throw signingError(Chain.Sui, "OneKey signed a different transaction than the one requested");
+      }
+
+      return { bytes: serialized, signature: result.signature };
+    },
+    toSuiAddress: () => account.address,
+  };
+
+  return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
 async function getTronWalletMethods() {
@@ -217,6 +249,8 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
       return getSolanaWalletMethods();
     case Chain.Stellar:
       return getStellarWalletMethods();
+    case Chain.Sui:
+      return getSuiWalletMethods();
     case Chain.Ton:
       return getTonWalletMethods();
     case Chain.Tron:

@@ -10,6 +10,7 @@ import { Chain, SKConfig } from "@swapkit/helpers";
 import { getWalletMethods } from "../helpers";
 import { onekeyWallet } from "../index";
 
+const SUI_ADDRESS = `0x${"ab".repeat(32)}`;
 const TRON_ADDRESS = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
 
 afterEach(() => {
@@ -33,6 +34,39 @@ function stellarPayment(source: Keypair, amount: string) {
     .setTimeout(30)
     .build();
 }
+
+describe("OneKey Sui signer", () => {
+  function mockSui(signTransaction) {
+    globalThis.window = {
+      $onekey: { sui: { getAccounts: async () => [{ address: SUI_ADDRESS, publicKey: "" }], signTransaction } },
+    };
+  }
+
+  test("sends the exact transaction bytes and returns the wallet signature", async () => {
+    const txBytes = new Uint8Array([1, 2, 3, 4]);
+    let request: Record<string, any> | undefined;
+    mockSui((input) => {
+      request = input;
+      return Promise.resolve({ bytes: input.transaction.serialize(), signature: "wallet-signature" });
+    });
+
+    const wallet = await getWalletMethods(Chain.Sui);
+    const signed = await wallet.signTransaction(txBytes);
+
+    expect(request.chain).toBe("sui:mainnet");
+    expect(request.account.address).toBe(SUI_ADDRESS);
+    expect(base64.decode(request.transaction.serialize())).toEqual(txBytes);
+    expect(signed).toEqual({ bytes: base64.encode(txBytes), signature: "wallet-signature" });
+  });
+
+  test("rejects a signature over different bytes", async () => {
+    mockSui(async () => ({ bytes: base64.encode(new Uint8Array([9, 9])), signature: "wallet-signature" }));
+
+    const wallet = await getWalletMethods(Chain.Sui);
+
+    await expect(wallet.signTransaction(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow("different transaction");
+  });
+});
 
 describe("OneKey Tron signer", () => {
   function mockTron(sign, requestAccountsCode = 200) {
