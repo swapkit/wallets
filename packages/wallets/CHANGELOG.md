@@ -1,5 +1,12 @@
 # @swapkit-dev/wallets
 
+## 6.3.0
+
+### Minor Changes
+
+- [#190](https://github.com/swapkit/wallets/pull/190) [`a74f087`](https://github.com/swapkit/wallets/commit/a74f08759992982d590ae7bf53b2c42993df1571) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects Sui. OKX does not inject a Sui provider on `window`, so it is found through the Wallet Standard as "OKX Wallet".
+- [#217](https://github.com/swapkit/wallets/pull/217) [`ae15331`](https://github.com/swapkit/wallets/commit/ae153315ab521da10aa33478d91f0fba5b4fbb43) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OneKey now connects Sui on mainnet. A Sui signature from OneKey is rejected if it covers a different transaction than the one requested. (via @swapkit/wallet-extensions@4.10.0)
+
 ## 6.2.0
 
 ### Minor Changes
