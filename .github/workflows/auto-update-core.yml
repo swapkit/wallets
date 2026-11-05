@@ -30,16 +30,16 @@ jobs:
             PKG=$(echo "$row" | jq -r '.name')
             VER=$(echo "$row" | jq -r '.version')
 
-            for attempt in $(seq 1 40); do
+            for attempt in $(seq 1 10); do
               if [ "$(npm view "$PKG@$VER" version 2>/dev/null)" = "$VER" ]; then
                 echo "✅ $PKG@$VER is available"
                 continue 2
               fi
-              echo "⏳ $PKG@$VER not on npm yet (attempt $attempt/40)"
-              sleep 15
+              echo "⏳ $PKG@$VER not on npm yet (attempt $attempt/10)"
+              sleep 30
             done
 
-            echo "::error::$PKG@$VER was not available on npm after 10 minutes"
+            echo "::error::$PKG@$VER was not available on npm after 5 minutes"
             exit 1
           done
 
