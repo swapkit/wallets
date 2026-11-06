@@ -35,6 +35,12 @@ export type OneKeyTronProvider = {
   };
 };
 
+export type OneKeyCardanoApi = {
+  getChangeAddress: () => Promise<string>;
+  getNetworkId: () => Promise<number>;
+  signTx: (transaction: string, partialSign?: boolean) => Promise<string>;
+};
+
 export type OneKeyStellarProvider = {
   getAddress: () => Promise<{ address: string }>;
   getNetwork: () => Promise<{ network: string; networkPassphrase: string }>;
@@ -46,6 +52,7 @@ export type OneKeyStellarProvider = {
 
 export type OneKeyProviders = {
   btc?: OneKeyBtcProvider;
+  cardano?: { enable: () => Promise<OneKeyCardanoApi> };
   ethereum?: Eip1193Provider;
   jsBridge?: OneKeyJsBridge;
   solana?: SolanaProvider;
