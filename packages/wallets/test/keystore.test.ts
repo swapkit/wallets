@@ -93,3 +93,28 @@ describe("keystore phrase generation", () => {
     expect(await decryptFromKeystore(keystore, "password")).toBe(phrase);
   });
 });
+
+describe("keystore phrase canonicalisation", () => {
+  test("a phrase with stray whitespace connects to the same addresses as the clean phrase", async () => {
+    const messy = `\n${TEST_PHRASE.split(" ").join("\t  ")}\u00a0\r\n`;
+    const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana];
+
+    const clean = await createKeystoreWallet({ chains, phrase: TEST_PHRASE });
+    const dirty = await createKeystoreWallet({ chains, phrase: messy });
+
+    for (const chain of chains) {
+      expect(clean[chain]?.address).toBeTruthy();
+      expect(`${chain}: ${dirty[chain]?.address}`).toBe(`${chain}: ${clean[chain]?.address}`);
+    }
+    expect(validatePhrase(messy)).toBe(true);
+  });
+
+  test("a phrase with a bad checksum is rejected before any chain connects", async () => {
+    const badChecksum = TEST_PHRASE.replace("about", "abandon");
+
+    expect(validatePhrase(badChecksum)).toBe(false);
+    await expect(createKeystoreWallet({ chains: [Chain.Ethereum], phrase: badChecksum })).rejects.toThrow(
+      "wallet_keystore_invalid_phrase",
+    );
+  });
+});

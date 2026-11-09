@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { generateMnemonic, validateMnemonic } from "@scure/bip39";
+import { generateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
-import { SwapKitError } from "@swapkit/helpers";
+import { canonicalizeMnemonic, SwapKitError } from "@swapkit/helpers";
 
 export type PhraseWordCount = 12 | 15 | 18 | 21 | 24;
 
@@ -77,7 +77,12 @@ export async function generateKeystore({
 }
 
 export function validatePhrase(phrase: string) {
-  return validateMnemonic(phrase, wordlist);
+  try {
+    canonicalizeMnemonic(phrase);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function decryptFromKeystore(keystore: Keystore, password: string) {

@@ -2,6 +2,7 @@ import {
   ACCOUNT_INDEXED_CHAINS,
   type AssetValue,
   Chain,
+  canonicalizeMnemonic,
   CosmosChains,
   type DerivationPathArray,
   EVMChains,
@@ -209,6 +210,7 @@ export async function createKeystoreWallet<T extends Chain[]>({
     supportedChains: KEYSTORE_SUPPORTED_CHAINS,
     walletType: WalletOption.KEYSTORE,
   });
+  const canonicalPhrase = canonicalizeMnemonic(phrase);
 
   const walletIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
   const walletResults = await Promise.allSettled(
@@ -241,7 +243,7 @@ export async function createKeystoreWallet<T extends Chain[]>({
 
       const toolbox = await getToolbox(chain, {
         derivationPath,
-        phrase,
+        phrase: canonicalPhrase,
         ...(resolvedScriptType ? { scriptType: resolvedScriptType } : {}),
       });
       const address = (await toolbox.getAddress()) || "";
