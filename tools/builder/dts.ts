@@ -58,6 +58,7 @@ const dtsPlugin = {
         noEmit: false,
         outDir: "./dist/types",
         paths: {
+          ...(pkgName === "ui" ? { "@swapkit/*": ["./node_modules/@swapkit/*", "../../node_modules/@swapkit/*"] } : {}),
           "@cosmjs/*": ["../../node_modules/@cosmjs/*"],
           "@near-wallet-selector/*": ["../../node_modules/@near-wallet-selector/*"],
           "@solana/*": ["../../node_modules/@solana/*"],
@@ -65,6 +66,7 @@ const dtsPlugin = {
           "@walletconnect/*": ["../../node_modules/@walletconnect/*"],
           xrpl: ["../../node_modules/xrpl"],
         } as Record<string, string[]>,
+        ...(pkgName === "ui" ? { skipLibCheck: true } : {}),
         rootDir: "./src",
         tsBuildInfoFile: "./tsconfig.tsbuildinfo",
       },
@@ -90,7 +92,7 @@ const dtsPlugin = {
   },
 };
 
-export const orderedPackages = ["wallet-extensions", "wallet-hardware", "wallet-mobile", "wallets", "sdk"];
+export const orderedPackages = ["wallet-extensions", "wallet-hardware", "wallet-mobile", "wallets", "sdk", "ui"];
 
 // Symlink .bun/ deps to standard node_modules/ paths so tsc can resolve them
 console.info("Symlinking .bun/ dependencies for tsc compatibility...");

@@ -1,92 +1,295 @@
 # @internal/playground-vite-lite
 
+## 0.0.42
+
+### Patch Changes
+
+- Updated dependencies [`4da98f1`, `8c3d13f`, `8e3fd2b`, `457e6bf`]:
+  - @swapkit/ui@0.29.0
+
+## 0.0.41
+
+### Patch Changes
+
+- Updated dependencies [`1e03ead`, `0483468`, `bada8de`, `1e03ead`, `263fab4`]:
+  - @swapkit/ui@0.28.1
+
+## 0.0.40
+
+### Patch Changes
+
+- Updated dependencies [`42d22a3`, `aeaf141`, `fbfdf25`, `bdc3b0e`, `49ab6ac`, `4a072da`]:
+  - @swapkit/ui@0.28.0
+
+## 0.0.39
+
+### Patch Changes
+
+- Updated dependencies [`27b605a`, `791000f`, `01b4081`, `a203206`, `ea4b25f`, `16faf33`]:
+  - @swapkit/ui@0.27.0
+
+## 0.0.38
+
+### Patch Changes
+
+- Updated dependencies [`47278c9`, `5923888`]:
+  - @swapkit/ui@0.26.1
+
+## 0.0.37
+
+### Patch Changes
+
+- Updated dependencies [`f8e5744`, `f98a75c`, `aef9fea`, `d49b676`, `70b9693`, `577d86c`, `fe92f07`, `fb17dad`, `93cfef4`, `c137b4a`]:
+  - @swapkit/ui@0.26.0
+
+## 0.0.36
+
+### Patch Changes
+
+- Updated dependencies [`df2eeb1`, `3bcca0a`, `aa03c39`, `3c657d2`, `57df9f0`]:
+  - @swapkit/ui@0.25.0
+
+## 0.0.35
+
+### Patch Changes
+
+- Updated dependencies [`708fb10`, `708fb10`, `c21688f`, `708fb10`]:
+  - @swapkit/ui@0.24.2
+
+## 0.0.34
+
+### Patch Changes
+
+- Updated dependencies [`42a5edc`]:
+  - @swapkit/ui@0.24.1
+
+## 0.0.33
+
+### Patch Changes
+
+- Updated dependencies [`2be4909`, `24dbaab`, `2dd25a0`, `250d92c`, `c5e99f5`, `4e74225`, `a6d0900`, `44a7742`, `2b229af`, `6504d78`, `5abc017`, `1cd3737`]:
+  - @swapkit/ui@0.24.0
+
+## 0.0.32
+
+### Patch Changes
+
+- Updated dependencies [`96394f7`, `acac94e`, `2bda851`, `b9cf5dc`, `dbe2fc1`, `dbe2fc1`, `c879ec8`, `15d4e04`, `dab11a1`]:
+  - @swapkit/ui@0.23.0
+
+## 0.0.31
+
+### Patch Changes
+
+- Updated dependencies [`908717f`]:
+  - @swapkit/ui@0.22.1
+
+## 0.0.30
+
+### Patch Changes
+
+- Updated dependencies [`8f34999`, `f16e85f`, `551165f`]:
+  - @swapkit/ui@0.22.0
+
+## 0.0.29
+
+### Patch Changes
+
+- Updated dependencies [`5936cea`]:
+  - @swapkit/ui@0.21.1
+
+## 0.0.28
+
+### Patch Changes
+
+- Updated dependencies [`3bcd3f9`]:
+  - @swapkit/ui@0.21.0
+
+## 0.0.27
+
+### Patch Changes
+
+- Updated dependencies [`360939c`]:
+  - @swapkit/ui@0.20.4
+
+## 0.0.26
+
+### Patch Changes
+
+- Updated dependencies [`9482966`]:
+  - @swapkit/ui@0.20.3
+
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [`a164ef9`]:
+  - @swapkit/ui@0.20.2
+
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [`7238dcd`]:
+  - @swapkit/ui@0.20.1
+
+## 0.0.23
+
+### Patch Changes
+
+- Updated dependencies [`b6bde66`]:
+  - @swapkit/ui@0.20.0
+
+## 0.0.22
+
+### Patch Changes
+
+- Updated dependencies [`9fd99aa`]:
+  - @swapkit/ui@0.19.1
+
+## 0.0.21
+
+### Patch Changes
+
+- Updated dependencies [`417ccf7`]:
+  - @swapkit/ui@0.19.0
+
+## 0.0.20
+
+### Patch Changes
+
+- Updated dependencies [`7128a31`]:
+  - @swapkit/ui@0.18.2
+
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [`349a199`, `67da9b1`]:
+  - @swapkit/ui@0.18.1
+
+## 0.0.18
+
+### Patch Changes
+
+- Updated dependencies [`d4ed0e2`, `0c379f9`]:
+  - @swapkit/ui@0.18.0
+
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [`c9213b0`, `d8bca4a`, `c9213b0`]:
+  - @swapkit/ui@0.17.0
+
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [`74cefd7`, `b3ce60b`]:
+  - @swapkit/ui@0.16.5
+
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [`d4c1c0a`]:
+  - @swapkit/ui@0.16.4
+
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [`170f352`, `170f352`]:
+  - @swapkit/ui@0.16.3
+
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [`9d6ede4`]:
+  - @swapkit/ui@0.16.2
+
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [`d74ed28`]:
+  - @swapkit/ui@0.16.1
+
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [`6c8d007`, `470ffe9`, `fdbcca6`, `470ffe9`, `d14e317`, `d14e317`, `fcde026`, `d14e317`, `3ed8ad0`]:
+  - @swapkit/ui@0.16.0
+
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [`34ecba8`]:
+  - @swapkit/ui@0.15.1
+
 ## 0.0.9
 
 ### Patch Changes
 
-- Updated dependencies [[`3104442`](https://github.com/swapkit/wallets/commit/31044425a5753c4436f806379d427d2aa3050158), [`3104442`](https://github.com/swapkit/wallets/commit/31044425a5753c4436f806379d427d2aa3050158)]:
-  - @swapkit/sdk@4.6.11
-  - @swapkit/wallet-extensions@4.5.6
-  - @swapkit/wallet-hardware@4.9.2
-  - @swapkit/wallet-mobile@4.3.6
-  - @swapkit/wallets@4.8.5
+- Updated dependencies [`567f5f3`]:
+  - @swapkit/ui@0.15.0
 
 ## 0.0.8
 
 ### Patch Changes
 
-- Updated dependencies [[`ef5f220`](https://github.com/swapkit/wallets/commit/ef5f22005c99f71071205fa7b9b1820ace5a8c8c)]:
-  - @swapkit/sdk@4.6.10
-  - @swapkit/wallet-extensions@4.5.5
-  - @swapkit/wallet-hardware@4.9.1
-  - @swapkit/wallet-mobile@4.3.5
-  - @swapkit/wallets@4.8.4
+- Updated dependencies [`0c85687`, `2c012d5`]:
+  - @swapkit/ui@0.14.0
 
 ## 0.0.7
 
 ### Patch Changes
 
-- Updated dependencies [[`6d9b39c`](https://github.com/swapkit/wallets/commit/6d9b39c8bf2baf07cfcd320eeb45533dcec3dd27)]:
-  - @swapkit/wallet-hardware@4.9.0
+- Updated dependencies [`da2d196`, `da2d196`, `da2d196`]:
+  - @swapkit/ui@0.13.0
 
 ## 0.0.6
 
 ### Patch Changes
 
-- Updated dependencies [[`09e8bb6`](https://github.com/swapkit/wallets/commit/09e8bb63ad97f19504f4a1c19630eec4bc2f1dfe)]:
-  - @swapkit/sdk@4.6.9
-  - @swapkit/wallet-extensions@4.5.4
-  - @swapkit/wallet-hardware@4.8.4
-  - @swapkit/wallet-mobile@4.3.4
-  - @swapkit/wallets@4.8.3
+- Updated dependencies [`1a1a8b5`]:
+  - @swapkit/ui@0.12.0
 
 ## 0.0.5
 
 ### Patch Changes
 
-- Updated dependencies [[`81053d0`](https://github.com/swapkit/wallets/commit/81053d0a35fb9170e87bd38128f23d6a666621f6)]:
-  - @swapkit/sdk@4.6.8
-  - @swapkit/wallet-extensions@4.5.3
-  - @swapkit/wallet-hardware@4.8.3
-  - @swapkit/wallet-mobile@4.3.3
-  - @swapkit/wallets@4.8.2
+- Updated dependencies [`346ffef`]:
+  - @swapkit/ui@0.11.1
 
 ## 0.0.4
 
 ### Patch Changes
 
-- Updated dependencies [[`851cbdc`](https://github.com/swapkit/wallets/commit/851cbdcb15500e673c56fedacd7f473f7887b9db)]:
-  - @swapkit/sdk@4.6.7
-  - @swapkit/wallet-extensions@4.5.2
-  - @swapkit/wallet-hardware@4.8.2
-  - @swapkit/wallet-mobile@4.3.2
-  - @swapkit/wallets@4.8.1
+- Updated dependencies [`194b5b1`, `1dd5cd0`]:
+  - @swapkit/ui@0.11.0
 
 ## 0.0.3
 
 ### Patch Changes
 
-- Updated dependencies [[`380809d`](https://github.com/swapkit/wallets/commit/380809d50647cd03c472a1caf105ebfa82a57d34)]:
-  - @swapkit/wallet-hardware@4.8.1
+- Updated dependencies [`bc33b52`]:
+  - @swapkit/ui@0.10.1
 
 ## 0.0.2
 
 ### Patch Changes
 
-- Updated dependencies [[`f181e26`](https://github.com/swapkit/wallets/commit/f181e26a24861d5b08284c583ab85e9fcfdd2008), [`159098d`](https://github.com/swapkit/wallets/commit/159098d3acbf75e0739115dab7fbe0ad17b17dd2), [`e87714a`](https://github.com/swapkit/wallets/commit/e87714a6e48aeff85674b7647b7b1a2943969b6b)]:
-  - @swapkit/sdk@4.6.5
-  - @swapkit/wallet-extensions@4.5.1
-  - @swapkit/wallet-hardware@4.8.0
-  - @swapkit/wallet-mobile@4.3.1
-  - @swapkit/wallets@4.8.0
+- Updated dependencies [`aeb02b6`]:
+  - @swapkit/ui@0.10.0
 
 ## 0.0.1
 
 ### Patch Changes
 
-- Updated dependencies [[`f7f0f94`](https://github.com/swapkit/wallets/commit/f7f0f94596d77727a0b5eeff4f70264177aba1ee), [`67d6989`](https://github.com/swapkit/wallets/commit/67d698968b20e68b92537b56d04a415ad516b84a), [`9dd5073`](https://github.com/swapkit/wallets/commit/9dd50734580ba787f335c925032dad82293523a7), [`b4b4666`](https://github.com/swapkit/wallets/commit/b4b4666fccee2861aa733cf589a9a50aaf4ed981), [`5202c86`](https://github.com/swapkit/wallets/commit/5202c86388c8b371b48e09c12aa7e5b2419d8ce6), [`5a5a117`](https://github.com/swapkit/wallets/commit/5a5a11738b1c8a2fd08fc571cc2156947ee05bd0)]:
-  - @swapkit/wallet-extensions@4.5.0
-  - @swapkit/sdk@4.6.4
-  - @swapkit/wallet-hardware@4.7.0
-  - @swapkit/wallet-mobile@4.3.0
-  - @swapkit/wallets@4.7.0
+- Updated dependencies []:
+  - @swapkit/ui@0.9.0
