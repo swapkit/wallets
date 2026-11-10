@@ -50,7 +50,7 @@ function mockCosmosNode(_input: string | URL | Request, init?: RequestInit) {
 }
 
 describe("KeepKey Cosmos transfer fee", () => {
-  // The toolbox's shared default fee. Releases before swapkit/sdk#423 already hold the 500 uatom an older connect
+  // The toolbox's shared default fee. Releases before swapkit/sdk#496 already hold the 500 uatom an older connect
   // wrote into it, so it gets another amount here for such a write to show.
   const [sharedDefaultFee] = DEFAULT_COSMOS_FEE_MAINNET.amount as [{ amount: string; denom: string }];
   let sharedDefaultAmount = "";
