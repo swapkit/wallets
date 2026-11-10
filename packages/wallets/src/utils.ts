@@ -8,6 +8,7 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
   const { match } = await import("ts-pattern");
 
   const wallet = await match(walletOption as keyof SKWallets)
+    .with(WalletOption.CIP30, async () => (await import("@swapkit/wallet-extensions/cardano")).cardanoWallet)
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
     .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
     .with(WalletOption.VULTISIG, async () => (await import("@swapkit/wallet-extensions/vultisig")).vultisigWallet)

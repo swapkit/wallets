@@ -56,6 +56,18 @@
       "require": "./dist/src/bitget/index.cjs",
       "types": "./dist/types/bitget/index.d.ts"
     },
+    "./cardano": {
+      "bun": "./src/cardano/index.ts",
+      "default": "./dist/src/cardano/index.js",
+      "require": "./dist/src/cardano/index.cjs",
+      "types": "./dist/types/cardano/index.d.ts"
+    },
+    "./cardano/register": {
+      "bun": "./src/cardano/register.ts",
+      "default": "./dist/src/cardano/register.js",
+      "require": "./dist/src/cardano/register.cjs",
+      "types": "./dist/types/cardano/register.d.ts"
+    },
     "./cosmostation": {
       "bun": "./src/cosmostation/index.ts",
       "default": "./dist/src/cosmostation/index.js",
