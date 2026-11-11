@@ -95,6 +95,22 @@ describe("CIP-30 Cardano wallets", () => {
     await expect(connect()).rejects.toThrow("wallet_connection_rejected_by_user");
   });
 
+  test("reports a failed connection as a SwapKit error with the wallet's reason", async () => {
+    const provider = { ...mockProvider(), enable: () => Promise.reject({ code: -2, info: "Wallet is locked" }) };
+    globalThis.window = { cardano: { lace: provider } };
+
+    const error = await connect().catch((error) => error);
+
+    expect(error.errorKey).toBe("core_wallet_connection_failed");
+    expect(error.cause).toMatchObject({ code: -2, message: "Wallet is locked", wallet: "lace" });
+  });
+
+  test("reports a declined signature as rejected by the user", async () => {
+    globalThis.window = { cardano: { lace: mockProvider({ signTx: () => Promise.reject({ code: 2, info: "no" }) }) } };
+
+    await expect((await connect()).signTransaction(UNSIGNED_TX)).rejects.toThrow("core_transaction_user_rejected");
+  });
+
   test("signs the transaction it receives and only adds the wallet signature", async () => {
     const requested = [];
     const signTx = (transaction) => {

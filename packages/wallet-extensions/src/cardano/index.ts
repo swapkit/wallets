@@ -4,15 +4,16 @@ import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import {
   CARDANO_MAINNET_NETWORK_ID,
+  CIP30_REFUSED,
   type Cip30Provider,
+  getCip30ErrorCode,
   getCip30PaymentAddress,
   getCip30Toolbox,
+  toCip30SwapKitError,
 } from "../helpers/cip30";
 import type { ExtensionWallet } from "../walletTypes";
 
 export type CardanoWalletInfo = { apiVersion: string; icon: string; key: string; name: string };
-
-const CIP30_REFUSED = -3;
 
 function isCip30Provider(provider: unknown): provider is Cip30Provider {
   if (typeof provider !== "object" || provider === null) return false;
@@ -31,10 +32,6 @@ export function getCardanoWallets(): CardanoWalletInfo[] {
   );
 }
 
-function isRefused(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error && error.code === CIP30_REFUSED;
-}
-
 export const cardanoWallet: ExtensionWallet<"connectCardano", Chain[], [chains: Chain[], walletKey: string]> =
   createWallet({
     connect: ({ addChain, walletType }) =>
@@ -43,8 +40,10 @@ export const cardanoWallet: ExtensionWallet<"connectCardano", Chain[], [chains: 
         if (!isCip30Provider(provider)) throw new SwapKitError("wallet_cip30_not_found", { walletKey });
 
         const api = await provider.enable().catch((error: unknown) => {
-          if (!isRefused(error)) throw error;
-          throw new SwapKitError("wallet_connection_rejected_by_user", { chain: Chain.Cardano, wallet: walletKey });
+          const info = { chain: Chain.Cardano, wallet: walletKey };
+          throw getCip30ErrorCode(error) === CIP30_REFUSED
+            ? new SwapKitError("wallet_connection_rejected_by_user", info)
+            : toCip30SwapKitError(error, "core_wallet_connection_failed", info);
         });
 
         if ((await api.getNetworkId()) !== CARDANO_MAINNET_NETWORK_ID) {
