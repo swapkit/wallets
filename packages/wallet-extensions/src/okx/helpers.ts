@@ -172,12 +172,11 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
         }
 
         const api = await window.okxwallet.cardano.enable();
+        const { CARDANO_MAINNET_NETWORK_ID, getCip30Toolbox } = await import("../helpers/cip30");
 
-        if ((await api.getNetworkId()) !== 1) {
+        if ((await api.getNetworkId()) !== CARDANO_MAINNET_NETWORK_ID) {
           throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Cardano, message: "Mainnet only" });
         }
-
-        const { getCip30Toolbox } = await import("../helpers/cip30");
 
         return getCip30Toolbox(api, await api.getChangeAddress());
       })
