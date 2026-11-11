@@ -65,7 +65,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       ].map((chain) => [chain, { direct: true, typedData: true }]),
     ),
     [Chain.Bitcoin]: { direct: true },
-    [Chain.Cosmos]: { direct: true },
+    // [Chain.Cosmos]: Bitget answers "ChainIds not supported" for cosmoshub-4, to be revisited
     [Chain.Near]: { direct: true },
     [Chain.Ripple]: { direct: true },
     [Chain.Solana]: { direct: true },
@@ -78,7 +78,6 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   supportedChains: [
     ...EVMChains,
     Chain.Bitcoin,
-    Chain.Cosmos,
     Chain.Near,
     Chain.Ripple,
     Chain.Solana,
