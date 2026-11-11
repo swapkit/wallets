@@ -22,7 +22,6 @@ export const CARDANO_MAINNET_NETWORK_ID = 1;
 export async function getCip30PaymentAddress(
   api: Pick<Cip30Api, "getChangeAddress" | "getUnusedAddresses" | "getUsedAddresses">,
 ) {
-  // A multi-address wallet can hand out a fresh, unfunded change address on every call
   const [usedAddress] = await api.getUsedAddresses();
   if (usedAddress) return usedAddress;
 

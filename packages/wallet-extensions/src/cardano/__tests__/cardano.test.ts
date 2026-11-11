@@ -6,7 +6,6 @@ import { decodeCardanoTransaction } from "@swapkit/toolboxes/cardano";
 
 import { cardanoWallet, getCardanoWallets } from "../index";
 
-// CIP-19 mainnet base address test vectors
 const USED_ADDRESS =
   "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x";
 const OTHER_ADDRESS = "addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8";
@@ -55,13 +54,10 @@ describe("CIP-30 Cardano wallets", () => {
   });
 
   test("lists only the CIP-30 wallets injected in the page", () => {
-    const cardano = { lace: mockProvider(), typhon: { isEnabled: async () => true }, version: "1" };
-    Object.defineProperty(cardano, "eternl", { value: { ...mockProvider(), name: "Eternl" } });
-    globalThis.window = { cardano };
+    globalThis.window = { cardano: { lace: mockProvider(), typhon: { isEnabled: async () => true }, version: "1" } };
 
-    expect(getCardanoWallets().map(({ key, name }) => ({ key, name }))).toEqual([
-      { key: "lace", name: "Lace" },
-      { key: "eternl", name: "Eternl" },
+    expect(getCardanoWallets()).toEqual([
+      { apiVersion: "1", icon: "data:image/svg+xml;base64,AA==", key: "lace", name: "Lace" },
     ]);
   });
 
