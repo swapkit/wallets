@@ -1,4 +1,3 @@
-// Registers WalletOption.CIP30 and the wallet_cip30_* error codes before anything below reads them.
 import "./register";
 
 import { Chain, SwapKitError, WalletOption } from "@swapkit/helpers";
