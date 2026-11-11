@@ -12,18 +12,17 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       );
 
       const failedChains: unknown[] = [];
-      pendingRetriesExhausted = false;
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
       for (const [index, chain] of filteredChains.entries()) {
-        // Bitget needs a moment between requests, except between EVM chains that share one account
+        // With less than a second between requests Bitget mixes up its approval windows; EVM chains share one account
         const previous = filteredChains[index - 1];
         if (previous && !(isEvmChain(previous) && isEvmChain(chain))) {
           await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
         }
 
         try {
-          const walletMethods = await connectWhenIdle(chain);
+          const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
         } catch (error) {
           if (isUserRejection(error)) throw error;
@@ -85,28 +84,3 @@ function isEvmChain(chain: Chain) {
 }
 
 const CHAIN_PAUSE_MS = 1000;
-const PENDING_RETRY_MS = 300;
-const PENDING_RETRIES = 10;
-let pendingRetriesExhausted = false;
-
-// Bitget refuses a request made right after an approval instead of queueing it, so it is asked again shortly after
-async function connectWhenIdle(chain: Chain) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await getWalletMethods(chain);
-    } catch (error) {
-      if (!isPendingApproval(error) || pendingRetriesExhausted) throw error;
-      if (attempt >= PENDING_RETRIES) {
-        pendingRetriesExhausted = true;
-        throw error;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, PENDING_RETRY_MS));
-    }
-  }
-}
-
-function isPendingApproval(error: unknown) {
-  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
-  return code === -32002 || (typeof message === "string" && message.includes("already pending"));
-}
