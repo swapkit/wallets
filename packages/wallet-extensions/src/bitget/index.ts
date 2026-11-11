@@ -59,7 +59,6 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       ].map((chain) => [chain, { direct: true, typedData: true }]),
     ),
     [Chain.Bitcoin]: { direct: true },
-    // Left out for now: Bitget refuses Cosmos and Starknet ("ChainIds not supported") and does not inject NEAR
     [Chain.Ripple]: { direct: true },
     [Chain.Solana]: { direct: true },
     [Chain.Sui]: { direct: true },
