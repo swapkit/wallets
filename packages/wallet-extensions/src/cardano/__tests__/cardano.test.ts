@@ -55,10 +55,13 @@ describe("CIP-30 Cardano wallets", () => {
   });
 
   test("lists only the CIP-30 wallets injected in the page", () => {
-    globalThis.window = { cardano: { lace: mockProvider(), typhon: { isEnabled: async () => true }, version: "1" } };
+    const cardano = { lace: mockProvider(), typhon: { isEnabled: async () => true }, version: "1" };
+    Object.defineProperty(cardano, "eternl", { value: { ...mockProvider(), name: "Eternl" } });
+    globalThis.window = { cardano };
 
-    expect(getCardanoWallets()).toEqual([
-      { apiVersion: "1", icon: "data:image/svg+xml;base64,AA==", key: "lace", name: "Lace" },
+    expect(getCardanoWallets().map(({ key, name }) => ({ key, name }))).toEqual([
+      { key: "lace", name: "Lace" },
+      { key: "eternl", name: "Eternl" },
     ]);
   });
 

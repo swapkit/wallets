@@ -25,11 +25,16 @@ function isCip30Provider(provider: unknown): provider is Cip30Provider {
 export function getCardanoWallets(): CardanoWalletInfo[] {
   if (typeof window === "undefined" || !window.cardano) return [];
 
-  return Object.entries(window.cardano).flatMap(([key, provider]) =>
-    isCip30Provider(provider)
+  const injected = window.cardano;
+
+  // Some wallets define their key as non-enumerable, so Object.entries would skip them
+  return Object.getOwnPropertyNames(injected).flatMap((key) => {
+    const provider = injected[key];
+
+    return isCip30Provider(provider)
       ? [{ apiVersion: provider.apiVersion, icon: provider.icon, key, name: provider.name }]
-      : [],
-  );
+      : [];
+  });
 }
 
 function isRefused(error: unknown) {
