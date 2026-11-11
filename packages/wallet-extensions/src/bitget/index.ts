@@ -22,7 +22,10 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
         ton: !!window.bitgetTonWallet,
       });
 
-      for (const chain of filteredChains) {
+      for (const [index, chain] of filteredChains.entries()) {
+        // TEMP experiment: give Bitget a second between requests
+        if (index > 0) await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
+
         const startedAt = Date.now();
         console.info(`[bitget-debug] ${chain} start`);
         try {
@@ -104,6 +107,7 @@ function isEvmChain(chain: Chain) {
   return (EVMChains as readonly Chain[]).includes(chain);
 }
 
+const CHAIN_PAUSE_MS = 1000;
 const PENDING_RETRY_MS = 300;
 const PENDING_RETRIES = 10;
 let pendingRetriesExhausted = false;
