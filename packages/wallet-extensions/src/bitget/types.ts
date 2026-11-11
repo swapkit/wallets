@@ -1,27 +1,11 @@
-import type { AminoSignResponse, StdSignature, StdSignDoc } from "@cosmjs/amino";
 import type { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import type { EthereumWindowProvider } from "@swapkit/helpers";
-import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
 
 export type BitgetBtcProvider = {
   getNetwork?: () => Promise<string>;
   requestAccounts: () => Promise<string[]>;
   signMessage: (message: string, type?: "ecdsa" | "bip322-simple") => Promise<string>;
   signPsbt: (psbtHex: string, options: { autoFinalized?: boolean }) => Promise<string>;
-};
-
-export type BitgetKeplrProvider = {
-  enable: (chainId: string | string[]) => Promise<void>;
-  signAmino: (chainId: string, signer: string, signDoc: StdSignDoc, signOptions: any) => Promise<AminoSignResponse>;
-  signArbitrary: (chainId: string, signer: string, data: string | Uint8Array) => Promise<StdSignature>;
-  verifyArbitrary: (
-    chainId: string,
-    signer: string,
-    data: string | Uint8Array,
-    signature: StdSignature,
-  ) => Promise<boolean>;
-  getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
-  getOfflineSignerAuto: (chainId: string) => Promise<OfflineAminoSigner | OfflineDirectSigner>;
 };
 
 export type BitgetSolanaTransaction = Transaction | VersionedTransaction;
@@ -68,7 +52,6 @@ export type BitgetXrpProvider = {
 export type BitgetProviders = BitgetTronProvider & {
   aptos: unknown;
   ethereum: EthereumWindowProvider;
-  keplr: BitgetKeplrProvider;
   solana: BitgetSolanaProvider;
   suiWallet: BitgetSuiProvider;
   unisat: BitgetBtcProvider;

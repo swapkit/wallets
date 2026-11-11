@@ -3,7 +3,6 @@ import {
   Chain,
   type EVMChain,
   EVMChains,
-  GAIAConfig,
   type GenericTransferParams,
   prepareNetworkSwitch,
   SwapKitError,
@@ -82,21 +81,6 @@ async function getBitcoinWalletMethods() {
   });
 
   return { ...toolbox, address };
-}
-
-async function getCosmosWalletMethods() {
-  const wallet = getProvider("keplr", Chain.Cosmos);
-
-  await wallet.enable(GAIAConfig.chainId);
-  const offlineSigner = await wallet.getOfflineSignerAuto(GAIAConfig.chainId);
-  const accounts = await offlineSigner.getAccounts();
-  if (!accounts?.[0]) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Cosmos });
-
-  const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
-  const [{ address }] = accounts;
-  const signer = Object.assign(offlineSigner, { getAddress: () => Promise.resolve(address) });
-
-  return { ...getCosmosToolbox(Chain.Cosmos, { signer }), address };
 }
 
 async function getSolanaWalletMethods() {
@@ -278,8 +262,6 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
       return getAptosWalletMethods();
     case Chain.Bitcoin:
       return getBitcoinWalletMethods();
-    case Chain.Cosmos:
-      return getCosmosWalletMethods();
     case Chain.Ripple:
       return getRippleWalletMethods();
     case Chain.Solana:
