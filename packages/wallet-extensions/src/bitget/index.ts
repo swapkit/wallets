@@ -6,9 +6,9 @@ import { getWalletMethods } from "./helpers";
 export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectBitget(chains: Chain[]) {
-      // EVM goes first: its approval waits for the user, and the site approval it grants covers the other chains
+      // EVM goes last: the chains asked right after its approval were refused as already pending
       const filteredChains = filterSupportedChains({ chains, supportedChains, walletType }).sort(
-        (a, b) => Number(isEvmChain(b)) - Number(isEvmChain(a)),
+        (a, b) => Number(isEvmChain(a)) - Number(isEvmChain(b)),
       );
 
       const failedChains: unknown[] = [];
