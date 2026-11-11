@@ -14,15 +14,28 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       const failedChains: unknown[] = [];
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
+      // TEMP debug logs, remove before merge
+      console.info("[bitget-debug] requested", chains, "connecting", filteredChains);
+      console.info("[bitget-debug] injected", Object.keys(window.bitkeep ?? {}), {
+        starknet: !!window.starknet_bitkeep,
+        ton: !!window.bitgetTonWallet,
+      });
+
       for (const chain of filteredChains) {
+        const startedAt = Date.now();
+        console.info(`[bitget-debug] ${chain} start`);
         try {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
+          console.info(`[bitget-debug] ${chain} connected in ${Date.now() - startedAt}ms`, walletMethods.address);
         } catch (error) {
+          console.info(`[bitget-debug] ${chain} failed in ${Date.now() - startedAt}ms`, error);
           if (isUserRejection(error)) throw error;
           failedChains.push(error);
         }
       }
+
+      console.info("[bitget-debug] done, failed:", failedChains.length);
 
       if (failedChains.length > 0 && failedChains.length === filteredChains.length) throw failedChains[0];
 
