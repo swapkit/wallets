@@ -15,31 +15,21 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       pendingRetriesExhausted = false;
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
-      // TEMP debug logs, remove before merge
-      console.info("[bitget-debug] requested", chains, "connecting", filteredChains);
-      console.info("[bitget-debug] injected", Object.keys(window.bitkeep ?? {}), { ton: !!window.bitgetTonWallet });
-
       for (const [index, chain] of filteredChains.entries()) {
-        // TEMP experiment: give Bitget a second between requests, except between EVM chains that share one account
+        // Bitget needs a moment between requests, except between EVM chains that share one account
         const previous = filteredChains[index - 1];
         if (previous && !(isEvmChain(previous) && isEvmChain(chain))) {
           await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
         }
 
-        const startedAt = Date.now();
-        console.info(`[bitget-debug] ${chain} start`);
         try {
           const walletMethods = await connectWhenIdle(chain);
           addChain({ ...walletMethods, chain, walletType });
-          console.info(`[bitget-debug] ${chain} connected in ${Date.now() - startedAt}ms`, walletMethods.address);
         } catch (error) {
-          console.info(`[bitget-debug] ${chain} failed in ${Date.now() - startedAt}ms`, error);
           if (isUserRejection(error)) throw error;
           failedChains.push(error);
         }
       }
-
-      console.info("[bitget-debug] done, failed:", failedChains.length);
 
       if (failedChains.length > 0 && failedChains.length === filteredChains.length) throw failedChains[0];
 
@@ -112,7 +102,6 @@ async function connectWhenIdle(chain: Chain) {
         throw error;
       }
 
-      console.info(`[bitget-debug] ${chain} pending, retry ${attempt + 1}`);
       await new Promise((resolve) => setTimeout(resolve, PENDING_RETRY_MS));
     }
   }
