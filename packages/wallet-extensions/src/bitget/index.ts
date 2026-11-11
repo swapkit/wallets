@@ -12,6 +12,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       );
 
       const failedChains: unknown[] = [];
+      pendingRetriesExhausted = false;
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
       // TEMP debug logs, remove before merge
@@ -25,7 +26,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
         const startedAt = Date.now();
         console.info(`[bitget-debug] ${chain} start`);
         try {
-          const walletMethods = await getWalletMethods(chain);
+          const walletMethods = await connectWhenIdle(chain);
           addChain({ ...walletMethods, chain, walletType });
           console.info(`[bitget-debug] ${chain} connected in ${Date.now() - startedAt}ms`, walletMethods.address);
         } catch (error) {
@@ -101,4 +102,31 @@ function isUserRejection(error: unknown) {
 
 function isEvmChain(chain: Chain) {
   return (EVMChains as readonly Chain[]).includes(chain);
+}
+
+const PENDING_RETRY_MS = 300;
+const PENDING_RETRIES = 10;
+let pendingRetriesExhausted = false;
+
+// Bitget refuses a request made right after an approval instead of queueing it, so it is asked again shortly after
+async function connectWhenIdle(chain: Chain) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await getWalletMethods(chain);
+    } catch (error) {
+      if (!isPendingApproval(error) || pendingRetriesExhausted) throw error;
+      if (attempt >= PENDING_RETRIES) {
+        pendingRetriesExhausted = true;
+        throw error;
+      }
+
+      console.info(`[bitget-debug] ${chain} pending, retry ${attempt + 1}`);
+      await new Promise((resolve) => setTimeout(resolve, PENDING_RETRY_MS));
+    }
+  }
+}
+
+function isPendingApproval(error: unknown) {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  return code === -32002 || (typeof message === "string" && message.includes("already pending"));
 }
