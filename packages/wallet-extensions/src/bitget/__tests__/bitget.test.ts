@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { base64 } from "@scure/base";
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { Chain, SwapKitError } from "@swapkit/helpers";
+import { encode } from "ripple-binary-codec";
 
 import { getWalletMethods } from "../helpers";
 import { bitgetWallet } from "../index";
@@ -60,33 +61,52 @@ describe("Bitget Sui signer", () => {
 });
 
 describe("Bitget Solana signer", () => {
-  test("rebuilds the transaction when the wallet answers with signed bytes", async () => {
-    const keypair = Keypair.generate();
+  const keypair = Keypair.generate();
+
+  function transfer(lamports: number) {
     const transaction = new Transaction({ blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 1 });
     transaction.feePayer = keypair.publicKey;
-    transaction.add(
-      SystemProgram.transfer({ fromPubkey: keypair.publicKey, lamports: 1, toPubkey: keypair.publicKey }),
-    );
+    transaction.add(SystemProgram.transfer({ fromPubkey: keypair.publicKey, lamports, toPubkey: keypair.publicKey }));
+    return transaction;
+  }
 
+  function mockSolana(signTransaction) {
     globalThis.window = {
       bitkeep: {
         solana: {
           connect: async () => ({ accounts: [{ address: keypair.publicKey.toBase58() }] }),
           publicKey: null,
-          signTransaction: (tx) => {
-            tx.sign(keypair);
-            return Promise.resolve([{ signedTransaction: tx.serialize() }]);
-          },
+          signTransaction,
         },
       },
     };
+  }
+
+  function signedBytes(transaction: Transaction) {
+    transaction.sign(keypair);
+    return Promise.resolve([{ signedTransaction: transaction.serialize() }]);
+  }
+
+  test("returns the requested transaction carrying the wallet signature", async () => {
+    const transaction = transfer(1);
+    mockSolana((requested) =>
+      signedBytes(Transaction.from(requested.serialize({ requireAllSignatures: false, verifySignatures: false }))),
+    );
 
     const wallet = await getWalletMethods(Chain.Solana);
     const signed = await wallet.signTransaction(transaction);
 
     expect(wallet.address).toBe(keypair.publicKey.toBase58());
-    expect(signed).toBeInstanceOf(Transaction);
+    expect(signed).toBe(transaction);
     expect(signed.verifySignatures()).toBe(true);
+  });
+
+  test("rejects a signature over a different transaction", async () => {
+    mockSolana(() => signedBytes(transfer(2)));
+
+    const wallet = await getWalletMethods(Chain.Solana);
+
+    await expect(wallet.signTransaction(transfer(1))).rejects.toThrow("core_transaction_failed");
   });
 });
 
@@ -128,25 +148,61 @@ describe("Bitget Tron signer", () => {
 });
 
 describe("Bitget XRP signer", () => {
-  test("hands the transaction to the wallet and returns the hash it reports", async () => {
-    let sent: Record<string, unknown> | undefined;
+  const payment = {
+    Account: XRP_ADDRESS,
+    Amount: "1000000",
+    Destination: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+    DestinationTag: 123,
+    Memos: [{ Memo: { MemoData: "74657374" } }],
+    TransactionType: "Payment",
+  };
+
+  function mockXrp(alter = (transaction) => transaction) {
+    const signature = { SigningPubKey: `02${"ab".repeat(32)}`, TxnSignature: "ABCDEF" };
+    const filled = { Fee: "12", Flags: 0, LastLedgerSequence: 20, Sequence: 7 };
+    const blobs: string[] = [];
+
     globalThis.window = {
       bitkeep: {
         xrp: {
-          connect: async () => ({ address: XRP_ADDRESS }),
-          sendTransaction: (transaction) => {
-            sent = transaction;
-            return Promise.resolve({ hash: "ABCDEF" });
+          connect: async () => XRP_ADDRESS,
+          signTransaction: (transaction) => {
+            blobs.push(encode({ ...filled, ...alter(transaction), ...signature }));
+            return Promise.resolve(blobs[0]);
           },
         },
       },
     };
 
-    const wallet = await getWalletMethods(Chain.Ripple);
-    const payment = { Account: XRP_ADDRESS, Amount: "1", Destination: XRP_ADDRESS, TransactionType: "Payment" };
+    return blobs;
+  }
 
-    expect(wallet.address).toBe(XRP_ADDRESS);
-    expect(await wallet.signAndBroadcastTransaction(payment)).toBe("ABCDEF");
-    expect(sent).toEqual(payment);
+  test("returns the blob Bitget signed when it only fills in fee and sequence", async () => {
+    const blobs = mockXrp();
+
+    const wallet = await getWalletMethods(Chain.Ripple);
+    const signed = await wallet.signTransaction(payment);
+
+    const hash = createHash("sha512")
+      .update(Buffer.from(`54584E00${blobs[0]}`, "hex"))
+      .digest("hex")
+      .slice(0, 64)
+      .toUpperCase();
+
+    expect(signed).toEqual({ hash, tx_blob: blobs[0] });
+  });
+
+  test.each([
+    ["drops the memo", ({ Memos, ...rest }) => rest],
+    ["drops the destination tag", ({ DestinationTag, ...rest }) => rest],
+    ["changes the amount", (transaction) => ({ ...transaction, Amount: "2000000" })],
+    ["changes the destination", (transaction) => ({ ...transaction, Destination: XRP_ADDRESS })],
+    ["adds a field", (transaction) => ({ ...transaction, SourceTag: 9 })],
+  ])("rejects a blob where Bitget %s", async (_name, alter) => {
+    mockXrp(alter);
+
+    const wallet = await getWalletMethods(Chain.Ripple);
+
+    await expect(wallet.signTransaction(payment)).rejects.toThrow("core_transaction_failed");
   });
 });

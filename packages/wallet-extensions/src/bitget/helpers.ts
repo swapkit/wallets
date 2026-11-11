@@ -1,13 +1,5 @@
 import { base64, hex } from "@scure/base";
-import {
-  Chain,
-  type EVMChain,
-  EVMChains,
-  type GenericTransferParams,
-  prepareNetworkSwitch,
-  SwapKitError,
-  WalletOption,
-} from "@swapkit/helpers";
+import { Chain, type EVMChain, EVMChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
@@ -94,14 +86,35 @@ async function getSolanaWalletMethods() {
   const { PublicKey, Transaction: SolanaTransaction, VersionedTransaction } = await import("@solana/web3.js");
   const publicKey = new PublicKey(address);
 
+  function messageOf(transaction: BitgetSolanaTransaction) {
+    return hex.encode("version" in transaction ? transaction.message.serialize() : transaction.serializeMessage());
+  }
+
   async function signTransaction<T extends BitgetSolanaTransaction>(transaction: T) {
-    const signed = await provider.signTransaction(transaction);
-    if (!Array.isArray(signed)) return signed as T;
+    const requested = messageOf(transaction);
+    const response = await provider.signTransaction(transaction);
+    const bytes = Array.isArray(response) ? response[0]?.signedTransaction : undefined;
+    if (Array.isArray(response) && !bytes) throw transactionFailedError(Chain.Solana, "Bitget returned no signature");
 
-    const bytes = signed[0]?.signedTransaction;
-    if (!bytes) throw transactionFailedError(Chain.Solana);
+    const signed = Array.isArray(response)
+      ? "version" in transaction
+        ? VersionedTransaction.deserialize(bytes as Uint8Array)
+        : SolanaTransaction.from(bytes as Uint8Array)
+      : response;
 
-    return ("version" in transaction ? VersionedTransaction.deserialize(bytes) : SolanaTransaction.from(bytes)) as T;
+    if (messageOf(signed) !== requested || messageOf(transaction) !== requested) {
+      throw transactionFailedError(Chain.Solana, "Bitget signed a different transaction than the one requested");
+    }
+
+    if (transaction instanceof VersionedTransaction) {
+      transaction.signatures = (signed as InstanceType<typeof VersionedTransaction>).signatures;
+    } else {
+      for (const { publicKey: signerKey, signature } of (signed as InstanceType<typeof SolanaTransaction>).signatures) {
+        if (signature) transaction.addSignature(signerKey, signature);
+      }
+    }
+
+    return transaction;
   }
 
   const signer: SolanaProvider = {
@@ -201,54 +214,49 @@ async function getSuiWalletMethods() {
   return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
-function readXrpAddress(connection: unknown) {
-  if (typeof connection === "string") return connection;
-  if (!(connection && typeof connection === "object")) return undefined;
+const XRP_WALLET_FIELDS = ["Fee", "Flags", "LastLedgerSequence", "Sequence", "SigningPubKey"];
 
-  const { address, account } = connection as { address?: unknown; account?: unknown };
-  return [address, account].find((value): value is string => typeof value === "string");
-}
+async function hashSignedXrpTransaction(blob: string) {
+  const bytes = hex.decode(`54584e00${blob.toLowerCase()}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-512", new Uint8Array(bytes)));
 
-function readXrpHash(result: unknown) {
-  if (typeof result === "string") return result;
-  if (!(result && typeof result === "object")) return undefined;
-
-  const { hash, txid } = result as { hash?: unknown; txid?: unknown };
-  return [hash, txid].find((value): value is string => typeof value === "string");
+  return hex.encode(digest.slice(0, 32)).toUpperCase();
 }
 
 async function getRippleWalletMethods() {
   const provider = getProvider("xrp", Chain.Ripple);
   const { getRippleToolbox, validateRippleAddress } = await import("@swapkit/toolboxes/ripple");
 
-  const address = readXrpAddress(await provider.connect());
-  if (!(address && validateRippleAddress(address))) {
+  const address = await provider.connect();
+  if (!(typeof address === "string" && validateRippleAddress(address))) {
     throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Ripple });
   }
 
-  const toolbox = getRippleToolbox();
+  const { decode, encode } = await import("ripple-binary-codec");
 
-  // Bitget signs and submits XRP transactions itself and never hands back a signed blob
-  async function signAndBroadcastTransaction(transaction: RippleTransaction) {
-    const hash = readXrpHash(await provider.sendTransaction({ ...transaction }));
-    if (!hash) throw transactionFailedError(Chain.Ripple);
+  async function signTransaction(transaction: RippleTransaction) {
+    const blob = await provider.signTransaction({ ...transaction });
+    if (typeof blob !== "string") throw transactionFailedError(Chain.Ripple, "Bitget returned no signed transaction");
 
-    return hash;
+    const { TxnSignature, ...signed } = decode(blob);
+    if (!TxnSignature) throw transactionFailedError(Chain.Ripple, "Bitget returned no signature");
+
+    // Only the fields the wallet is expected to fill in may differ from the request
+    const expected: Record<string, unknown> = { ...transaction };
+    for (const field of XRP_WALLET_FIELDS) {
+      if (!(field in expected) && field in signed) expected[field] = signed[field];
+    }
+
+    if (encode(expected) !== encode(signed)) {
+      throw transactionFailedError(Chain.Ripple, "Bitget signed a different transaction than the one requested");
+    }
+
+    return { hash: await hashSignedXrpTransaction(blob), tx_blob: blob };
   }
 
-  async function transfer({ assetValue, memo, recipient, sweep }: GenericTransferParams) {
-    const transaction = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address, sweep });
-    return signAndBroadcastTransaction(transaction);
-  }
+  const signer = { getAddress: () => Promise.resolve(address), signTransaction };
 
-  return {
-    ...toolbox,
-    address,
-    getAddress: () => Promise.resolve(address),
-    getBalance: () => toolbox.getBalance(address),
-    signAndBroadcastTransaction,
-    transfer,
-  };
+  return { ...getRippleToolbox({ signer }), address };
 }
 
 export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress> {

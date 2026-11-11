@@ -20,6 +20,7 @@
     "@wallet-standard/app": "^1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "~2.7.0",
     "sats-connect": "~1.0.0",
     "ts-pattern": "^5.9.0"
   },
@@ -40,6 +41,7 @@
     "@wallet-standard/app": "1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "2.7.0",
     "sats-connect": "1.0.0",
     "ts-pattern": "^5.9.0"
   },
@@ -147,16 +149,11 @@
       "types": "./dist/types/vultisig/index.d.ts"
     }
   },
-  "files": [
-    "dist/",
-    "src/"
-  ],
+  "files": ["dist/", "src/"],
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "publishConfig": {
-    "access": "public"
-  },
+  "publishConfig": { "access": "public" },
   "repository": {
     "directory": "packages/wallet-extensions",
     "type": "git",

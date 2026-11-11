@@ -46,7 +46,7 @@ export type BitgetSuiProvider = {
 
 export type BitgetXrpProvider = {
   connect: () => Promise<unknown>;
-  sendTransaction: (transaction: Record<string, unknown>) => Promise<unknown>;
+  signTransaction: (transaction: Record<string, unknown>) => Promise<unknown>;
 };
 
 export type BitgetProviders = BitgetTronProvider & {
