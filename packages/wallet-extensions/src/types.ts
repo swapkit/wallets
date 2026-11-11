@@ -9,15 +9,13 @@ import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
-import type { Cip30Api, Cip30Provider } from "./helpers/cip30";
+import type { Cip30Provider } from "./helpers/cip30";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
 
 type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
 
 export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
-
-export type OkxCardanoApi = Pick<Cip30Api, "getChangeAddress" | "getNetworkId" | "signTx">;
 
 export type TonConnectEvent =
   | { event: "connect"; payload: { items: { name: string; address?: string; network?: string }[] } }
@@ -158,7 +156,7 @@ declare global {
           };
           solana: SolanaProvider;
           starknet: OkxStarknetProvider;
-          cardano: { enable: () => Promise<OkxCardanoApi> };
+          cardano: Cip30Provider;
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
               contractId?: string;
