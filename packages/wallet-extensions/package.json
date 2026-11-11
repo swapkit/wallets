@@ -56,6 +56,12 @@
       "require": "./dist/src/bitget/index.cjs",
       "types": "./dist/types/bitget/index.d.ts"
     },
+    "./bitget/register": {
+      "bun": "./src/bitget/register.ts",
+      "default": "./dist/src/bitget/register.js",
+      "require": "./dist/src/bitget/register.cjs",
+      "types": "./dist/types/bitget/register.d.ts"
+    },
     "./cosmostation": {
       "bun": "./src/cosmostation/index.ts",
       "default": "./dist/src/cosmostation/index.js",

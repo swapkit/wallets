@@ -30,6 +30,7 @@ import type { xamanWallet } from "./xaman";
 
 export type SKWallets = {
   [WalletOption.BITGET]: typeof bitgetWallet;
+  [WalletOption.BITGET_MOBILE]: typeof bitgetWallet;
   [WalletOption.BRAVE]: typeof evmWallet;
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet;
   [WalletOption.COINBASE_WEB]: typeof evmWallet;
@@ -107,6 +108,7 @@ export type HDWalletDiscoveryMethods = {
 
 export type SKWalletsSupportedChains = {
   [WalletOption.BITGET]: typeof bitgetWallet.connectBitget.supportedChains;
+  [WalletOption.BITGET_MOBILE]: typeof bitgetWallet.connectBitget.supportedChains;
   [WalletOption.BRAVE]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet.connectCoinbaseWallet.supportedChains;
   [WalletOption.COINBASE_WEB]: typeof evmWallet.connectEVMWallet.supportedChains;

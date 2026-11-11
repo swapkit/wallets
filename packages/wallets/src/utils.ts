@@ -9,7 +9,11 @@ export async function loadWallet<W extends keyof SKWallets>(walletOption: W): Pr
 
   const wallet = await match(walletOption as keyof SKWallets)
     .with(WalletOption.COINBASE_MOBILE, async () => (await import("./coinbase")).coinbaseWallet)
-    .with(WalletOption.BITGET, async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet)
+    .with(
+      WalletOption.BITGET,
+      WalletOption.BITGET_MOBILE,
+      async () => (await import("@swapkit/wallet-extensions/bitget")).bitgetWallet,
+    )
     .with(WalletOption.VULTISIG, async () => (await import("@swapkit/wallet-extensions/vultisig")).vultisigWallet)
     .with(
       WalletOption.OKX,

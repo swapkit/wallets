@@ -1,3 +1,6 @@
+// Registers WalletOption.BITGET_MOBILE before anything below reads it.
+import "./register";
+
 import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 import type { ExtensionWallet } from "../walletTypes";
