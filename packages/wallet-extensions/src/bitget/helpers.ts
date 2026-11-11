@@ -1,5 +1,14 @@
 import { base64, hex } from "@scure/base";
-import { Chain, type EVMChain, EVMChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
+import {
+  Chain,
+  type EVMChain,
+  EVMChains,
+  GAIAConfig,
+  prepareNetworkSwitch,
+  SwapKitError,
+  WalletOption,
+} from "@swapkit/helpers";
+import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
@@ -8,7 +17,7 @@ import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
 import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
-import type { BitgetProviders, BitgetSolanaTransaction } from "./types";
+import type { BitgetNearAction, BitgetNearResponse, BitgetProviders, BitgetSolanaTransaction } from "./types";
 
 const SUI_MAINNET = "sui:mainnet";
 const TRON_USER_REJECTED = 4001;
@@ -78,6 +87,21 @@ async function getBitcoinWalletMethods() {
   });
 
   return { ...toolbox, address };
+}
+
+async function getCosmosWalletMethods() {
+  const wallet = getProvider("keplr", Chain.Cosmos);
+
+  await wallet.enable(GAIAConfig.chainId);
+  const offlineSigner = await wallet.getOfflineSignerAuto(GAIAConfig.chainId);
+  const accounts = await offlineSigner.getAccounts();
+  if (!accounts?.[0]) throw noAccountsError(Chain.Cosmos);
+
+  const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
+  const [{ address }] = accounts;
+  const signer = Object.assign(offlineSigner, { getAddress: () => Promise.resolve(address) });
+
+  return { ...getCosmosToolbox(Chain.Cosmos, { signer }), address };
 }
 
 async function getSolanaWalletMethods() {
@@ -221,6 +245,88 @@ async function getSuiWalletMethods() {
   return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
+async function getStarknetWalletMethods() {
+  const provider = window.starknet_bitkeep;
+  if (!provider) throw notFoundError(Chain.Starknet);
+
+  await provider.enable();
+  const { account } = provider;
+  if (!account) throw noAccountsError(Chain.Starknet);
+
+  const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
+
+  return { ...getStarknetToolbox({ signer: account, walletDeploysAccount: true }), address: account.address };
+}
+
+type NearAction = {
+  functionCall?: { methodName: string; args: Uint8Array; gas: bigint; deposit: bigint };
+  transfer?: { deposit: bigint };
+};
+
+// Bitget takes NEAR actions in the wallet-selector JSON form instead of the borsh classes
+export function toBitgetNearAction({ functionCall, transfer }: NearAction): BitgetNearAction {
+  if (transfer) return { params: { deposit: transfer.deposit.toString() }, type: "Transfer" };
+
+  if (functionCall) {
+    return {
+      params: {
+        args: JSON.parse(new TextDecoder().decode(functionCall.args) || "{}"),
+        deposit: functionCall.deposit.toString(),
+        gas: functionCall.gas.toString(),
+        methodName: functionCall.methodName,
+      },
+      type: "FunctionCall",
+    };
+  }
+
+  throw new SwapKitError("wallet_near_method_not_supported", { method: "action", wallet: WalletOption.BITGET });
+}
+
+function readNearResponse({ error, response }: BitgetNearResponse) {
+  if (error) throw transactionFailedError(Chain.Near, error);
+  if (!(Array.isArray(response) && response.length)) throw transactionFailedError(Chain.Near, response);
+
+  return response;
+}
+
+async function getNearWalletMethods() {
+  const provider = getProvider("near", Chain.Near);
+
+  if (!(provider.isSignedIn() && provider.getAccountId())) {
+    const { accessKey, error } = await provider.requestSignIn({ contractId: "", methodNames: [] });
+    if (!accessKey || error) throw connectionRejectedError(Chain.Near);
+  }
+
+  const address = provider.getAccountId();
+  if (!address) throw noAccountsError(Chain.Near);
+
+  const { getNearToolbox } = await import("@swapkit/toolboxes/near");
+
+  const notSupported = (method: string) =>
+    Promise.reject(new SwapKitError("wallet_near_method_not_supported", { method, wallet: WalletOption.BITGET }));
+
+  // Bitget only signs and sends NEAR transactions, so the toolbox falls back to signAndSendTransaction
+  const signer = {
+    getAddress: () => Promise.resolve(address),
+    async getPublicKey() {
+      const { PublicKey } = await import("@near-js/crypto");
+      return PublicKey.fromString((await provider.getPublicKey()).toString());
+    },
+    async signAndSendTransaction({ actions, receiverId }: { actions: NearAction[]; receiverId?: string }) {
+      if (!receiverId) throw transactionFailedError(Chain.Near, "Missing receiver");
+
+      return readNearResponse(
+        await provider.signAndSendTransaction({ actions: actions.map(toBitgetNearAction), receiverId }),
+      );
+    },
+    signDelegateAction: () => notSupported("signDelegateAction"),
+    signNep413Message: () => notSupported("signNep413Message"),
+    signTransaction: () => notSupported("signTransaction"),
+  };
+
+  return { ...getNearToolbox({ signer: signer as unknown as NearSigner }), address };
+}
+
 const XRP_WALLET_FIELDS = ["Fee", "LastLedgerSequence", "Sequence", "SigningPubKey"];
 const XRP_FULLY_CANONICAL_SIG = 0x80000000;
 
@@ -288,10 +394,16 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
       return getAptosWalletMethods();
     case Chain.Bitcoin:
       return getBitcoinWalletMethods();
+    case Chain.Cosmos:
+      return getCosmosWalletMethods();
+    case Chain.Near:
+      return getNearWalletMethods();
     case Chain.Ripple:
       return getRippleWalletMethods();
     case Chain.Solana:
       return getSolanaWalletMethods();
+    case Chain.Starknet:
+      return getStarknetWalletMethods();
     case Chain.Sui:
       return getSuiWalletMethods();
     case Chain.Ton:

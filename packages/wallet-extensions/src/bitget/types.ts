@@ -1,5 +1,9 @@
+import type { AminoSignResponse, StdSignature, StdSignDoc } from "@cosmjs/amino";
 import type { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import type { EthereumWindowProvider } from "@swapkit/helpers";
+import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
+
+import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 
 type UnisatToSignInputs = { index: number; sighashTypes?: number[]; disableTweakSigner?: boolean } & (
   | { address: string }
@@ -14,6 +18,20 @@ export type BitgetBtcProvider = {
     psbtHex: string,
     options: { autoFinalized?: boolean; toSignInputs?: UnisatToSignInputs[] },
   ) => Promise<string>;
+};
+
+export type BitgetKeplrProvider = {
+  enable: (chainId: string | string[]) => Promise<void>;
+  signAmino: (chainId: string, signer: string, signDoc: StdSignDoc, signOptions: any) => Promise<AminoSignResponse>;
+  signArbitrary: (chainId: string, signer: string, data: string | Uint8Array) => Promise<StdSignature>;
+  verifyArbitrary: (
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array,
+    signature: StdSignature,
+  ) => Promise<boolean>;
+  getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
+  getOfflineSignerAuto: (chainId: string) => Promise<OfflineAminoSigner | OfflineDirectSigner>;
 };
 
 export type BitgetSolanaTransaction = Transaction | VersionedTransaction;
@@ -52,6 +70,30 @@ export type BitgetSuiProvider = {
   }) => Promise<{ bytes: string; signature: string }>;
 };
 
+export type BitgetNearAction = { type: string; params?: Record<string, unknown> };
+
+type BitgetNearOutcome = { transaction?: { hash?: string }; transaction_outcome?: { id?: string } };
+
+export type BitgetNearResponse = {
+  error?: string | { type?: string; message?: string };
+  response?: BitgetNearOutcome[] | { error: { message: string } };
+};
+
+export type BitgetNearProvider = {
+  getAccountId: () => string;
+  getPublicKey: () => Promise<{ toString: () => string } | string>;
+  isSignedIn: () => boolean;
+  requestSignIn: (params: {
+    contractId: string;
+    methodNames?: string[];
+  }) => Promise<{ accessKey?: unknown; error?: string | { type?: string } }>;
+  signAndSendTransaction: (params: { receiverId: string; actions: BitgetNearAction[] }) => Promise<BitgetNearResponse>;
+};
+
+type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
+
+export type BitgetStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
+
 export type BitgetXrpProvider = {
   connect: () => Promise<unknown>;
   signTransaction: (transaction: Record<string, unknown>) => Promise<unknown>;
@@ -60,6 +102,8 @@ export type BitgetXrpProvider = {
 export type BitgetProviders = BitgetTronProvider & {
   aptos: unknown;
   ethereum: EthereumWindowProvider;
+  keplr: BitgetKeplrProvider;
+  near: BitgetNearProvider;
   solana: BitgetSolanaProvider;
   suiWallet: BitgetSuiProvider;
   unisat: BitgetBtcProvider;
