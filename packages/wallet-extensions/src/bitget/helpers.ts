@@ -52,7 +52,11 @@ function transactionFailedError(chain: Chain, error?: unknown) {
 
 async function getEvmWalletMethods(chain: EVMChain) {
   const wallet = getProvider("ethereum", chain);
-  const [address] = (await wallet.request({ method: "eth_requestAccounts" })) as [string, ...string[]];
+  // Asked only once per site: a second eth_requestAccounts while one is open is rejected as already pending
+  const [connected] = (await wallet.request({ method: "eth_accounts" })) as string[];
+  const [address] = connected ? [connected] : ((await wallet.request({ method: "eth_requestAccounts" })) as string[]);
+  if (!address) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain });
+
   const evmWallet = await getWeb3WalletMethods({ chain, walletProvider: wallet });
 
   return { ...evmWallet, address };

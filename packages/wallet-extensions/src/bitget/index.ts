@@ -6,7 +6,10 @@ import { getWalletMethods } from "./helpers";
 export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
   connect: ({ addChain, walletType, supportedChains }) =>
     async function connectBitget(chains: Chain[]) {
-      const filteredChains = filterSupportedChains({ chains, supportedChains, walletType });
+      // EVM goes first: its approval waits for the user, and the site approval it grants covers the other chains
+      const filteredChains = filterSupportedChains({ chains, supportedChains, walletType }).sort(
+        (a, b) => Number(isEvmChain(b)) - Number(isEvmChain(a)),
+      );
 
       const failedChains: unknown[] = [];
 
@@ -82,4 +85,8 @@ function isUserRejection(error: unknown) {
   // ethers wraps the EIP-1193 4001 rejection of the EVM provider as ACTION_REJECTED
   const code = (error as { code?: unknown } | null)?.code;
   return code === 4001 || code === "ACTION_REJECTED";
+}
+
+function isEvmChain(chain: Chain) {
+  return (EVMChains as readonly Chain[]).includes(chain);
 }
