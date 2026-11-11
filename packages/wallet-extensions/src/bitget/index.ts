@@ -20,8 +20,11 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       console.info("[bitget-debug] injected", Object.keys(window.bitkeep ?? {}), { ton: !!window.bitgetTonWallet });
 
       for (const [index, chain] of filteredChains.entries()) {
-        // TEMP experiment: give Bitget a second between requests
-        if (index > 0) await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
+        // TEMP experiment: give Bitget a second between requests, except between EVM chains that share one account
+        const previous = filteredChains[index - 1];
+        if (previous && !(isEvmChain(previous) && isEvmChain(chain))) {
+          await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
+        }
 
         const startedAt = Date.now();
         console.info(`[bitget-debug] ${chain} start`);
@@ -66,8 +69,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       ].map((chain) => [chain, { direct: true, typedData: true }]),
     ),
     [Chain.Bitcoin]: { direct: true },
-    // Cosmos and Starknet are left out: Bitget answers "ChainIds not supported" to their connection request
-    [Chain.Near]: { direct: true },
+    // Left out for now: Bitget refuses Cosmos and Starknet ("ChainIds not supported") and does not inject NEAR
     [Chain.Ripple]: { direct: true },
     [Chain.Solana]: { direct: true },
     [Chain.Sui]: { direct: true },
@@ -75,16 +77,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
     [Chain.Tron]: { direct: true },
     // [Chain.Aptos]: blocked on toolbox — getAptosToolbox needs to accept AptosExtensionProvider
   },
-  supportedChains: [
-    ...EVMChains,
-    Chain.Bitcoin,
-    Chain.Near,
-    Chain.Ripple,
-    Chain.Solana,
-    Chain.Sui,
-    Chain.Ton,
-    Chain.Tron,
-  ],
+  supportedChains: [...EVMChains, Chain.Bitcoin, Chain.Ripple, Chain.Solana, Chain.Sui, Chain.Ton, Chain.Tron],
   walletType: WalletOption.BITGET,
 });
 

@@ -9,7 +9,6 @@ import {
   SwapKitError,
   WalletOption,
 } from "@swapkit/helpers";
-import type { NearSigner } from "@swapkit/toolboxes/near";
 import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
@@ -18,7 +17,7 @@ import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
 import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
-import type { BitgetNearAction, BitgetNearResponse, BitgetProviders, BitgetSolanaTransaction } from "./types";
+import type { BitgetProviders, BitgetSolanaTransaction } from "./types";
 
 const SUI_MAINNET = "sui:mainnet";
 
@@ -208,75 +207,6 @@ async function getSuiWalletMethods() {
   return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
-type NearAction = {
-  functionCall?: { methodName: string; args: Uint8Array; gas: bigint; deposit: bigint };
-  transfer?: { deposit: bigint };
-};
-
-// Bitget takes NEAR actions in the wallet-selector JSON form instead of the borsh classes
-export function toBitgetNearAction({ functionCall, transfer }: NearAction): BitgetNearAction {
-  if (transfer) return { params: { deposit: transfer.deposit.toString() }, type: "Transfer" };
-
-  if (functionCall) {
-    return {
-      params: {
-        args: JSON.parse(new TextDecoder().decode(functionCall.args) || "{}"),
-        deposit: functionCall.deposit.toString(),
-        gas: functionCall.gas.toString(),
-        methodName: functionCall.methodName,
-      },
-      type: "FunctionCall",
-    };
-  }
-
-  throw new SwapKitError("wallet_near_method_not_supported", { method: "action", wallet: WalletOption.BITGET });
-}
-
-function readNearResponse({ error, response }: BitgetNearResponse) {
-  if (error) throw transactionFailedError(Chain.Near, error);
-  if (!(Array.isArray(response) && response.length)) throw transactionFailedError(Chain.Near, response);
-
-  return response;
-}
-
-async function getNearWalletMethods() {
-  const provider = getProvider("near", Chain.Near);
-
-  if (!(provider.isSignedIn() && provider.getAccountId())) {
-    const { accessKey, error } = await provider.requestSignIn({ contractId: "", methodNames: [] });
-    if (!accessKey || error) throw connectionRejectedError(Chain.Near);
-  }
-
-  const address = provider.getAccountId();
-  if (!address) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Near });
-
-  const { getNearToolbox } = await import("@swapkit/toolboxes/near");
-
-  const notSupported = (method: string) =>
-    Promise.reject(new SwapKitError("wallet_near_method_not_supported", { method, wallet: WalletOption.BITGET }));
-
-  // Bitget only signs and sends NEAR transactions, so the toolbox falls back to signAndSendTransaction
-  const signer = {
-    getAddress: () => Promise.resolve(address),
-    async getPublicKey() {
-      const { PublicKey } = await import("@near-js/crypto");
-      return PublicKey.fromString((await provider.getPublicKey()).toString());
-    },
-    async signAndSendTransaction({ actions, receiverId }: { actions: NearAction[]; receiverId?: string }) {
-      if (!receiverId) throw transactionFailedError(Chain.Near, "Missing receiver");
-
-      return readNearResponse(
-        await provider.signAndSendTransaction({ actions: actions.map(toBitgetNearAction), receiverId }),
-      );
-    },
-    signDelegateAction: () => notSupported("signDelegateAction"),
-    signNep413Message: () => notSupported("signNep413Message"),
-    signTransaction: () => notSupported("signTransaction"),
-  };
-
-  return { ...getNearToolbox({ signer: signer as unknown as NearSigner }), address };
-}
-
 function readXrpAddress(connection: unknown) {
   if (typeof connection === "string") return connection;
   if (!(connection && typeof connection === "object")) return undefined;
@@ -340,8 +270,6 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
       return getBitcoinWalletMethods();
     case Chain.Cosmos:
       return getCosmosWalletMethods();
-    case Chain.Near:
-      return getNearWalletMethods();
     case Chain.Ripple:
       return getRippleWalletMethods();
     case Chain.Solana:

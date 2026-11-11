@@ -60,26 +60,6 @@ export type BitgetSuiProvider = {
   }) => Promise<{ bytes: string; signature: string }>;
 };
 
-export type BitgetNearAction = { type: string; params?: Record<string, unknown> };
-
-type BitgetNearOutcome = { transaction?: { hash?: string }; transaction_outcome?: { id?: string } };
-
-export type BitgetNearResponse = {
-  error?: string | { type?: string; message?: string };
-  response?: BitgetNearOutcome[] | { error: { message: string } };
-};
-
-export type BitgetNearProvider = {
-  getAccountId: () => string;
-  getPublicKey: () => Promise<{ toString: () => string } | string>;
-  isSignedIn: () => boolean;
-  requestSignIn: (params: {
-    contractId: string;
-    methodNames?: string[];
-  }) => Promise<{ accessKey?: unknown; error?: string | { type?: string } }>;
-  signAndSendTransaction: (params: { receiverId: string; actions: BitgetNearAction[] }) => Promise<BitgetNearResponse>;
-};
-
 export type BitgetXrpProvider = {
   connect: () => Promise<unknown>;
   sendTransaction: (transaction: Record<string, unknown>) => Promise<unknown>;
@@ -89,7 +69,6 @@ export type BitgetProviders = BitgetTronProvider & {
   aptos: unknown;
   ethereum: EthereumWindowProvider;
   keplr: BitgetKeplrProvider;
-  near: BitgetNearProvider;
   solana: BitgetSolanaProvider;
   suiWallet: BitgetSuiProvider;
   unisat: BitgetBtcProvider;

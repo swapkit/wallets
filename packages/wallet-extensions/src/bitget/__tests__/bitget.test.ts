@@ -1,11 +1,10 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { afterEach, describe, expect, test } from "bun:test";
-import { actionCreators } from "@near-js/transactions";
 import { base64 } from "@scure/base";
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { Chain, SwapKitError } from "@swapkit/helpers";
 
-import { getWalletMethods, toBitgetNearAction } from "../helpers";
+import { getWalletMethods } from "../helpers";
 import { bitgetWallet } from "../index";
 
 const SUI_ADDRESS = `0x${"ab".repeat(32)}`;
@@ -87,21 +86,6 @@ describe("Bitget Solana signer", () => {
     expect(wallet.address).toBe(keypair.publicKey.toBase58());
     expect(signed).toBeInstanceOf(Transaction);
     expect(signed.verifySignatures()).toBe(true);
-  });
-});
-
-describe("Bitget Near actions", () => {
-  test("turns transfers and contract calls into the JSON form Bitget expects", () => {
-    const call = actionCreators.functionCall("ft_transfer", { amount: "5", receiver_id: "bob.near" }, 30n, 1n);
-
-    expect(toBitgetNearAction(actionCreators.transfer(1000n))).toEqual({
-      params: { deposit: "1000" },
-      type: "Transfer",
-    });
-    expect(toBitgetNearAction(call)).toEqual({
-      params: { args: { amount: "5", receiver_id: "bob.near" }, deposit: "1", gas: "30", methodName: "ft_transfer" },
-      type: "FunctionCall",
-    });
   });
 });
 
