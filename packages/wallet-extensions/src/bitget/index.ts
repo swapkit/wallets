@@ -17,10 +17,7 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
       // TEMP debug logs, remove before merge
       console.info("[bitget-debug] requested", chains, "connecting", filteredChains);
-      console.info("[bitget-debug] injected", Object.keys(window.bitkeep ?? {}), {
-        starknet: !!window.starknet_bitkeep,
-        ton: !!window.bitgetTonWallet,
-      });
+      console.info("[bitget-debug] injected", Object.keys(window.bitkeep ?? {}), { ton: !!window.bitgetTonWallet });
 
       for (const [index, chain] of filteredChains.entries()) {
         // TEMP experiment: give Bitget a second between requests
@@ -69,11 +66,10 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       ].map((chain) => [chain, { direct: true, typedData: true }]),
     ),
     [Chain.Bitcoin]: { direct: true },
-    // [Chain.Cosmos]: Bitget answers "ChainIds not supported" for cosmoshub-4, to be revisited
+    // Cosmos and Starknet are left out: Bitget answers "ChainIds not supported" to their connection request
     [Chain.Near]: { direct: true },
     [Chain.Ripple]: { direct: true },
     [Chain.Solana]: { direct: true },
-    [Chain.Starknet]: { direct: true },
     [Chain.Sui]: { direct: true },
     [Chain.Ton]: { direct: true },
     [Chain.Tron]: { direct: true },
@@ -85,7 +81,6 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
     Chain.Near,
     Chain.Ripple,
     Chain.Solana,
-    Chain.Starknet,
     Chain.Sui,
     Chain.Ton,
     Chain.Tron,

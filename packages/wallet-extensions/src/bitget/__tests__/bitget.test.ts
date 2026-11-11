@@ -30,7 +30,7 @@ describe("Bitget connection", () => {
   test("keeps the chains that connect when another one is missing in the wallet", async () => {
     globalThis.window = { bitkeep: { suiWallet: suiProvider() } };
 
-    const { connected, result } = connectBitget([Chain.Starknet, Chain.Sui]);
+    const { connected, result } = connectBitget([Chain.Ton, Chain.Sui]);
 
     expect(await result).toBe(true);
     expect(connected).toEqual([Chain.Sui]);
@@ -40,7 +40,7 @@ describe("Bitget connection", () => {
     const rejection = new SwapKitError("wallet_connection_rejected_by_user");
     globalThis.window = { bitkeep: { suiWallet: suiProvider(() => Promise.reject(rejection)) } };
 
-    const { connected, result } = connectBitget([Chain.Sui, Chain.Starknet]);
+    const { connected, result } = connectBitget([Chain.Sui, Chain.Ton]);
 
     await expect(result).rejects.toBe(rejection);
     expect(connected).toEqual([]);

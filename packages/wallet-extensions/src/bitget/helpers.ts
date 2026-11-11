@@ -208,19 +208,6 @@ async function getSuiWalletMethods() {
   return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
-async function getStarknetWalletMethods() {
-  const provider = window.starknet_bitkeep;
-  if (!provider) throw notFoundError(Chain.Starknet);
-
-  await provider.enable();
-  const { account } = provider;
-  if (!account) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Starknet });
-
-  const { getStarknetToolbox } = await import("@swapkit/toolboxes/starknet");
-
-  return { ...getStarknetToolbox({ signer: account, walletDeploysAccount: true }), address: account.address };
-}
-
 type NearAction = {
   functionCall?: { methodName: string; args: Uint8Array; gas: bigint; deposit: bigint };
   transfer?: { deposit: bigint };
@@ -359,8 +346,6 @@ export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress
       return getRippleWalletMethods();
     case Chain.Solana:
       return getSolanaWalletMethods();
-    case Chain.Starknet:
-      return getStarknetWalletMethods();
     case Chain.Sui:
       return getSuiWalletMethods();
     case Chain.Ton:

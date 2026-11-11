@@ -2,7 +2,6 @@ import type { AminoSignResponse, StdSignature, StdSignDoc } from "@cosmjs/amino"
 import type { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import type { EthereumWindowProvider } from "@swapkit/helpers";
 import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
-import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 
 export type BitgetBtcProvider = {
   getNetwork?: () => Promise<string>;
@@ -80,10 +79,6 @@ export type BitgetNearProvider = {
   }) => Promise<{ accessKey?: unknown; error?: string | { type?: string } }>;
   signAndSendTransaction: (params: { receiverId: string; actions: BitgetNearAction[] }) => Promise<BitgetNearResponse>;
 };
-
-type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
-
-export type BitgetStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
 
 export type BitgetXrpProvider = {
   connect: () => Promise<unknown>;

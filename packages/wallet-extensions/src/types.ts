@@ -9,7 +9,7 @@ import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
-import type { BitgetProviders, BitgetStarknetProvider } from "./bitget/types";
+import type { BitgetProviders } from "./bitget/types";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
 
@@ -88,7 +88,6 @@ declare global {
     };
 
     bitkeep?: Partial<BitgetProviders>;
-    starknet_bitkeep?: BitgetStarknetProvider;
     bitgetTonWallet?: { tonconnect: TonConnectBridge };
 
     okxwallet?:
