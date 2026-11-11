@@ -147,7 +147,17 @@ async function getTronWalletMethods() {
   const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
   const signer = {
     getAddress: () => Promise.resolve(address),
-    signTransaction: (transaction: TronTransaction) => tronWeb.trx.sign(transaction),
+    signTransaction: async (transaction: TronTransaction) => {
+      const signed = await tronWeb.trx.sign(structuredClone(transaction));
+
+      if (signed?.txID !== transaction.txID) {
+        throw transactionFailedError(Chain.Tron, "Bitget signed a different transaction than the one requested");
+      }
+      if (!signed.signature?.length) throw transactionFailedError(Chain.Tron, "Bitget returned no signature");
+
+      // Bitget hands back a copy without `visible` and `raw_data_hex`, which the node then cannot read
+      return { ...transaction, signature: signed.signature };
+    },
   };
 
   return { ...getTronToolbox({ signer }), address };

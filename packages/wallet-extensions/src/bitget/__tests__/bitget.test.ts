@@ -1,5 +1,6 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { base64 } from "@scure/base";
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { Chain, SwapKitError } from "@swapkit/helpers";
@@ -86,6 +87,43 @@ describe("Bitget Solana signer", () => {
     expect(wallet.address).toBe(keypair.publicKey.toBase58());
     expect(signed).toBeInstanceOf(Transaction);
     expect(signed.verifySignatures()).toBe(true);
+  });
+});
+
+describe("Bitget Tron signer", () => {
+  function mockTron(sign) {
+    globalThis.window = {
+      bitkeep: {
+        tronLink: { request: async () => ({ code: 200 }) },
+        tronWeb: { defaultAddress: { base58: "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8" }, trx: { sign } },
+      },
+    };
+  }
+
+  function tronTransaction(rawDataHex: string) {
+    return {
+      raw_data: { contract: [], expiration: 0, ref_block_bytes: "", ref_block_hash: "", timestamp: 0 },
+      raw_data_hex: rawDataHex,
+      txID: createHash("sha256").update(Buffer.from(rawDataHex, "hex")).digest("hex"),
+      visible: true,
+    };
+  }
+
+  test("keeps the requested transaction when the wallet returns a stripped copy", async () => {
+    const transaction = tronTransaction("0a02");
+    mockTron(async ({ raw_data, txID }) => ({ raw_data, signature: ["sig"], txID }));
+
+    const wallet = await getWalletMethods(Chain.Tron);
+
+    expect(await wallet.signTransaction(transaction)).toEqual({ ...transaction, signature: ["sig"] });
+  });
+
+  test("rejects a signature over a different transaction", async () => {
+    mockTron(async () => ({ ...tronTransaction("0b03"), signature: ["sig"] }));
+
+    const wallet = await getWalletMethods(Chain.Tron);
+
+    await expect(wallet.signTransaction(tronTransaction("0a02"))).rejects.toThrow("core_transaction_failed");
   });
 });
 
