@@ -19,8 +19,8 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       const debug = (...args: unknown[]) => console.info(`[bitget-debug] +${Date.now() - startedAt}ms`, ...args);
       const onBlur = () => debug("page lost focus (Bitget window opened?)");
       const onFocus = () => debug("page got focus back (Bitget window closed?)");
-      window.addEventListener("blur", onBlur);
-      window.addEventListener("focus", onFocus);
+      window.addEventListener?.("blur", onBlur);
+      window.addEventListener?.("focus", onFocus);
       debug("order", filteredChains);
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
@@ -40,8 +40,8 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
         } catch (error) {
           debug(`${chain} failed`, error);
           if (isUserRejection(error)) {
-            window.removeEventListener("blur", onBlur);
-            window.removeEventListener("focus", onFocus);
+            window.removeEventListener?.("blur", onBlur);
+            window.removeEventListener?.("focus", onFocus);
             throw error;
           }
           failedChains.push(error);
@@ -49,8 +49,8 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
       }
 
       debug("done");
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener?.("blur", onBlur);
+      window.removeEventListener?.("focus", onFocus);
 
       if (failedChains.length > 0 && failedChains.length === filteredChains.length) throw failedChains[0];
 
