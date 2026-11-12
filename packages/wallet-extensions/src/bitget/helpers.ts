@@ -37,6 +37,10 @@ function connectionRejectedError(chain: Chain) {
   return new SwapKitError("wallet_connection_rejected_by_user", { chain, wallet: WalletOption.BITGET });
 }
 
+function noAccountsError(chain: Chain) {
+  return new SwapKitError("wallet_bitkeep_no_accounts", { chain, wallet: WalletOption.BITGET });
+}
+
 function transactionFailedError(chain: Chain, error?: unknown) {
   return new SwapKitError("core_transaction_failed", { chain, error, wallet: WalletOption.BITGET });
 }
@@ -46,7 +50,7 @@ async function getEvmWalletMethods(chain: EVMChain) {
   // Asked only once per site: a second eth_requestAccounts while one is open is rejected as already pending
   const [connected] = (await wallet.request({ method: "eth_accounts" })) as string[];
   const [address] = connected ? [connected] : ((await wallet.request({ method: "eth_requestAccounts" })) as string[]);
-  if (!address) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain });
+  if (!address) throw noAccountsError(chain);
 
   const evmWallet = await getWeb3WalletMethods({ chain, walletProvider: wallet });
 
@@ -81,7 +85,7 @@ async function getSolanaWalletMethods() {
   const connection = await provider.connect();
   const address =
     provider.publicKey?.toString() ?? connection?.publicKey?.toString() ?? connection?.accounts?.[0]?.address;
-  if (!address) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Solana });
+  if (!address) throw noAccountsError(Chain.Solana);
 
   const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
   const { PublicKey, Transaction: SolanaTransaction, VersionedTransaction } = await import("@solana/web3.js");
@@ -142,7 +146,7 @@ async function getTronWalletMethods() {
   }
 
   const address = tronWeb.defaultAddress?.base58;
-  if (!address) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Tron });
+  if (!address) throw noAccountsError(Chain.Tron);
 
   const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
   const signer = {
@@ -182,7 +186,7 @@ function getTonWalletMethods() {
   return getTonConnectWallet({
     bridge,
     mainnetOnlyError: () => mainnetOnlyError(Chain.Ton),
-    noAccountError: () => new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Ton }),
+    noAccountError: () => noAccountsError(Chain.Ton),
     wallet: WalletOption.BITGET,
   });
 }
@@ -217,7 +221,8 @@ async function getSuiWalletMethods() {
   return { ...getSuiToolbox({ signer }), address: account.address };
 }
 
-const XRP_WALLET_FIELDS = ["Fee", "Flags", "LastLedgerSequence", "Sequence", "SigningPubKey"];
+const XRP_WALLET_FIELDS = ["Fee", "LastLedgerSequence", "Sequence", "SigningPubKey"];
+const XRP_FULLY_CANONICAL_SIG = 0x80000000;
 
 async function hashSignedXrpTransaction(blob: string) {
   const bytes = hex.decode(`54584e00${blob.toLowerCase()}`);
@@ -232,7 +237,7 @@ async function getRippleWalletMethods() {
 
   const address = await provider.connect();
   if (!(typeof address === "string" && validateRippleAddress(address))) {
-    throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Ripple });
+    throw noAccountsError(Chain.Ripple);
   }
 
   const { decode, encode } = await import("ripple-binary-codec");
@@ -250,6 +255,14 @@ async function getRippleWalletMethods() {
     for (const field of XRP_WALLET_FIELDS) {
       if (!(field in expected) && field in signed) expected[field] = signed[field];
     }
+
+    // Any other flag, such as partial payment, would change what the payment delivers
+    const requestedFlags = Number(requested.Flags ?? 0);
+    const signedFlags = Number(signed.Flags ?? 0);
+    if (signedFlags !== requestedFlags && signedFlags !== (requestedFlags | XRP_FULLY_CANONICAL_SIG) >>> 0) {
+      throw transactionFailedError(Chain.Ripple, "Bitget changed the transaction flags");
+    }
+    if ("Flags" in signed) expected.Flags = signed.Flags;
 
     if (encode(expected) !== encode(signed)) {
       throw transactionFailedError(Chain.Ripple, "Bitget signed a different transaction than the one requested");

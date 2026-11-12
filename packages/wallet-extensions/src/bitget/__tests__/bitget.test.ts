@@ -187,7 +187,7 @@ describe("Bitget XRP signer", () => {
 
   function mockXrp(alter = (transaction) => transaction) {
     const signature = { SigningPubKey: `02${"ab".repeat(32)}`, TxnSignature: "ABCDEF" };
-    const filled = { Fee: "12", Flags: 0, LastLedgerSequence: 20, Sequence: 7 };
+    const filled = { Fee: "12", Flags: 0x80000000, LastLedgerSequence: 20, Sequence: 7 };
     const blobs: string[] = [];
 
     globalThis.window = {
@@ -239,6 +239,7 @@ describe("Bitget XRP signer", () => {
     ["changes the amount", (transaction) => ({ ...transaction, Amount: "2000000" })],
     ["changes the destination", (transaction) => ({ ...transaction, Destination: XRP_ADDRESS })],
     ["adds a field", (transaction) => ({ ...transaction, SourceTag: 9 })],
+    ["adds the partial payment flag", (transaction) => ({ ...transaction, Flags: 0x80020000 })],
   ])("rejects a blob where Bitget %s", async (_name, alter) => {
     mockXrp(alter);
 

@@ -1,11 +1,19 @@
 import type { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import type { EthereumWindowProvider } from "@swapkit/helpers";
 
+type UnisatToSignInputs = { index: number; sighashTypes?: number[]; disableTweakSigner?: boolean } & (
+  | { address: string }
+  | { publicKey: string }
+);
+
 export type BitgetBtcProvider = {
   getNetwork?: () => Promise<string>;
   requestAccounts: () => Promise<string[]>;
   signMessage: (message: string, type?: "ecdsa" | "bip322-simple") => Promise<string>;
-  signPsbt: (psbtHex: string, options: { autoFinalized?: boolean }) => Promise<string>;
+  signPsbt: (
+    psbtHex: string,
+    options: { autoFinalized?: boolean; toSignInputs?: UnisatToSignInputs[] },
+  ) => Promise<string>;
 };
 
 export type BitgetSolanaTransaction = Transaction | VersionedTransaction;
