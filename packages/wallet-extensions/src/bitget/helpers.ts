@@ -1,161 +1,306 @@
-import { hex } from "@scure/base";
-import { Chain, type EVMChain, GAIAConfig, prepareNetworkSwitch, SwapKitError } from "@swapkit/helpers";
+import { base64, hex } from "@scure/base";
+import { Chain, type EVMChain, EVMChains, prepareNetworkSwitch, SwapKitError, WalletOption } from "@swapkit/helpers";
+import type { RippleTransaction } from "@swapkit/toolboxes/ripple";
+import type { SolanaProvider } from "@swapkit/toolboxes/solana";
+import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
 import type { TronTransaction } from "@swapkit/toolboxes/tron";
 import { Transaction } from "@swapkit/utxo-signer";
 import type { Eip1193Provider } from "ethers";
+import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
+import type { BitgetProviders, BitgetSolanaTransaction } from "./types";
+
+const SUI_MAINNET = "sui:mainnet";
+const TRON_USER_REJECTED = 4001;
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
-export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress> {
-  const { match, P } = await import("ts-pattern");
-  const bitget = window.bitkeep;
+function notFoundError(chain: Chain) {
+  return new SwapKitError("wallet_bitkeep_not_found", { chain });
+}
 
-  return match(chain)
-    .with(
-      P.union(
-        Chain.Arbitrum,
-        Chain.Aurora,
-        Chain.Avalanche,
-        Chain.Base,
-        Chain.Berachain,
-        Chain.BinanceSmartChain,
-        Chain.Ethereum,
-        Chain.Gnosis,
-        Chain.Monad,
-        Chain.Optimism,
-        Chain.Polygon,
-        Chain.XLayer,
-      ),
-      async () => {
-        if (!(bitget && "ethereum" in bitget)) {
-          throw new SwapKitError("wallet_bitkeep_not_found");
-        }
+function getProvider<Key extends keyof BitgetProviders>(key: Key, chain: Chain) {
+  const provider = window.bitkeep?.[key];
+  if (!provider) throw notFoundError(chain);
 
-        const wallet = bitget.ethereum;
+  return provider as BitgetProviders[Key];
+}
 
-        const [address] = (await wallet.request({ method: "eth_requestAccounts" })) as [string, ...string[]];
-        const evmWallet = await getWeb3WalletMethods({ chain: chain as EVMChain, walletProvider: wallet });
+function mainnetOnlyError(chain: Chain) {
+  return new SwapKitError({
+    errorKey: "wallet_chain_not_supported",
+    info: { chain, message: "Mainnet only", wallet: WalletOption.BITGET },
+  });
+}
 
-        return { ...evmWallet, address };
-      },
-    )
-    .with(Chain.Bitcoin, async () => {
-      if (!(bitget && "unisat" in bitget)) {
-        throw new SwapKitError("wallet_bitkeep_not_found");
+function connectionRejectedError(chain: Chain) {
+  return new SwapKitError("wallet_connection_rejected_by_user", { chain, wallet: WalletOption.BITGET });
+}
+
+function noAccountsError(chain: Chain) {
+  return new SwapKitError("wallet_bitkeep_no_accounts", { chain, wallet: WalletOption.BITGET });
+}
+
+function transactionFailedError(chain: Chain, error?: unknown) {
+  return new SwapKitError("core_transaction_failed", { chain, error, wallet: WalletOption.BITGET });
+}
+
+async function getEvmWalletMethods(chain: EVMChain) {
+  const wallet = getProvider("ethereum", chain);
+  // Asked only once per site: a second eth_requestAccounts while one is open is rejected as already pending
+  const [connected] = (await wallet.request({ method: "eth_accounts" })) as string[];
+  const [address] = connected ? [connected] : ((await wallet.request({ method: "eth_requestAccounts" })) as string[]);
+  if (!address) throw noAccountsError(chain);
+
+  const evmWallet = await getWeb3WalletMethods({ chain, walletProvider: wallet });
+
+  return { ...evmWallet, address };
+}
+
+async function getBitcoinWalletMethods() {
+  const wallet = getProvider("unisat", Chain.Bitcoin);
+  const [address] = await wallet.requestAccounts();
+  if (!address) throw connectionRejectedError(Chain.Bitcoin);
+  if (wallet.getNetwork && (await wallet.getNetwork()) !== "livenet") throw mainnetOnlyError(Chain.Bitcoin);
+
+  const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
+
+  async function signTransaction(tx: InstanceType<typeof Transaction>) {
+    const signedPsbtHex = await wallet.signPsbt(hex.encode(tx.toPSBT(0)), { autoFinalized: false });
+
+    return Transaction.fromPSBT(hex.decode(signedPsbtHex));
+  }
+
+  const signer = { getAddress: () => Promise.resolve(address), signTransaction };
+  const toolbox = getUtxoToolbox(Chain.Bitcoin, {
+    ...(await getUtxoScriptTypeParams({ address, chain: Chain.Bitcoin })),
+    signer,
+  });
+
+  return { ...toolbox, address };
+}
+
+async function getSolanaWalletMethods() {
+  const provider = getProvider("solana", Chain.Solana);
+  const connection = await provider.connect();
+  const address =
+    provider.publicKey?.toString() ?? connection?.publicKey?.toString() ?? connection?.accounts?.[0]?.address;
+  if (!address) throw noAccountsError(Chain.Solana);
+
+  const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
+  const { PublicKey, Transaction: SolanaTransaction, VersionedTransaction } = await import("@solana/web3.js");
+  const publicKey = new PublicKey(address);
+
+  function messageOf(transaction: BitgetSolanaTransaction) {
+    return hex.encode("version" in transaction ? transaction.message.serialize() : transaction.serializeMessage());
+  }
+
+  async function signTransaction<T extends BitgetSolanaTransaction>(transaction: T) {
+    const requested = messageOf(transaction);
+    const response = await provider.signTransaction(transaction);
+    let signed = response as BitgetSolanaTransaction;
+
+    if (Array.isArray(response)) {
+      const bytes = response[0]?.signedTransaction;
+      if (!bytes) throw transactionFailedError(Chain.Solana, "Bitget returned no signature");
+
+      signed = "version" in transaction ? VersionedTransaction.deserialize(bytes) : SolanaTransaction.from(bytes);
+    }
+
+    if (messageOf(signed) !== requested || messageOf(transaction) !== requested) {
+      throw transactionFailedError(Chain.Solana, "Bitget signed a different transaction than the one requested");
+    }
+
+    if (transaction instanceof VersionedTransaction) {
+      transaction.signatures = (signed as InstanceType<typeof VersionedTransaction>).signatures;
+    } else {
+      for (const { publicKey: signerKey, signature } of (signed as InstanceType<typeof SolanaTransaction>).signatures) {
+        if (signature) transaction.addSignature(signerKey, signature);
       }
-      const { unisat: wallet } = bitget;
+    }
 
-      const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
-      const [address] = await wallet.requestAccounts();
+    return transaction;
+  }
 
-      async function signTransaction(tx: InstanceType<typeof Transaction>) {
-        const psbtHex = hex.encode(tx.toPSBT(0));
-        const signedPsbtHex = await wallet.signPsbt(psbtHex, { autoFinalized: false });
+  const signer: SolanaProvider = {
+    connect: () => Promise.resolve({ publicKey }),
+    disconnect: () => provider.disconnect(),
+    publicKey,
+    signTransaction,
+  };
 
-        return Transaction.fromPSBT(hex.decode(signedPsbtHex));
+  return { ...getSolanaToolbox({ signer }), address };
+}
+
+async function getTronWalletMethods() {
+  const tronLink = getProvider("tronLink", Chain.Tron);
+  const tronWeb = getProvider("tronWeb", Chain.Tron);
+  const response = await tronLink.request({ method: "tron_requestAccounts" });
+
+  if (response.code === TRON_USER_REJECTED) throw connectionRejectedError(Chain.Tron);
+  if (response.code !== 200) {
+    throw new SwapKitError({
+      errorKey: "core_wallet_connection_failed",
+      info: { chain: Chain.Tron, code: response.code, message: response.message, wallet: WalletOption.BITGET },
+    });
+  }
+
+  const address = tronWeb.defaultAddress?.base58;
+  if (!address) throw noAccountsError(Chain.Tron);
+
+  const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
+  const signer = {
+    getAddress: () => Promise.resolve(address),
+    signTransaction: async (transaction: TronTransaction) => {
+      const signed = await tronWeb.trx.sign(structuredClone(transaction));
+
+      if (signed?.txID !== transaction.txID) {
+        throw transactionFailedError(Chain.Tron, "Bitget signed a different transaction than the one requested");
       }
+      if (!signed.signature?.length) throw transactionFailedError(Chain.Tron, "Bitget returned no signature");
 
-      const signer = { getAddress: () => Promise.resolve(address), signTransaction };
+      // Bitget hands back a copy without `visible` and `raw_data_hex`, which the node then cannot read
+      return { ...transaction, signature: signed.signature };
+    },
+  };
 
-      const toolbox = getUtxoToolbox(Chain.Bitcoin, {
-        ...(await getUtxoScriptTypeParams({ address, chain: Chain.Bitcoin })),
-        signer,
-      });
+  return { ...getTronToolbox({ signer }), address };
+}
 
-      return { ...toolbox, address };
-    })
-    .with(Chain.Cosmos, async () => {
-      if (!(bitget && "keplr" in bitget)) {
-        throw new SwapKitError("wallet_bitkeep_not_found");
-      }
-      const { keplr: wallet } = bitget;
+async function getAptosWalletMethods() {
+  const { createAptosExtensionTransfer, getAptosToolbox, validateAptosAddress } = await import(
+    "@swapkit/toolboxes/aptos"
+  );
+  const aptosProvider = getProvider("aptos", Chain.Aptos) as import("@swapkit/toolboxes/aptos").AptosExtensionProvider;
 
-      await wallet.enable(GAIAConfig.chainId);
-      const offlineSigner = await wallet.getOfflineSignerAuto(GAIAConfig.chainId);
-      const accounts = await offlineSigner.getAccounts();
-      if (!accounts?.[0]) throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Cosmos });
+  const { address } = await aptosProvider.connect();
+  if (!validateAptosAddress(address)) throw notFoundError(Chain.Aptos);
 
-      const { getCosmosToolbox } = await import("@swapkit/toolboxes/cosmos");
-      const [{ address }] = accounts;
+  return { ...getAptosToolbox(), address, transfer: createAptosExtensionTransfer({ provider: aptosProvider }) };
+}
 
-      const signer = Object.assign(offlineSigner, { getAddress: () => Promise.resolve(address) });
+function getTonWalletMethods() {
+  const bridge = window.bitgetTonWallet?.tonconnect;
+  if (!bridge) throw notFoundError(Chain.Ton);
 
-      const toolbox = getCosmosToolbox(Chain.Cosmos, { signer });
+  return getTonConnectWallet({
+    bridge,
+    mainnetOnlyError: () => mainnetOnlyError(Chain.Ton),
+    noAccountError: () => noAccountsError(Chain.Ton),
+    wallet: WalletOption.BITGET,
+  });
+}
 
-      return { ...toolbox, address };
-    })
-    .with(Chain.Solana, async () => {
-      if (!(bitget && "solana" in bitget)) {
-        throw new SwapKitError("wallet_bitkeep_not_found");
-      }
+async function getSuiWalletMethods() {
+  const provider = getProvider("suiWallet", Chain.Sui);
+  const { accounts } = await provider.connect();
+  const account = accounts.find(({ chains }) => !chains || chains.includes(SUI_MAINNET));
+  if (!account?.address) throw mainnetOnlyError(Chain.Sui);
 
-      const { getSolanaToolbox } = await import("@swapkit/toolboxes/solana");
-      const provider = bitget?.solana;
+  const { getSuiToolbox } = await import("@swapkit/toolboxes/sui");
 
-      const { publicKey } = await provider.connect();
-      const address: string = publicKey.toString();
+  const signer: SuiChainSigner = {
+    getAddress: () => account.address,
+    signTransaction: async (txBytes: Uint8Array) => {
+      const serialized = base64.encode(txBytes);
+      const transaction = { serialize: () => serialized, toJSON: () => Promise.resolve(serialized) };
+      const signed = await provider.signTransaction({ account, chain: SUI_MAINNET, transaction });
 
-      const signer = Object.assign(provider, { getAddress: async () => address });
-
-      const toolbox = getSolanaToolbox({ signer });
-
-      return { ...toolbox, address };
-    })
-    .with(Chain.Tron, async () => {
-      if (!(bitget && "tronLink" in bitget && "tronWeb" in bitget)) {
-        throw new SwapKitError("wallet_bitkeep_not_found");
-      }
-
-      const { getTronToolbox } = await import("@swapkit/toolboxes/tron");
-      const { tronLink, tronWeb } = bitget;
-
-      const response = await tronLink.request({ method: "tron_requestAccounts" });
-
-      if (response.code !== 200) {
-        throw new SwapKitError("wallet_connection_rejected_by_user", {
-          message: response.message || "User rejected connection",
+      if (signed.bytes !== serialized) {
+        throw new SwapKitError("toolbox_sui_signing_error", {
+          chain: Chain.Sui,
+          message: "Bitget signed a different transaction than the one requested",
         });
       }
 
-      const address = tronWeb.defaultAddress?.base58;
+      return { bytes: serialized, signature: signed.signature };
+    },
+    toSuiAddress: () => account.address,
+  };
 
-      if (!address) {
-        throw new SwapKitError("wallet_bitkeep_no_accounts", { chain: Chain.Tron });
-      }
+  return { ...getSuiToolbox({ signer }), address: account.address };
+}
 
-      const signer = {
-        getAddress: () => Promise.resolve(address),
-        signTransaction: async (transaction: TronTransaction) => {
-          const signedTx = await tronWeb.trx.sign(transaction);
-          return signedTx;
-        },
-      };
+const XRP_WALLET_FIELDS = ["Fee", "LastLedgerSequence", "Sequence", "SigningPubKey"];
+const XRP_FULLY_CANONICAL_SIG = 0x80000000;
 
-      const toolbox = getTronToolbox({ signer });
+async function hashSignedXrpTransaction(blob: string) {
+  const bytes = hex.decode(`54584e00${blob.toLowerCase()}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-512", new Uint8Array(bytes)));
 
-      return { ...toolbox, address };
-    })
-    .with(Chain.Aptos, async () => {
-      if (!(bitget && "aptos" in bitget)) {
-        throw new SwapKitError("wallet_bitkeep_not_found");
-      }
+  return hex.encode(digest.slice(0, 32)).toUpperCase();
+}
 
-      const { createAptosExtensionTransfer, getAptosToolbox, validateAptosAddress } = await import(
-        "@swapkit/toolboxes/aptos"
-      );
-      const aptosProvider = bitget.aptos as import("@swapkit/toolboxes/aptos").AptosExtensionProvider;
+async function getRippleWalletMethods() {
+  const provider = getProvider("xrp", Chain.Ripple);
+  const { getRippleToolbox, validateRippleAddress } = await import("@swapkit/toolboxes/ripple");
 
-      const { address } = await aptosProvider.connect();
-      if (!validateAptosAddress(address)) throw new SwapKitError("wallet_bitkeep_not_found");
+  const address = await provider.connect();
+  if (!(typeof address === "string" && validateRippleAddress(address))) {
+    throw noAccountsError(Chain.Ripple);
+  }
 
-      const toolbox = getAptosToolbox();
+  const { decode, encode } = await import("ripple-binary-codec");
 
-      return { ...toolbox, address, transfer: createAptosExtensionTransfer({ provider: aptosProvider }) };
-    })
-    .otherwise(() => {
-      throw new SwapKitError("wallet_chain_not_supported");
-    });
+  async function signTransaction(transaction: RippleTransaction) {
+    const requested: Record<string, unknown> = structuredClone(transaction);
+    const blob = await provider.signTransaction(structuredClone(requested));
+    if (typeof blob !== "string") throw transactionFailedError(Chain.Ripple, "Bitget returned no signed transaction");
+
+    const { TxnSignature, ...signed } = decode(blob);
+    if (!TxnSignature) throw transactionFailedError(Chain.Ripple, "Bitget returned no signature");
+
+    // Only the fields the wallet is expected to fill in may differ from the request
+    const expected = { ...requested };
+    for (const field of XRP_WALLET_FIELDS) {
+      if (!(field in expected) && field in signed) expected[field] = signed[field];
+    }
+
+    // Any other flag, such as partial payment, would change what the payment delivers
+    const requestedFlags = Number(requested.Flags ?? 0);
+    const signedFlags = Number(signed.Flags ?? 0);
+    if (signedFlags !== requestedFlags && signedFlags !== (requestedFlags | XRP_FULLY_CANONICAL_SIG) >>> 0) {
+      throw transactionFailedError(Chain.Ripple, "Bitget changed the transaction flags");
+    }
+    if ("Flags" in signed) expected.Flags = signed.Flags;
+
+    if (encode(expected) !== encode(signed)) {
+      throw transactionFailedError(Chain.Ripple, "Bitget signed a different transaction than the one requested");
+    }
+
+    return { hash: await hashSignedXrpTransaction(blob), tx_blob: blob };
+  }
+
+  const signer = { getAddress: () => Promise.resolve(address), signTransaction };
+
+  return { ...getRippleToolbox({ signer }), address };
+}
+
+export function isEvmChain(chain: Chain): chain is EVMChain {
+  return (EVMChains as readonly Chain[]).includes(chain);
+}
+
+export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress> {
+  if (isEvmChain(chain)) return getEvmWalletMethods(chain);
+
+  switch (chain) {
+    case Chain.Aptos:
+      return getAptosWalletMethods();
+    case Chain.Bitcoin:
+      return getBitcoinWalletMethods();
+    case Chain.Ripple:
+      return getRippleWalletMethods();
+    case Chain.Solana:
+      return getSolanaWalletMethods();
+    case Chain.Sui:
+      return getSuiWalletMethods();
+    case Chain.Ton:
+      return getTonWalletMethods();
+    case Chain.Tron:
+      return getTronWalletMethods();
+    default:
+      throw new SwapKitError({ errorKey: "wallet_chain_not_supported", info: { chain, wallet: WalletOption.BITGET } });
+  }
 }
 
 export const getWeb3WalletMethods = async ({
