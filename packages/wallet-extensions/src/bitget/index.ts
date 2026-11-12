@@ -14,15 +14,6 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 
       const failedChains: unknown[] = [];
 
-      // TEMP debug logs, remove before merge
-      const startedAt = Date.now();
-      const debug = (...args: unknown[]) => console.info(`[bitget-debug] +${Date.now() - startedAt}ms`, ...args);
-      const onBlur = () => debug("page lost focus (Bitget window opened?)");
-      const onFocus = () => debug("page got focus back (Bitget window closed?)");
-      window.addEventListener?.("blur", onBlur);
-      window.addEventListener?.("focus", onFocus);
-      debug("order", filteredChains);
-
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
       for (const [index, chain] of filteredChains.entries()) {
         // Requests sent back to back make Bitget mix up its approval windows; EVM chains share one account
@@ -31,25 +22,14 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
           await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
         }
 
-        debug(`${chain} request sent`);
         try {
           const walletMethods = await getWalletMethods(chain);
           addChain({ ...walletMethods, chain, walletType });
-          debug(`${chain} connected`, walletMethods.address);
         } catch (error) {
-          debug(`${chain} failed`, error);
-          if (isUserRejection(error)) {
-            window.removeEventListener?.("blur", onBlur);
-            window.removeEventListener?.("focus", onFocus);
-            throw error;
-          }
+          if (isUserRejection(error)) throw error;
           failedChains.push(error);
         }
       }
-
-      debug("done");
-      window.removeEventListener?.("blur", onBlur);
-      window.removeEventListener?.("focus", onFocus);
 
       if (failedChains.length > 0 && failedChains.length === filteredChains.length) throw failedChains[0];
 

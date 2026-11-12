@@ -236,8 +236,6 @@ async function getRippleWalletMethods() {
   const { getRippleToolbox, validateRippleAddress } = await import("@swapkit/toolboxes/ripple");
 
   const address = await provider.connect();
-  // TEMP debug log, remove before merge
-  console.info("[bitget-debug] XRP connect() returned", address);
   if (!(typeof address === "string" && validateRippleAddress(address))) {
     throw noAccountsError(Chain.Ripple);
   }
