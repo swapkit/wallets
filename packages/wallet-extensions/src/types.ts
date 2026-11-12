@@ -4,11 +4,12 @@ import type { EthereumWindowProvider } from "@swapkit/helpers";
 // The offline-signer handles feed straight into the cosmos toolbox, whose 5.0.0
 // client (backed by @swapkit/cosmos-signer) declares its own signer interfaces
 // replacing the @cosmjs ones — type the handles with those.
-import type { OfflineAminoSigner, OfflineDirectSigner } from "@swapkit/toolboxes/cosmos";
+import type { OfflineAminoSigner } from "@swapkit/toolboxes/cosmos";
 import type { SolanaProvider } from "@swapkit/toolboxes/solana";
 import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
+import type { BitgetProviders } from "./bitget/types";
 import type { Cip30Provider } from "./helpers/cip30";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
@@ -33,11 +34,6 @@ export type TonConnectBridge = {
     params: string[];
   }) => Promise<{ id: string; result?: string; error?: { code: number; message: string } }>;
 };
-
-type UnisatToSignInputs = { index: number; sighashTypes?: number[]; disableTweakSigner?: boolean } & (
-  | { address: string }
-  | { publicKey: string }
-);
 
 type Callback = (
   error: Error | null,
@@ -88,46 +84,8 @@ declare global {
       zcash: Eip1193Provider;
     };
 
-    bitkeep?: {
-      unisat: {
-        requestAccounts: () => Promise<[string, ...string[]]>;
-        signMessage: (message: string, type?: "ecdsa" | "bip322-simple") => Promise<string>;
-        signPsbt: (
-          psbtHex: string,
-          { autoFinalized, toSignInputs }: { autoFinalized?: boolean; toSignInputs?: UnisatToSignInputs[] },
-        ) => Promise<string>;
-      };
-      keplr: {
-        enable: (chainId: string | string[]) => Promise<void>;
-        signAmino: (
-          chainId: string,
-          signer: string,
-          signDoc: StdSignDoc,
-          signOptions: any,
-        ) => Promise<AminoSignResponse>;
-        signArbitrary: (chainId: string, signer: string, data: string | Uint8Array) => Promise<StdSignature>;
-        verifyArbitrary: (
-          chainId: string,
-          signer: string,
-          data: string | Uint8Array,
-          signature: StdSignature,
-        ) => Promise<boolean>;
-        getOfflineSignerOnlyAmino: (chainId: string) => OfflineAminoSigner;
-        getOfflineSignerAuto: (chainId: string) => Promise<OfflineAminoSigner | OfflineDirectSigner>;
-      };
-      solana: SolanaProvider;
-      ethereum: EthereumWindowProvider;
-      tronLink: { request: (args: { method: string; params?: any }) => Promise<any>; ready: boolean };
-      tronWeb: {
-        defaultAddress: { base58: string; hex: string };
-        trx: {
-          sign: (transaction: any) => Promise<any>;
-          sendRawTransaction: (signedTransaction: any) => Promise<any>;
-          getAccount: (address: string) => Promise<any>;
-          getBalance: (address: string) => Promise<number>;
-        };
-      };
-    };
+    bitkeep?: Partial<BitgetProviders>;
+    bitgetTonWallet?: { tonconnect: TonConnectBridge };
 
     okxwallet?:
       | {

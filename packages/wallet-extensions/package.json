@@ -20,6 +20,7 @@
     "@wallet-standard/app": "^1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "~2.7.0",
     "sats-connect": "~1.0.0",
     "ts-pattern": "^5.9.0"
   },
@@ -40,6 +41,7 @@
     "@wallet-standard/app": "1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "2.7.0",
     "sats-connect": "1.0.0",
     "ts-pattern": "^5.9.0"
   },
