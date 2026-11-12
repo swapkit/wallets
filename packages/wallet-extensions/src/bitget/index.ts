@@ -1,5 +1,6 @@
-import { Chain, EVMChains, filterSupportedChains, SwapKitError, WalletOption } from "@swapkit/helpers";
+import { Chain, EVMChains, filterSupportedChains, WalletOption } from "@swapkit/helpers";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { isUserRejection } from "../helpers/userRejection";
 import type { ExtensionWallet } from "../walletTypes";
 import { getWalletMethods, isEvmChain } from "./helpers";
 
@@ -70,13 +71,5 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 });
 
 export const BITGET_SUPPORTED_CHAINS = getWalletSupportedChains(bitgetWallet);
-
-function isUserRejection(error: unknown) {
-  if (error instanceof SwapKitError) return error.errorKey === "wallet_connection_rejected_by_user";
-
-  // ethers wraps the EIP-1193 4001 rejection of the EVM provider as ACTION_REJECTED
-  const code = (error as { code?: unknown } | null)?.code;
-  return code === 4001 || code === "ACTION_REJECTED";
-}
 
 const CHAIN_PAUSE_MS = 1000;
