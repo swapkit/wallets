@@ -16,10 +16,11 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 
       // One chain at a time, so a cancelled approval stops the rest and a missing chain does not drop the others
       for (const [index, chain] of filteredChains.entries()) {
-        // With less than a second between requests Bitget mixes up its approval windows; EVM chains share one account
+        // Requests sent back to back make Bitget mix up its approval windows; EVM chains share one account
         const previous = filteredChains[index - 1];
-        if (previous && !(isEvmChain(previous) && isEvmChain(chain))) {
-          await new Promise((resolve) => setTimeout(resolve, CHAIN_PAUSE_MS));
+        if (previous) {
+          const pause = isEvmChain(previous) && isEvmChain(chain) ? EVM_CHAIN_PAUSE_MS : CHAIN_PAUSE_MS;
+          await new Promise((resolve) => setTimeout(resolve, pause));
         }
 
         try {
@@ -73,3 +74,4 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 export const BITGET_SUPPORTED_CHAINS = getWalletSupportedChains(bitgetWallet);
 
 const CHAIN_PAUSE_MS = 1000;
+const EVM_CHAIN_PAUSE_MS = 250;
