@@ -48,6 +48,34 @@ describe("Bitget connection", () => {
   });
 });
 
+describe("Bitget Tron connection", () => {
+  function connectWithTronCode(code: number) {
+    globalThis.window = {
+      bitkeep: {
+        suiWallet: suiProvider(),
+        tronLink: { request: async () => ({ code, message: "" }) },
+        tronWeb: { defaultAddress: {}, trx: {} },
+      },
+    };
+
+    return connectBitget([Chain.Tron, Chain.Sui]);
+  }
+
+  test("skips Tron and connects the rest when the wallet fails without a cancellation", async () => {
+    const { connected, result } = connectWithTronCode(4000);
+
+    expect(await result).toBe(true);
+    expect(connected).toEqual([Chain.Sui]);
+  });
+
+  test("stops when the user cancels the Tron approval", async () => {
+    const { connected, result } = connectWithTronCode(4001);
+
+    await expect(result).rejects.toThrow("wallet_connection_rejected_by_user");
+    expect(connected).toEqual([]);
+  });
+});
+
 describe("Bitget Sui signer", () => {
   test("rejects a signature over different bytes", async () => {
     const provider = suiProvider();
@@ -190,6 +218,19 @@ describe("Bitget XRP signer", () => {
       .toUpperCase();
 
     expect(signed).toEqual({ hash, tx_blob: blobs[0] });
+  });
+
+  test("rejects a memo changed in place and leaves the request untouched", async () => {
+    mockXrp((transaction) => {
+      transaction.Memos[0].Memo.MemoData = "00";
+      return transaction;
+    });
+    const request = structuredClone(payment);
+
+    const wallet = await getWalletMethods(Chain.Ripple);
+
+    await expect(wallet.signTransaction(request)).rejects.toThrow("core_transaction_failed");
+    expect(request).toEqual(payment);
   });
 
   test.each([

@@ -11,6 +11,7 @@ import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 import type { BitgetProviders, BitgetSolanaTransaction } from "./types";
 
 const SUI_MAINNET = "sui:mainnet";
+const TRON_USER_REJECTED = 4001;
 
 type WalletMethodsWithAddress = Record<string, unknown> & { address: string };
 
@@ -93,14 +94,14 @@ async function getSolanaWalletMethods() {
   async function signTransaction<T extends BitgetSolanaTransaction>(transaction: T) {
     const requested = messageOf(transaction);
     const response = await provider.signTransaction(transaction);
-    const bytes = Array.isArray(response) ? response[0]?.signedTransaction : undefined;
-    if (Array.isArray(response) && !bytes) throw transactionFailedError(Chain.Solana, "Bitget returned no signature");
+    let signed = response as BitgetSolanaTransaction;
 
-    const signed = Array.isArray(response)
-      ? "version" in transaction
-        ? VersionedTransaction.deserialize(bytes as Uint8Array)
-        : SolanaTransaction.from(bytes as Uint8Array)
-      : response;
+    if (Array.isArray(response)) {
+      const bytes = response[0]?.signedTransaction;
+      if (!bytes) throw transactionFailedError(Chain.Solana, "Bitget returned no signature");
+
+      signed = "version" in transaction ? VersionedTransaction.deserialize(bytes) : SolanaTransaction.from(bytes);
+    }
 
     if (messageOf(signed) !== requested || messageOf(transaction) !== requested) {
       throw transactionFailedError(Chain.Solana, "Bitget signed a different transaction than the one requested");
@@ -132,9 +133,11 @@ async function getTronWalletMethods() {
   const tronWeb = getProvider("tronWeb", Chain.Tron);
   const response = await tronLink.request({ method: "tron_requestAccounts" });
 
+  if (response.code === TRON_USER_REJECTED) throw connectionRejectedError(Chain.Tron);
   if (response.code !== 200) {
-    throw new SwapKitError("wallet_connection_rejected_by_user", {
-      message: response.message || "User rejected connection",
+    throw new SwapKitError({
+      errorKey: "core_wallet_connection_failed",
+      info: { chain: Chain.Tron, code: response.code, message: response.message, wallet: WalletOption.BITGET },
     });
   }
 
@@ -235,14 +238,15 @@ async function getRippleWalletMethods() {
   const { decode, encode } = await import("ripple-binary-codec");
 
   async function signTransaction(transaction: RippleTransaction) {
-    const blob = await provider.signTransaction({ ...transaction });
+    const requested: Record<string, unknown> = structuredClone(transaction);
+    const blob = await provider.signTransaction(structuredClone(requested));
     if (typeof blob !== "string") throw transactionFailedError(Chain.Ripple, "Bitget returned no signed transaction");
 
     const { TxnSignature, ...signed } = decode(blob);
     if (!TxnSignature) throw transactionFailedError(Chain.Ripple, "Bitget returned no signature");
 
     // Only the fields the wallet is expected to fill in may differ from the request
-    const expected: Record<string, unknown> = { ...transaction };
+    const expected = { ...requested };
     for (const field of XRP_WALLET_FIELDS) {
       if (!(field in expected) && field in signed) expected[field] = signed[field];
     }
@@ -259,8 +263,12 @@ async function getRippleWalletMethods() {
   return { ...getRippleToolbox({ signer }), address };
 }
 
+export function isEvmChain(chain: Chain): chain is EVMChain {
+  return (EVMChains as readonly Chain[]).includes(chain);
+}
+
 export function getWalletMethods(chain: Chain): Promise<WalletMethodsWithAddress> {
-  if (EVMChains.includes(chain as EVMChain)) return getEvmWalletMethods(chain as EVMChain);
+  if (isEvmChain(chain)) return getEvmWalletMethods(chain);
 
   switch (chain) {
     case Chain.Aptos:
