@@ -73,5 +73,5 @@ export const bitgetWallet: ExtensionWallet<"connectBitget"> = createWallet({
 
 export const BITGET_SUPPORTED_CHAINS = getWalletSupportedChains(bitgetWallet);
 
-const CHAIN_PAUSE_MS = 1000;
+const CHAIN_PAUSE_MS = 2000;
 const EVM_CHAIN_PAUSE_MS = 250;
