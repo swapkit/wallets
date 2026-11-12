@@ -10,18 +10,13 @@ import type { StarknetToolboxParams } from "@swapkit/toolboxes/starknet";
 import type { SubstrateInjectedExtension } from "@swapkit/toolboxes/substrate";
 import type { Eip1193Provider } from "ethers";
 import type { BitgetProviders } from "./bitget/types";
+import type { Cip30Provider } from "./helpers/cip30";
 import type { NearBrowserWalletProvider } from "./helpers/near";
 import type { TronLinkWindow } from "./tronlink";
 
 type StarknetAccount = NonNullable<Extract<StarknetToolboxParams, { signer?: unknown }>["signer"]>;
 
 export type OkxStarknetProvider = { account?: StarknetAccount; enable: () => Promise<string[]> };
-
-export type OkxCardanoApi = {
-  getChangeAddress: () => Promise<string>;
-  getNetworkId: () => Promise<number>;
-  signTx: (transaction: string, partialSign?: boolean) => Promise<string>;
-};
 
 export type TonConnectEvent =
   | { event: "connect"; payload: { items: { name: string; address?: string; network?: string }[] } }
@@ -67,6 +62,8 @@ declare global {
     keplr: Keplr;
     trustwallet: EthereumWindowProvider & { ton?: import("./trustwallet").TrustWalletTonProvider };
     phantom: { solana: SolanaProvider };
+
+    cardano?: Record<string, Cip30Provider | undefined>;
 
     noirwallet?: { isNoirWallet: boolean; version?: string; zcash: NoirWalletZcashProvider };
 
@@ -117,7 +114,7 @@ declare global {
           };
           solana: SolanaProvider;
           starknet: OkxStarknetProvider;
-          cardano: { enable: () => Promise<OkxCardanoApi> };
+          cardano: Cip30Provider;
           near: NearBrowserWalletProvider & {
             requestSignIn: (params?: {
               contractId?: string;

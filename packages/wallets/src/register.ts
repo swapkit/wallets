@@ -11,6 +11,7 @@
  * `loadWallet` imports this itself, so apps that only connect wallets through
  * it need nothing extra.
  */
+import "@swapkit/wallet-extensions/cardano/register";
 import "@swapkit/wallet-extensions/noir-wallet/register";
 import "./ledger-wallet-provider/register";
 import "./tonconnect/register";
