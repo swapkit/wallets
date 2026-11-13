@@ -1,5 +1,6 @@
 import { WalletOption } from "@swapkit/helpers";
 import type { bitgetWallet } from "@swapkit/wallet-extensions/bitget";
+import type { cardanoWallet } from "@swapkit/wallet-extensions/cardano";
 import type { cosmostationWallet } from "@swapkit/wallet-extensions/cosmostation";
 import type { evmWallet } from "@swapkit/wallet-extensions/evm-extensions";
 import type { keepkeyBexWallet } from "@swapkit/wallet-extensions/keepkey-bex";
@@ -31,6 +32,7 @@ import type { xamanWallet } from "./xaman";
 export type SKWallets = {
   [WalletOption.BITGET]: typeof bitgetWallet;
   [WalletOption.BRAVE]: typeof evmWallet;
+  [WalletOption.CIP30]: typeof cardanoWallet;
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet;
   [WalletOption.COINBASE_WEB]: typeof evmWallet;
   [WalletOption.COSMOSTATION]: typeof cosmostationWallet;
@@ -108,6 +110,7 @@ export type HDWalletDiscoveryMethods = {
 export type SKWalletsSupportedChains = {
   [WalletOption.BITGET]: typeof bitgetWallet.connectBitget.supportedChains;
   [WalletOption.BRAVE]: typeof evmWallet.connectEVMWallet.supportedChains;
+  [WalletOption.CIP30]: typeof cardanoWallet.connectCardano.supportedChains;
   [WalletOption.COINBASE_MOBILE]: typeof coinbaseWallet.connectCoinbaseWallet.supportedChains;
   [WalletOption.COINBASE_WEB]: typeof evmWallet.connectEVMWallet.supportedChains;
   [WalletOption.COSMOSTATION]: typeof cosmostationWallet.connectCosmostation.supportedChains;

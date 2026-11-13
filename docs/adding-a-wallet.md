@@ -9,6 +9,9 @@ Worked examples in this repo:
 
 - `packages/wallet-extensions/src/noir-wallet/` — injected browser-extension
   wallet with custom error codes (added via fork PR #111 + #144)
+- `packages/wallet-extensions/src/cardano/` — one connector for every wallet
+  that follows a shared standard (CIP-30): the wallet is picked at connect time
+  by its `window.cardano` key and listed with `getCardanoWallets()`
 - `packages/wallets/src/tonconnect/` — connector living directly in
   `@swapkit/wallets`, registry registration only
 - `packages/wallets/src/ledger-wallet-provider/` — connector wrapping a
@@ -84,7 +87,7 @@ Rules:
   convention, not enforced at runtime; first-party codes live outside it and
   collisions throw only when two keys claim the same number. Grep this repo's
   registers for the next free block (noir-wallet holds 80101–80103,
-  ledger-wallet-provider 80201–80205).
+  ledger-wallet-provider 80201–80205, cardano 80301–80302).
 - Registration is idempotent for identical values and throws
   `helpers_invalid_params` on conflicting re-registration, so the module may
   safely load through multiple import paths.

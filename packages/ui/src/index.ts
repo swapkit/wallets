@@ -1,0 +1,1 @@
+import "@swapkit/wallets/register";

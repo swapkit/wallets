@@ -82,6 +82,12 @@
       "require": "./dist/src/bitget.cjs",
       "types": "./dist/types/bitget.d.ts"
     },
+    "./cardano": {
+      "bun": "./src/cardano.ts",
+      "default": "./dist/src/cardano.js",
+      "require": "./dist/src/cardano.cjs",
+      "types": "./dist/types/cardano.d.ts"
+    },
     "./coinbase": {
       "bun": "./src/coinbase/index.ts",
       "default": "./dist/src/coinbase/index.js",

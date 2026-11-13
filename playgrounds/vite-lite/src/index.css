@@ -52,6 +52,8 @@ body {
   z-index: 50;
 }
 
+/* Widget canvas: full viewport, with left gutter for the floating sidebar, widget centred in the
+   remaining space. */
 .studio-layout__widget {
   min-height: 100svh;
   padding: 4rem 2rem 4rem calc(360px + 32px + 16px);
@@ -70,17 +72,19 @@ body {
   width: 18px;
   height: 18px;
 }
-
 .studio-layout__icon svg {
   width: 100%;
   height: 100%;
 }
 
+/* Desktop: settings cog and backdrop are mobile-only. */
 .studio-layout__settings-trigger,
 .studio-layout__backdrop {
   display: none;
 }
 
+/* Mobile: matches the swapkit-frontend dashboard pattern — sheet slides up from the
+   bottom over a dimmed backdrop; tapping the backdrop closes it. */
 @media (max-width: 768px) {
   .studio-layout__sidebar {
     top: 0;
@@ -112,6 +116,8 @@ body {
     bottom: max(6px, env(safe-area-inset-bottom, 6px));
     left: 50%;
     transform: translateX(-50%);
+    /* Higher than the sidebar (50) so the close affordance stays tappable when
+       the sheet is open. */
     z-index: 60;
     display: inline-flex;
     align-items: center;
@@ -119,6 +125,7 @@ body {
     gap: 8px;
     height: 44px;
     padding: 0 18px;
+    /* Match the controls' card radius (Tailwind rounded-lg, 8px). */
     border-radius: 8px;
     border: 1px solid hsl(0 0% 100% / 0.14);
     background: hsl(140 6% 8% / 0.92);

@@ -20,6 +20,7 @@
     "@wallet-standard/app": "^1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "~2.7.0",
     "sats-connect": "~1.0.0",
     "ts-pattern": "^5.9.0"
   },
@@ -40,6 +41,7 @@
     "@wallet-standard/app": "1.1.1",
     "cosmjs-types": "0.10.1",
     "ethers": "6.16.0",
+    "ripple-binary-codec": "2.7.0",
     "sats-connect": "1.0.0",
     "ts-pattern": "^5.9.0"
   },
@@ -55,6 +57,18 @@
       "default": "./dist/src/bitget/index.js",
       "require": "./dist/src/bitget/index.cjs",
       "types": "./dist/types/bitget/index.d.ts"
+    },
+    "./cardano": {
+      "bun": "./src/cardano/index.ts",
+      "default": "./dist/src/cardano/index.js",
+      "require": "./dist/src/cardano/index.cjs",
+      "types": "./dist/types/cardano/index.d.ts"
+    },
+    "./cardano/register": {
+      "bun": "./src/cardano/register.ts",
+      "default": "./dist/src/cardano/register.js",
+      "require": "./dist/src/cardano/register.cjs",
+      "types": "./dist/types/cardano/register.d.ts"
     },
     "./cosmostation": {
       "bun": "./src/cosmostation/index.ts",

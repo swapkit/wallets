@@ -48,3 +48,4 @@ jobs:
       - run: bun lint
       - run: bun type-check:ci
       - run: bun test
+      - run: bun test --path-ignore-patterns= --preload ./packages/ui/src/react/__tests__/setup-dom.ts ./packages/ui

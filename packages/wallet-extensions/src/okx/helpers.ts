@@ -172,29 +172,13 @@ export async function getWalletMethods(chain: Chain): Promise<WalletMethodsWithA
         }
 
         const api = await window.okxwallet.cardano.enable();
+        const { CARDANO_MAINNET_NETWORK_ID, getCip30Toolbox } = await import("../helpers/cip30");
 
-        if ((await api.getNetworkId()) !== 1) {
+        if ((await api.getNetworkId()) !== CARDANO_MAINNET_NETWORK_ID) {
           throw new SwapKitError("wallet_okx_chain_not_supported", { chain: Chain.Cardano, message: "Mainnet only" });
         }
 
-        const { addCardanoVkeyWitnesses, decodeCardanoWitnessSet, getCardanoAddressFromBytes, getCardanoToolbox } =
-          await import("@swapkit/toolboxes/cardano");
-
-        const changeAddress = await api.getChangeAddress();
-        const address = changeAddress.startsWith("addr")
-          ? changeAddress
-          : await getCardanoAddressFromBytes(hex.decode(changeAddress));
-
-        const signer = {
-          address,
-          connect: () => Promise.resolve({ address }),
-          disconnect: () => Promise.resolve(),
-          getAddress: () => Promise.resolve(address),
-          signTransaction: async (transaction: string) =>
-            addCardanoVkeyWitnesses(transaction, await decodeCardanoWitnessSet(await api.signTx(transaction))),
-        };
-
-        return { ...getCardanoToolbox({ signer }), address };
+        return getCip30Toolbox(api, await api.getChangeAddress());
       })
       .with(Chain.Sui, () => getOkxSuiWallet())
       .with(Chain.Ton, () => getOkxTonWallet())
