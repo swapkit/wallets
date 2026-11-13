@@ -1,5 +1,15 @@
 # @swapkit/sdk
 
+## 5.1.6
+
+### Patch Changes
+
+- [#225](https://github.com/swapkit/wallets/pull/225) [`0a68bb8`](https://github.com/swapkit/wallets/commit/0a68bb8a45cc51bcb26ee69e27f962cd2a816830) Thanks [@robottheory](https://github.com/robottheory)! - Update SwapKit SDK dependencies:
+- [#226](https://github.com/swapkit/wallets/pull/226) [`9fcbd70`](https://github.com/swapkit/wallets/commit/9fcbd70282d11f94dc33967e98711450134fe383) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Bitget Wallet now connects Sui, TON and XRP, and every EVM chain it lists. Chains are connected one at a time, so a chain missing in the wallet is skipped instead of failing the whole connection. Cosmos is no longer offered with Bitget for now: the wallet refuses the Cosmos Hub connection request. Solana, Tron and XRP transactions are checked against what was requested before they are sent, so a transaction the wallet altered is rejected. (via @swapkit/wallets@6.3.0)
+- [#224](https://github.com/swapkit/wallets/pull/224) [`43b5a90`](https://github.com/swapkit/wallets/commit/43b5a90c0b56e62c0575a941f8dc04ba21e705ba) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Cardano browser wallets that follow CIP-30 (Lace, Eternl, Vespr, Yoroi, Typhon and others) can now connect, send and swap. `getCardanoWallets()` lists the wallets injected in the page and `connectCardano(chains, walletKey)` connects the chosen one under the new `WalletOption.CIP30`. Mainnet only; message signing is not available yet. (via @swapkit/wallets@6.3.0)
+- [#190](https://github.com/swapkit/wallets/pull/190) [`a74f087`](https://github.com/swapkit/wallets/commit/a74f08759992982d590ae7bf53b2c42993df1571) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects Sui. OKX does not inject a Sui provider on `window`, so it is found through the Wallet Standard as "OKX Wallet". (via @swapkit/wallets@6.3.0)
+- [#217](https://github.com/swapkit/wallets/pull/217) [`ae15331`](https://github.com/swapkit/wallets/commit/ae153315ab521da10aa33478d91f0fba5b4fbb43) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OneKey now connects Sui on mainnet. A Sui signature from OneKey is rejected if it covers a different transaction than the one requested. (via @swapkit/wallets@6.3.0)
+
 ## 5.1.5
 
 ### Patch Changes
