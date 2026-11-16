@@ -49,3 +49,14 @@ jobs:
       - run: bun type-check:ci
       - run: bun test
       - run: bun test --path-ignore-patterns= --preload ./packages/ui/src/react/__tests__/setup-dom.ts ./packages/ui
+
+  studio-nginx:
+    # Routing test for playgrounds/vite-lite/nginx.conf against the same nginx
+    # image the studio Dockerfile uses.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: playgrounds/vite-lite/nginx.test.sh
