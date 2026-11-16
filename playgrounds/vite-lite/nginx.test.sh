@@ -38,6 +38,7 @@ expect() {
   got_body=$(curl -sS -o - -w '\n%{http_code}' "http://127.0.0.1:$port$path")
   got_status=${got_body##*$'\n'}
   got_body=${got_body%$'\n'*}
+  got_body=${got_body%$'\n'} # fixture files end in a newline
   if [[ $got_status == "$status" && ($body == '*' || $got_body == "$body") ]]; then
     echo "ok   $path -> $got_status"
   else
