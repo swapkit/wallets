@@ -124,6 +124,7 @@
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/ui",
+  "private": true,
   "publishConfig": {
     "access": "public"
   },
