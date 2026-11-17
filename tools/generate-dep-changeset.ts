@@ -73,10 +73,14 @@ if (changed.size === 0) {
 }
 
 // 2. Which of THIS repo's packages depend on a changed dep → patch bump.
+//    Packages in the changesets `ignore` list are skipped: changesets rejects a
+//    changeset that names both ignored and released packages.
+const { ignore = [] } = (await Bun.file(".changeset/config.json").json()) as { ignore?: string[] };
+const ignored = ignore.map((pattern) => new Glob(pattern));
 const bumps = new Set<string>();
 for (const f of pkgFiles) {
   const json = (await Bun.file(f).json()) as Json;
-  if (!json.name) continue;
+  if (!json.name || ignored.some((g) => g.match(json.name as string))) continue;
   const deps = DEP_FIELDS.flatMap((field) => Object.keys(json[field] ?? {}));
   if (deps.some((d) => changed.has(d))) bumps.add(json.name);
 }
