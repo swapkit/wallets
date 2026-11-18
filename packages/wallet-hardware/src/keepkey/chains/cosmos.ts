@@ -7,6 +7,7 @@ import {
   derivationPathToString,
   GAIAConfig,
   getRPCUrl,
+  SwapKitError,
 } from "@swapkit/helpers";
 
 import { bip32ToAddressNList } from "../coins";
@@ -33,8 +34,15 @@ export async function cosmosWalletMethods({
     DEFAULT_COSMOS_FEE_MAINNET.amount[0].amount = String(await getFeeRateFromSwapKit(GAIAConfig.chainId, 500));
   }
 
-  // TODO support other cosmos assets
   const transfer = async ({ assetValue, recipient, memo }: GenericTransferParams) => {
+    if (!(assetValue.chain === Chain.Cosmos && assetValue.isGasAsset)) {
+      throw new SwapKitError("wallet_keepkey_method_not_supported", {
+        asset: assetValue.toString(),
+        chain: Chain.Cosmos,
+        reason: "KeepKey only transfers ATOM on Cosmos",
+      });
+    }
+
     const amount = assetValue.getBaseValue("string");
     const accountInfo = await toolbox.getAccount(fromAddress);
 
