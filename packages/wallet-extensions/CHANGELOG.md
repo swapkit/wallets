@@ -1,5 +1,26 @@
 # @swapkit-dev/wallet-extensions
 
+## 4.10.0
+
+### Minor Changes
+
+- [#226](https://github.com/swapkit/wallets/pull/226) [`9fcbd70`](https://github.com/swapkit/wallets/commit/9fcbd70282d11f94dc33967e98711450134fe383) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Bitget Wallet now connects Sui, TON and XRP, and every EVM chain it lists. Chains are connected one at a time, so a chain missing in the wallet is skipped instead of failing the whole connection. Cosmos is no longer offered with Bitget for now: the wallet refuses the Cosmos Hub connection request. Solana, Tron and XRP transactions are checked against what was requested before they are sent, so a transaction the wallet altered is rejected.
+
+- [#224](https://github.com/swapkit/wallets/pull/224) [`43b5a90`](https://github.com/swapkit/wallets/commit/43b5a90c0b56e62c0575a941f8dc04ba21e705ba) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Cardano browser wallets that follow CIP-30 (Lace, Eternl, Vespr, Yoroi, Typhon and others) can now connect, send and swap. `getCardanoWallets()` lists the wallets injected in the page and `connectCardano(chains, walletKey)` connects the chosen one under the new `WalletOption.CIP30`. Mainnet only; message signing is not available yet.
+
+- [#190](https://github.com/swapkit/wallets/pull/190) [`a74f087`](https://github.com/swapkit/wallets/commit/a74f08759992982d590ae7bf53b2c42993df1571) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OKX Wallet now connects Sui. OKX does not inject a Sui provider on `window`, so it is found through the Wallet Standard as "OKX Wallet".
+
+- [#217](https://github.com/swapkit/wallets/pull/217) [`ae15331`](https://github.com/swapkit/wallets/commit/ae153315ab521da10aa33478d91f0fba5b4fbb43) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - OneKey now connects Sui on mainnet. A Sui signature from OneKey is rejected if it covers a different transaction than the one requested.
+
+### Patch Changes
+
+- [#231](https://github.com/swapkit/wallets/pull/231) [`a76b6a6`](https://github.com/swapkit/wallets/commit/a76b6a60bc4dc936711098ce80760804686a0264) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - KeepKey on Cosmos and XRP, and OKX Wallet on Cosmos, now reject a transfer of a token they cannot send instead of sending the chain's native coin in its place. The error is thrown before the device or the wallet is asked to sign.
+
+- [#222](https://github.com/swapkit/wallets/pull/222) [`2b5bd20`](https://github.com/swapkit/wallets/commit/2b5bd207fd816a18e9fab13d0b899f58ce4a1d53) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#487](https://github.com/swapkit/sdk/pull/487) [`4c192c9`](https://github.com/swapkit/sdk/commit/4c192c939cb142989c13048f31fe681a15312020) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Zcash transactions now pay the ZIP-317 conventional fee instead of a per-byte rate. Coin selection, fee estimation and sweeps price inputs per logical action, so UTXOs worth more than their marginal cost are no longer dropped as uneconomical and payable wallets are no longer rejected. The marginal fee switches from 5,000 to 1,000 zats at mainnet height 3,590,000 (ZIP 2009). `accumulative` takes an optional `marginalFee` for Zcash and `calculateZcashFee` is exported so the API can share the same fee. `feeRate` and `FeeOption` have no effect on Zcash because ZIP-317 has no fee market; the conventional fee for the expected mining height is always paid. Other UTXO chains are unchanged. (via @swapkit/toolboxes@6.6.1)
+  - [#484](https://github.com/swapkit/sdk/pull/484) [`c03235b`](https://github.com/swapkit/sdk/commit/c03235b7a06fc3c71c67c0407a2c8c5159b4cb17) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update generated token lists. (via @swapkit/toolboxes@6.6.1)
+
 ## 4.9.0
 
 ### Minor Changes

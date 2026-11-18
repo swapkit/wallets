@@ -1,5 +1,14 @@
 # @swapkit-dev/wallet-mobile
 
+## 4.3.33
+
+### Patch Changes
+
+- [#222](https://github.com/swapkit/wallets/pull/222) [`2b5bd20`](https://github.com/swapkit/wallets/commit/2b5bd207fd816a18e9fab13d0b899f58ce4a1d53) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update SwapKit SDK dependencies:
+
+  - [#487](https://github.com/swapkit/sdk/pull/487) [`4c192c9`](https://github.com/swapkit/sdk/commit/4c192c939cb142989c13048f31fe681a15312020) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Zcash transactions now pay the ZIP-317 conventional fee instead of a per-byte rate. Coin selection, fee estimation and sweeps price inputs per logical action, so UTXOs worth more than their marginal cost are no longer dropped as uneconomical and payable wallets are no longer rejected. The marginal fee switches from 5,000 to 1,000 zats at mainnet height 3,590,000 (ZIP 2009). `accumulative` takes an optional `marginalFee` for Zcash and `calculateZcashFee` is exported so the API can share the same fee. `feeRate` and `FeeOption` have no effect on Zcash because ZIP-317 has no fee market; the conventional fee for the expected mining height is always paid. Other UTXO chains are unchanged. (via @swapkit/toolboxes@6.6.1)
+  - [#484](https://github.com/swapkit/sdk/pull/484) [`c03235b`](https://github.com/swapkit/sdk/commit/c03235b7a06fc3c71c67c0407a2c8c5159b4cb17) Thanks [@github-actions](https://github.com/apps/github-actions)! - Update generated token lists. (via @swapkit/toolboxes@6.6.1)
+
 ## 4.3.32
 
 ### Patch Changes
