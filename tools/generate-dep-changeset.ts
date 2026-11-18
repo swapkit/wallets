@@ -55,30 +55,38 @@ for await (const f of new Glob("packages/*/package.json").scan(".")) {
   if (name) workspace.add(name);
 }
 
-// 1. Per package: which of its own external @swapkit/* deps changed vs BASE_REF?
-//    A package that bumped one gets a patch. Packages new since BASE_REF and packages
-//    in the changesets `ignore` list are skipped (changesets rejects a changeset that
-//    names both ignored and released packages).
+// 1. Which external @swapkit/* deps changed vs BASE_REF?  name -> { old, new }
+const changed = new Map<string, { old: string; new: string }>();
+for (const f of pkgFiles) {
+  const current = externalSwapkitDeps((await Bun.file(f).json()) as Json, workspace);
+  const baseText = await gitShow(BASE_REF, f);
+  const base = baseText ? externalSwapkitDeps(JSON.parse(baseText) as Json, workspace) : {};
+  for (const [name, newV] of Object.entries(current)) {
+    const oldV = base[name] ?? "";
+    if (oldV !== newV) changed.set(name, { new: newV, old: oldV });
+  }
+}
+
+if (changed.size === 0) {
+  console.info(`No @swapkit/* dependency version changes vs ${BASE_REF} — nothing to generate.`);
+  process.exit(0);
+}
+
+// 2. Which of THIS repo's packages depend on a changed dep → patch bump.
+//    Packages in the changesets `ignore` list are skipped: changesets rejects a
+//    changeset that names both ignored and released packages.
 const { ignore = [] } = (await Bun.file(".changeset/config.json").json()) as { ignore?: string[] };
 const ignored = ignore.map((pattern) => new Glob(pattern));
-const changed = new Map<string, { old: string; new: string }>();
 const bumps = new Set<string>();
 for (const f of pkgFiles) {
   const json = (await Bun.file(f).json()) as Json;
   if (!json.name || ignored.some((g) => g.match(json.name as string))) continue;
-  const baseText = await gitShow(BASE_REF, f);
-  if (!baseText) continue;
-  const base = externalSwapkitDeps(JSON.parse(baseText) as Json, workspace);
-  for (const [name, newV] of Object.entries(externalSwapkitDeps(json, workspace))) {
-    const oldV = base[name] ?? "";
-    if (oldV === newV) continue;
-    changed.set(name, { new: newV, old: oldV });
-    bumps.add(json.name);
-  }
+  const deps = DEP_FIELDS.flatMap((field) => Object.keys(json[field] ?? {}));
+  if (deps.some((d) => changed.has(d))) bumps.add(json.name);
 }
 
 if (bumps.size === 0) {
-  console.info(`No @swapkit/* dependency version changes vs ${BASE_REF} — nothing to generate.`);
+  console.info("No workspace packages depend on the changed deps — nothing to generate.");
   process.exit(0);
 }
 
