@@ -1,5 +1,6 @@
 import { hex } from "@scure/base";
 import {
+  type AssetValue,
   Chain,
   type EVMChain,
   type GenericTransferParams,
@@ -20,9 +21,22 @@ type OkxEvmProvider = Eip1193Provider & {
   send?: (method: string, params: unknown[]) => Promise<{ result?: string[] } | string[]>;
 };
 
+function getCosmosDenom(assetValue: AssetValue) {
+  if (assetValue.chain === Chain.Cosmos && assetValue.isGasAsset) return "uatom";
+  if (assetValue.chain === Chain.Cosmos && assetValue.symbol === "MUON") return "umuon";
+
+  throw new SwapKitError("wallet_okx_chain_not_supported", {
+    asset: assetValue.toString(),
+    chain: Chain.Cosmos,
+    reason: "OKX Wallet only transfers ATOM and MUON on Cosmos",
+  });
+}
+
 const cosmosTransfer =
   (sender: string) =>
   async ({ recipient, assetValue, memo }: GenericTransferParams) => {
+    const denom = getCosmosDenom(assetValue);
+
     if (!(window.okxwallet && "keplr" in window.okxwallet)) {
       throw new SwapKitError("wallet_okx_not_found", { chain: Chain.Cosmos });
     }
@@ -34,7 +48,6 @@ const cosmosTransfer =
     const rpcUrl = await getRPCUrl(Chain.Cosmos);
     const cosmJS = await createSigningStargateClient(rpcUrl, offlineSigner);
 
-    const denom = assetValue?.symbol === "MUON" ? "umuon" : "uatom";
     const coins = [{ amount: assetValue.getBaseValue("string"), denom }];
 
     const { transactionHash } = await cosmJS.sendTokens(

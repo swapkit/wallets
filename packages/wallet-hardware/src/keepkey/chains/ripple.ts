@@ -5,6 +5,7 @@ import {
   type DerivationPathArray,
   derivationPathToString,
   type GenericTransferParams,
+  SwapKitError,
 } from "@swapkit/helpers";
 import { getRippleToolbox } from "@swapkit/toolboxes/ripple";
 import { bip32ToAddressNList } from "../coins";
@@ -37,6 +38,14 @@ export const rippleWalletMethods = async ({
   const toolbox = await getRippleToolbox({ signer });
 
   const transfer = async ({ recipient, assetValue, memo }: GenericTransferParams) => {
+    if (!(assetValue.chain === Chain.Ripple && assetValue.isGasAsset)) {
+      throw new SwapKitError("wallet_keepkey_method_not_supported", {
+        asset: assetValue.toString(),
+        chain: Chain.Ripple,
+        reason: "KeepKey only signs native XRP payments",
+      });
+    }
+
     // Build XRPL Payment tx using toolbox helper
     const tx = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address });
 

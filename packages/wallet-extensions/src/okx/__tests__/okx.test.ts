@@ -1,5 +1,5 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { bech32, hex } from "@scure/base";
 import { AssetValue, Chain } from "@swapkit/helpers";
 import { Address, beginCell } from "@ton/core";
@@ -242,5 +242,93 @@ describe("OKX TON", () => {
 
     await expect(sweep).rejects.toThrow("core_swap_invalid_params");
     expect(requests).toHaveLength(0);
+  });
+});
+
+describe("OKX Cosmos", () => {
+  const COSMOS_ADDRESS = "cosmos1okx";
+  const RECIPIENT = "cosmos1recipient";
+  const refusal = new Error("User rejected the request");
+  let fetchSpy: ReturnType<typeof spyOn>;
+
+  function encodeAccountResponse() {
+    const field = (tag, bytes) => [tag, bytes.length, ...bytes];
+    const text = (value) => new TextEncoder().encode(value);
+    const baseAccount = Uint8Array.from([...field(0x0a, text(COSMOS_ADDRESS)), 0x18, 17, 0x20, 4]);
+    const account = Uint8Array.from([
+      ...field(0x0a, text("/cosmos.auth.v1beta1.BaseAccount")),
+      ...field(0x12, baseAccount),
+    ]);
+    return Buffer.from(field(0x0a, account)).toString("base64");
+  }
+
+  function mockCosmosNode(_input, init) {
+    if (!init?.body) return Promise.resolve(Response.json([]));
+
+    const { id, method } = JSON.parse(String(init.body));
+    const result =
+      method === "abci_query"
+        ? { response: { code: 0, height: "1", value: encodeAccountResponse() } }
+        : { node_info: { network: "cosmoshub-4" }, sync_info: { latest_block_height: "1" } };
+    return Promise.resolve(Response.json({ id, jsonrpc: "2.0", result }));
+  }
+
+  function mockKeplr(signRequests) {
+    const signer = {
+      getAccounts: async () => [{ address: COSMOS_ADDRESS, algo: "secp256k1", pubkey: new Uint8Array(33).fill(2) }],
+      signAmino: (signerAddress, signDoc) => {
+        signRequests.push({ signDoc, signerAddress });
+        return Promise.reject(refusal);
+      },
+    };
+    globalThis.window = { okxwallet: { keplr: { enable: async () => {}, getOfflineSignerOnlyAmino: () => signer } } };
+  }
+
+  beforeEach(() => {
+    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(mockCosmosNode);
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  test("asks the wallet to sign the ATOM amount, recipient and memo it was given", async () => {
+    const signRequests = [];
+    mockKeplr(signRequests);
+
+    const wallet = await getWalletMethods(Chain.Cosmos);
+    const transfer = wallet.transfer({
+      assetValue: AssetValue.from({ chain: Chain.Cosmos, value: "0.1" }),
+      memo: "okx transfer",
+      recipient: RECIPIENT,
+    });
+
+    await expect(transfer).rejects.toBe(refusal);
+    expect(signRequests).toHaveLength(1);
+    expect(signRequests[0].signerAddress).toBe(COSMOS_ADDRESS);
+    expect(signRequests[0].signDoc.memo).toBe("okx transfer");
+    expect(signRequests[0].signDoc.msgs).toEqual([
+      {
+        type: "cosmos-sdk/MsgSend",
+        value: { amount: [{ amount: "100000", denom: "uatom" }], from_address: COSMOS_ADDRESS, to_address: RECIPIENT },
+      },
+    ]);
+  });
+
+  test("rejects a non-ATOM asset before reaching the wallet", async () => {
+    const signRequests = [];
+    mockKeplr(signRequests);
+
+    const wallet = await getWalletMethods(Chain.Cosmos);
+    fetchSpy.mockClear();
+    const transfer = wallet.transfer({
+      assetValue: AssetValue.from({ asset: "GAIA.KUJI", value: "0.1" }),
+      memo: "okx transfer",
+      recipient: RECIPIENT,
+    });
+
+    await expect(transfer).rejects.toThrow("wallet_okx_chain_not_supported");
+    expect(signRequests).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
