@@ -132,22 +132,29 @@ for (const [name, changelogPath] of changelogs) {
 
   const kept = enriched.slice(0, MAX_BULLETS);
   const overflow = enriched.length - kept.length;
-  const block = [
-    ...section.realBullets,
+  const viaBullets = [
     ...kept.map((item) => `- ${item.text} (via ${item.via})`),
     ...(overflow > 0 ? [`- ...and ${overflow} more dependency change${overflow > 1 ? "s" : ""}`] : []),
   ];
 
+  // Keep the section as changesets wrote it (headings, nested lists) minus the
+  // "Updated dependencies" block, and append the resolved bullets at its end.
   const lines = (await Bun.file(changelogPath).text()).split("\n");
-  const headerIdx = lines.findIndex(
-    (line, index) => index > section.start && index < section.end && /^### /.test(line),
-  );
-  if (headerIdx < 0) {
-    console.warn(`no changelog change-type heading found for ${name}@${section.version}`);
-    continue;
+  const body: string[] = [];
+  let inDepBlock = false;
+  for (const line of lines.slice(section.start + 1, section.end)) {
+    if (/^- Updated dependencies/.test(line)) {
+      inDepBlock = true;
+      continue;
+    }
+    if (inDepBlock && /^\s+- /.test(line)) continue;
+    if (line.trim() !== "") inDepBlock = false;
+    body.push(line);
   }
+  while (body.length > 0 && body[body.length - 1]?.trim() === "") body.pop();
 
-  const rebuilt = [...lines.slice(0, headerIdx + 1), "", ...block, "", ...lines.slice(section.end)].join("\n");
+  const block = [...body, ...viaBullets];
+  const rebuilt = [...lines.slice(0, section.start + 1), ...block, "", ...lines.slice(section.end)].join("\n");
 
   if (DRY_RUN) {
     console.info(`\n=== ${name} @ ${section.version} ===\n${block.join("\n")}`);
