@@ -41,7 +41,7 @@ export async function utxoWalletMethods({
   derivationPath,
 }: {
   sdk: KeepKeySdk;
-  chain: Exclude<UTXOChain, typeof Chain.Zcash>;
+  chain: Exclude<UTXOChain, typeof Chain.Pearl | typeof Chain.Zcash>;
   derivationPath?: DerivationPathArray;
 }): Promise<KeepKeyUTXOWalletMethods> {
   const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");

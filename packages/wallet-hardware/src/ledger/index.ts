@@ -73,7 +73,7 @@ interface WalletMethodsParams<C extends Chain = Chain> extends ConnectLedgerOpti
 }
 
 interface LedgerAccountXpubParams {
-  chain: UTXOChain;
+  chain: LedgerUTXOChain;
   path: string;
   signer: UTXOLedgerClient;
   xpubVersion: number;
@@ -126,6 +126,8 @@ const LEDGER_UTXO_CHAINS = [
   Chain.Litecoin,
   Chain.Zcash,
 ] as const satisfies readonly UTXOChain[];
+
+type LedgerUTXOChain = (typeof LEDGER_UTXO_CHAINS)[number];
 
 const LEDGER_EVM_CHAINS = [
   Chain.Ethereum,
@@ -266,7 +268,7 @@ export async function getLedgerExtendedPublicKey(
     throw new SwapKitError("wallet_chain_not_supported", { chain, wallet: WalletOption.LEDGER });
   }
 
-  const utxoChain = chain as UTXOChain;
+  const utxoChain = chain as LedgerUTXOChain;
   const signer = await getLedgerClient({
     chain: utxoChain,
     derivationPath,
@@ -294,7 +296,7 @@ async function getUTXOWalletMethods({
   derivationPath,
   onDeviceActionState,
   transport,
-}: WalletMethodsParams<UTXOChain>) {
+}: WalletMethodsParams<LedgerUTXOChain>) {
   const { getUtxoToolbox } = await import("@swapkit/toolboxes/utxo");
   const utxoChain = chain;
 

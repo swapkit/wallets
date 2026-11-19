@@ -448,7 +448,7 @@ async function resolveZcashInputAmounts(tx: ZcashTransaction): Promise<UTXOType[
     Array.from({ length: tx.inputsLength }, async (_, inputIndex) => {
       const input = tx.getInput(inputIndex);
       const hash = hexEncode.encode(input.txid);
-      if (input.value > 0n) return { hash, index: input.index, value: Number(input.value) };
+      if (input.value && input.value > 0n) return { hash, index: input.index, value: Number(input.value) };
 
       const previous = previousTransactions.get(hash) ?? zcashApi.getTransactionDetails(hash);
       previousTransactions.set(hash, previous);
