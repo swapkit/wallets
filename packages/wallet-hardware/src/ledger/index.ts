@@ -129,6 +129,10 @@ const LEDGER_UTXO_CHAINS = [
 
 type LedgerUTXOChain = (typeof LEDGER_UTXO_CHAINS)[number];
 
+function isLedgerUTXOChain(chain: Chain): chain is LedgerUTXOChain {
+  return (LEDGER_UTXO_CHAINS as readonly Chain[]).includes(chain);
+}
+
 const LEDGER_EVM_CHAINS = [
   Chain.Ethereum,
   Chain.Avalanche,
@@ -264,25 +268,18 @@ export async function getLedgerExtendedPublicKey(
     transport?: Transport;
   } = {},
 ): Promise<HardwareExtendedPublicKeyInfo | undefined> {
-  if (![Chain.BitcoinCash, Chain.Bitcoin, Chain.Dash, Chain.Dogecoin, Chain.Litecoin, Chain.Zcash].includes(chain)) {
+  if (!isLedgerUTXOChain(chain)) {
     throw new SwapKitError("wallet_chain_not_supported", { chain, wallet: WalletOption.LEDGER });
   }
 
-  const utxoChain = chain as LedgerUTXOChain;
-  const signer = await getLedgerClient({
-    chain: utxoChain,
-    derivationPath,
-    dmkSession,
-    onDeviceActionState,
-    transport,
-  });
+  const signer = await getLedgerClient({ chain, derivationPath, dmkSession, onDeviceActionState, transport });
   if (!signer.getExtendedPublicKey) return undefined;
 
-  const accountPath = getUTXOAccountPath({ accountIndex, chain: utxoChain, derivationPath });
+  const accountPath = getUTXOAccountPath({ accountIndex, chain, derivationPath });
   const path = derivationPathToString(accountPath);
-  const xpubVersion = getNetworkForChain(utxoChain).bip32.public;
+  const xpubVersion = getNetworkForChain(chain).bip32.public;
   try {
-    const xpub = await getLedgerAccountXpub({ chain: utxoChain, path, signer, xpubVersion });
+    const xpub = await getLedgerAccountXpub({ chain, path, signer, xpubVersion });
     return { accountIndex: getUTXOAccountIndexFromPath(accountPath), path, xpub };
   } finally {
     await (signer as { disconnect?: () => Promise<void> }).disconnect?.();
