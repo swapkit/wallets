@@ -72,6 +72,33 @@ describe("keystore UTXO script types", () => {
   });
 });
 
+describe("keystore Quantus", () => {
+  test("each signature scheme derives its own address", async () => {
+    const [mlDsa87, mlDsa65] = await Promise.all([
+      createKeystoreWallet({ chains: [Chain.Quantus], phrase: TEST_PHRASE }),
+      createKeystoreWallet({
+        chains: [Chain.Quantus],
+        derivationPathMapOrIndex: { [Chain.Quantus]: [44, 189189, 0, 0, 1] },
+        phrase: TEST_PHRASE,
+      }),
+    ]);
+
+    expect(mlDsa87[Chain.Quantus]?.address).toBeTruthy();
+    expect(mlDsa65[Chain.Quantus]?.address).toBeTruthy();
+    expect(mlDsa65[Chain.Quantus]?.address).not.toBe(mlDsa87[Chain.Quantus]?.address);
+  });
+
+  test("a scheme slot Quantus does not know fails the connect", async () => {
+    await expect(
+      createKeystoreWallet({
+        chains: [Chain.Quantus],
+        derivationPathMapOrIndex: { [Chain.Quantus]: [44, 189189, 0, 0, 2] },
+        phrase: TEST_PHRASE,
+      }),
+    ).rejects.toMatchObject({ errorKey: "toolbox_derivation_slot_unsupported" });
+  });
+});
+
 describe("keystore phrase generation", () => {
   test("defaults to 24 words and accepts every BIP39 length", () => {
     expect(generatePhrase().split(" ")).toHaveLength(24);
