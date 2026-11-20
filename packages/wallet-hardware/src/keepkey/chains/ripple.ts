@@ -4,10 +4,9 @@ import {
   DerivationPath,
   type DerivationPathArray,
   derivationPathToString,
-  type GenericTransferParams,
   SwapKitError,
 } from "@swapkit/helpers";
-import { getRippleToolbox } from "@swapkit/toolboxes/ripple";
+import { getRippleToolbox, type RippleTransferParams } from "@swapkit/toolboxes/ripple";
 import { bip32ToAddressNList } from "../coins";
 
 export const rippleWalletMethods = async ({
@@ -37,7 +36,7 @@ export const rippleWalletMethods = async ({
 
   const toolbox = await getRippleToolbox({ signer });
 
-  const transfer = async ({ recipient, assetValue, memo }: GenericTransferParams) => {
+  const transfer = async ({ recipient, assetValue, memo, destinationTag }: RippleTransferParams) => {
     if (!(assetValue.chain === Chain.Ripple && assetValue.isGasAsset)) {
       throw new SwapKitError("wallet_keepkey_method_not_supported", {
         asset: assetValue.toString(),
@@ -47,7 +46,7 @@ export const rippleWalletMethods = async ({
     }
 
     // Build XRPL Payment tx using toolbox helper
-    const tx = await toolbox.createTransaction({ assetValue, memo, recipient, sender: address });
+    const tx = await toolbox.createTransaction({ assetValue, destinationTag, memo, recipient, sender: address });
 
     // Convert toolbox Payment tx into KeepKey StdTx wrapper (KeepKey-specific format)
     const stdTx = {
@@ -72,7 +71,8 @@ export const rippleWalletMethods = async ({
       payment: {
         amount: tx.Amount,
         destination: tx.Destination,
-        destinationTag: (tx.DestinationTag ?? "0").toString(),
+        // The KeepKey API requires a tag, so an untagged payment still sends "0".
+        destinationTag: (tx.DestinationTag ?? 0).toString(),
       },
       sequence: (tx.Sequence ?? 0).toString(),
       tx: stdTx,
