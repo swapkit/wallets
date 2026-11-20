@@ -1,18 +1,15 @@
 import {
-  ACCOUNT_INDEXED_CHAINS,
   type AssetValue,
   Chain,
   CosmosChains,
   type DerivationPathArray,
+  type EVMChain,
   EVMChains,
   filterSupportedChains,
-  getUTXOScriptTypeForPath,
-  NetworkDerivationPath,
   SwapKitError,
   type UTXOChain,
   UTXOChains,
   type UTXOScriptType,
-  updateDerivationPath,
   WalletOption,
 } from "@swapkit/helpers";
 import type { DerivedAddress, ExtendedPublicKeyResult, FullWallet, HDWalletAccountParams } from "@swapkit/toolboxes";
@@ -41,12 +38,31 @@ export type KeystoreDerivationPathMap = {
 };
 export type KeystoreDerivationPathMapOrIndex = KeystoreDerivationPathMap | number;
 
-function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | undefined) {
-  if (!entry) return { derivationPath: undefined, scriptType: undefined };
+function readChainDerivation<C extends Chain>(chain: C, entry: KeystoreChainDerivation | undefined) {
+  // Only an absent entry means the default path; 0, "", false and null are mistakes.
+  if (entry === undefined) return { chain, derivationPath: undefined, scriptType: undefined };
 
   const isUTXO = UTXOChains.includes(chain as UTXOChain);
-  const derivationPath = "derivationPath" in entry ? entry.derivationPath : entry;
-  const scriptType = "scriptType" in entry ? entry.scriptType : undefined;
+  // `in` on a primitive or null throws a TypeError that names no chain.
+  const isObjectEntry = typeof entry === "object" && entry !== null;
+  const derivationPath = isObjectEntry && "derivationPath" in entry ? entry.derivationPath : entry;
+  const scriptType = isObjectEntry && "scriptType" in entry ? entry.scriptType : undefined;
+
+  if (!Array.isArray(derivationPath)) {
+    throw isUTXO
+      ? new SwapKitError("toolbox_utxo_invalid_params", {
+          chain,
+          entry,
+          error: `${chain}: a UTXO derivation entry must state its path as an array: { derivationPath, scriptType }.`,
+        })
+      : new SwapKitError("wallet_missing_params", {
+          chain,
+          entry,
+          error: `${chain}: a derivation entry must be a path array or { derivationPath: number[] }.`,
+          param: "derivationPath",
+          wallet: WalletOption.KEYSTORE,
+        });
+  }
 
   if (isUTXO && !scriptType) {
     throw new SwapKitError("toolbox_utxo_invalid_params", {
@@ -57,10 +73,8 @@ function readChainDerivation(chain: Chain, entry: KeystoreChainDerivation | unde
     });
   }
 
-  return { derivationPath, scriptType: isUTXO ? scriptType : undefined };
+  return { chain, derivationPath, scriptType: isUTXO ? scriptType : undefined };
 }
-
-const deterministicErrorKeys = new Set(["toolbox_utxo_unsupported_script_type", "toolbox_utxo_invalid_params"]);
 
 type UTXOToolboxWithHD = {
   deriveAddressAtIndex: (
@@ -129,6 +143,24 @@ async function createHDWalletMethods(chain: UTXOChain, toolbox: UTXOToolboxWithH
   return { deriveAddresses, getAggregatedBalance, getAggregatedUtxos, scanForAddresses };
 }
 
+const keystoreSupportedChains = [
+  ...EVMChains,
+  ...UTXOChains,
+  ...CosmosChains.filter((chain) => chain !== Chain.Harbor),
+  Chain.Aleo,
+  Chain.Aptos,
+  Chain.Cardano,
+  Chain.Ripple,
+  Chain.Solana,
+  Chain.Stellar,
+  Chain.Sui,
+  Chain.Ton,
+  Chain.Tron,
+  Chain.Near,
+  Chain.Hype,
+  Chain.Quantus,
+] as const;
+
 export const keystoreWallet = createWallet({
   connect: ({ addChain }) =>
     async function connectKeystore(
@@ -155,41 +187,17 @@ export const keystoreWallet = createWallet({
       return true;
     },
   name: "connectKeystore",
-  signingSupport: {
-    ...Object.fromEntries(EVMChains.map((chain) => [chain, { direct: true, typedData: true }])),
-    ...Object.fromEntries(UTXOChains.map((chain) => [chain, { direct: true }])),
-    [Chain.Bitcoin]: { btcMessage: true, direct: true },
-    ...Object.fromEntries(
-      CosmosChains.filter((chain) => chain !== Chain.Harbor).map((chain) => [chain, { direct: true }]),
-    ),
-    [Chain.Aleo]: { direct: true },
-    [Chain.Aptos]: { direct: true },
-    [Chain.Cardano]: { direct: true },
-    [Chain.Hype]: { direct: true },
-    [Chain.Near]: { direct: true },
-    [Chain.Ripple]: { direct: true },
-    [Chain.Solana]: { direct: true },
-    [Chain.Stellar]: { direct: true },
-    [Chain.Sui]: { direct: true },
-    [Chain.Ton]: { direct: true },
-    [Chain.Tron]: { direct: true },
-  },
-  supportedChains: [
-    ...EVMChains,
-    ...UTXOChains,
-    ...CosmosChains.filter((chain) => chain !== Chain.Harbor),
-    Chain.Aleo,
-    Chain.Aptos,
-    Chain.Cardano,
-    Chain.Hype,
-    Chain.Ripple,
-    Chain.Solana,
-    Chain.Stellar,
-    Chain.Sui,
-    Chain.Ton,
-    Chain.Tron,
-    Chain.Near,
-  ],
+  signingSupport: Object.fromEntries(
+    keystoreSupportedChains.map((chain) => [
+      chain,
+      EVMChains.includes(chain as EVMChain)
+        ? { direct: true, typedData: true }
+        : chain === Chain.Bitcoin
+          ? { btcMessage: true, direct: true }
+          : { direct: true },
+    ]),
+  ),
+  supportedChains: [...keystoreSupportedChains],
   walletType: WalletOption.KEYSTORE,
 });
 
@@ -204,46 +212,56 @@ export async function createKeystoreWallet<T extends Chain[]>({
   phrase: string;
   derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex;
 }) {
+  if (typeof phrase !== "string" || !phrase.trim()) {
+    throw new SwapKitError("wallet_missing_params", { param: "phrase", wallet: WalletOption.KEYSTORE });
+  }
+
   const supportedChains = filterSupportedChains({
     chains,
     supportedChains: KEYSTORE_SUPPORTED_CHAINS,
     walletType: WalletOption.KEYSTORE,
   });
 
-  const walletIndex = typeof derivationPathMapOrIndex === "number" ? derivationPathMapOrIndex : 0;
+  const walletIndex =
+    derivationPathMapOrIndex === undefined || typeof derivationPathMapOrIndex === "object"
+      ? 0
+      : derivationPathMapOrIndex;
+
+  // Chains disagree on a NaN, negative or fractional index: some derive an address no other wallet
+  // reproduces, others read NaN as wallet 0.
+  if (!Number.isSafeInteger(walletIndex) || walletIndex < 0) {
+    throw new SwapKitError("wallet_missing_params", {
+      error: "derivationPathMapOrIndex must be a non-negative integer wallet index or a derivation path map.",
+      param: "derivationPathMapOrIndex",
+      value: String(derivationPathMapOrIndex),
+      wallet: WalletOption.KEYSTORE,
+    });
+  }
+
+  const derivationMap =
+    derivationPathMapOrIndex && typeof derivationPathMapOrIndex === "object" ? derivationPathMapOrIndex : undefined;
+  // Only a connect with a UTXO chain loads the UTXO toolbox, which that chain needs anyway.
+  const utxo = supportedChains.some((chain) => UTXOChains.includes(chain as UTXOChain))
+    ? await import("@swapkit/toolboxes/utxo")
+    : undefined;
+
+  // Configuration errors recur on every connect, so they fail the whole connect in chain order before
+  // anything connects; a chain that fails later for an environmental reason is skipped and logged.
+  const derivations = supportedChains.map((chain) => {
+    const derivation = readChainDerivation(chain, derivationMap?.[chain] as KeystoreChainDerivation | undefined);
+    if (derivation.scriptType) utxo?.assertScriptTypeSupported(chain as UTXOChain, derivation.scriptType);
+    return derivation;
+  });
+
   const walletResults = await Promise.allSettled(
-    supportedChains.map(async (chain) => {
+    derivations.map(async ({ chain, derivationPath, scriptType }) => {
       const { getToolbox } = await import("@swapkit/toolboxes");
 
-      const { derivationPath: derivationPathFromMap, scriptType } = readChainDerivation(
-        chain,
-        derivationPathMapOrIndex && typeof derivationPathMapOrIndex === "object"
-          ? (derivationPathMapOrIndex[chain] as KeystoreChainDerivation | undefined)
-          : undefined,
-      );
-
-      const slicedPath: readonly (number | undefined)[] = NetworkDerivationPath[chain].slice(
-        0,
-        chain === Chain.Solana || chain === Chain.Aleo ? 4 : 5,
-      );
-      const derivationArrayToUpdate = slicedPath as DerivationPathArray;
-
-      const derivationSlots = ACCOUNT_INDEXED_CHAINS.includes(chain)
-        ? { account: walletIndex }
-        : { index: walletIndex };
-
-      const derivationPath: DerivationPathArray =
-        derivationPathFromMap || updateDerivationPath(derivationArrayToUpdate, derivationSlots);
-
-      const resolvedScriptType = UTXOChains.includes(chain as UTXOChain)
-        ? (scriptType ?? getUTXOScriptTypeForPath(derivationPath))
-        : undefined;
-
-      const toolbox = await getToolbox(chain, {
-        derivationPath,
-        phrase,
-        ...(resolvedScriptType ? { scriptType: resolvedScriptType } : {}),
-      });
+      // Toolboxes must never receive path and index together; without a path each derives its own default.
+      const toolboxParams = derivationPath
+        ? { derivationPath, phrase, ...(scriptType ? { scriptType } : {}) }
+        : { index: walletIndex, phrase };
+      const toolbox = await getToolbox(chain, toolboxParams as Parameters<typeof getToolbox>[1]);
       const address = (await toolbox.getAddress()) || "";
 
       const hdWalletMethods =
@@ -265,12 +283,7 @@ export async function createKeystoreWallet<T extends Chain[]>({
   for (const [index, result] of walletResults.entries()) {
     if (result.status !== "rejected") continue;
 
-    const errorKey = (result.reason as { errorKey?: string } | undefined)?.errorKey;
-    if (errorKey && deterministicErrorKeys.has(errorKey)) {
-      throw result.reason;
-    }
-
-    console.error(`connectKeystore: skipping ${supportedChains[index]} — failed to connect`, result.reason);
+    console.error(`connectKeystore: skipping ${derivations[index]?.chain} — failed to connect`, result.reason);
   }
 
   return wallets.reduce(
