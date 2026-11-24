@@ -10,7 +10,7 @@
  * - NEAR API JS types
  */
 
-import type { PublicKey } from "@near-js/crypto";
+import type { PublicKey } from "near-api-js";
 
 /**
  * Transaction action types supported by NEAR

@@ -1,11 +1,10 @@
 // @ts-nocheck - Test file with intentional mocking of browser globals
 import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { KeyPair } from "@near-js/crypto";
-import { actionCreators, createTransaction } from "@near-js/transactions";
 import { base64 } from "@scure/base";
 import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { Chain, SKConfig } from "@swapkit/helpers";
+import { actions, createTransaction, KeyPair } from "near-api-js";
 
 import { getWalletMethods } from "../helpers";
 import { onekeyWallet } from "../index";
@@ -179,7 +178,7 @@ describe("OneKey Near signer", () => {
       keyPair.getPublicKey(),
       "bob.near",
       1n,
-      [actionCreators.transfer(1n)],
+      [actions.transfer(1n)],
       new Uint8Array(32),
     );
     const requests = [];

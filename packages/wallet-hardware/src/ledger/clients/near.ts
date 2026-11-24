@@ -1,9 +1,9 @@
 import type { UserInteractionRequired } from "@ledgerhq/device-management-kit";
 import type Near from "@ledgerhq/hw-app-near";
 import type Transport from "@ledgerhq/hw-transport";
-import type { SignedTransaction, Transaction } from "@near-js/transactions";
 import { Chain, type DerivationPathArray, NetworkDerivationPath, SwapKitError } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
+import type { Transaction } from "near-api-js";
 
 import {
   LEDGER_USER_INTERACTION_REQUIRED,
@@ -40,36 +40,30 @@ export async function getNearLedgerClient(
 
   const { address, publicKey } = await runNearOperation({ operation: (app) => app.getAddress(path) });
 
-  const signer = {
+  const signer: NearSigner = {
     getAddress() {
       return Promise.resolve(address);
     },
     async getPublicKey() {
-      const { PublicKey } = await import("@near-js/crypto");
+      const { PublicKey } = await import("near-api-js");
       const encodedPublicKey = publicKey.startsWith("ed25519:") ? publicKey : `ed25519:${publicKey}`;
       return PublicKey.fromString(encodedPublicKey);
     },
 
-    signDelegateAction(_delegateAction: unknown) {
+    signDelegateAction() {
       return Promise.reject(
         new SwapKitError("wallet_ledger_method_not_supported", { method: "signDelegateAction", wallet: "Ledger" }),
       );
     },
 
-    signNep413Message(
-      _message: string,
-      _accountId: string,
-      _recipient: string,
-      _nonce: Uint8Array,
-      _callbackUrl?: string,
-    ) {
+    signNep413Message() {
       return Promise.reject(
         new SwapKitError("wallet_ledger_method_not_supported", { method: "signNep413Message", wallet: "Ledger" }),
       );
     },
 
     async signTransaction(transaction: Transaction) {
-      const { Signature, SignedTransaction } = await import("@near-js/transactions");
+      const { KeyType, Signature, SignedTransaction } = await import("near-api-js");
       try {
         const signatureArray = await runNearOperation({
           operation: (app) => app.signTransaction(transaction.encode(), path),
@@ -79,10 +73,10 @@ export async function getNearLedgerClient(
           throw new SwapKitError("wallet_ledger_signing_error", { reason: "Ledger returned no NEAR signature" });
         }
 
-        const signature = new Signature({ data: signatureArray, keyType: 0 });
+        const signature = new Signature({ data: signatureArray, keyType: KeyType.ED25519 });
         const signedTransaction = new SignedTransaction({ signature, transaction });
 
-        return [signatureArray, signedTransaction] as [Uint8Array<ArrayBufferLike>, SignedTransaction];
+        return [signatureArray, signedTransaction];
       } catch (error) {
         if (error instanceof SwapKitError) throw error;
         throw new SwapKitError("wallet_ledger_signing_error", { error });
@@ -90,5 +84,5 @@ export async function getNearLedgerClient(
     },
   };
 
-  return signer as NearSigner;
+  return signer;
 }

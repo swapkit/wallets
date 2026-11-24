@@ -1,11 +1,40 @@
 import type { Wallet, WalletModuleFactory } from "@near-wallet-selector/core";
 import "@near-wallet-selector/modal-ui-js/styles.css";
-import type { Transaction } from "@near-js/transactions";
 import { Chain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
-import { getNearToolbox } from "@swapkit/toolboxes/near";
+import { getNearToolbox, type NearSigner } from "@swapkit/toolboxes/near";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { Transaction } from "near-api-js";
 
-function createNearSigner(wallet: Wallet) {
+// Wallet Selector 10 signs @near-js 2.x transactions, so near-api-js 7 transactions cross over as borsh bytes.
+// A transaction the 2.x schema cannot carry byte for byte is refused rather than signed in an altered form.
+async function toWalletSelectorTransaction(transaction: Transaction) {
+  const [{ encodeTransaction }, { Transaction: WalletSelectorTransaction }] = await Promise.all([
+    import("near-api-js"),
+    import("@near-js/transactions"),
+  ]);
+  const bytes = encodeTransaction(transaction);
+
+  try {
+    const walletSelectorTransaction = WalletSelectorTransaction.decode(bytes);
+    const roundTrip = walletSelectorTransaction.encode();
+
+    if (roundTrip.length !== bytes.length || roundTrip.some((byte, index) => byte !== bytes[index])) {
+      throw new Error("The @near-js 2.x encoding differs from the near-api-js 7 encoding");
+    }
+
+    return walletSelectorTransaction;
+  } catch (error) {
+    throw new SwapKitError(
+      {
+        errorKey: "wallet_near_method_not_supported",
+        info: { reason: "Wallet Selector cannot sign this transaction", wallet: WalletOption.WALLET_SELECTOR },
+      },
+      error,
+    );
+  }
+}
+
+function createNearSigner(wallet: Wallet): NearSigner {
   return {
     getAddress: async () => {
       const accounts = await wallet.getAccounts();
@@ -21,8 +50,10 @@ function createNearSigner(wallet: Wallet) {
     getPublicKey: () => {
       throw new SwapKitError("wallet_near_method_not_supported");
     },
-    signAndSendTransactions: async (transactions: { transactions: Transaction[] }) => {
-      const result = await wallet.signAndSendTransactions(transactions);
+    signAndSendTransactions: async ({ transactions }: { transactions: Transaction[] }) => {
+      const result = await wallet.signAndSendTransactions({
+        transactions: await Promise.all(transactions.map(toWalletSelectorTransaction)),
+      });
       return result?.[0]?.transaction_outcome.id || "";
     },
 
@@ -34,11 +65,15 @@ function createNearSigner(wallet: Wallet) {
       throw new SwapKitError("wallet_near_method_not_supported");
     },
 
-    signTransaction: (params: Transaction) => {
+    signTransaction: async (transaction: Transaction) => {
       if (!wallet.signTransaction) {
         throw new SwapKitError("wallet_near_method_not_supported");
       }
-      return wallet.signTransaction(params);
+
+      const [hash, signedTransaction] = await wallet.signTransaction(await toWalletSelectorTransaction(transaction));
+      const { decodeSignedTransaction } = await import("near-api-js");
+
+      return [hash, decodeSignedTransaction(signedTransaction.encode())];
     },
   };
 }

@@ -1,9 +1,8 @@
 //TBD @towan to be moved somewhere else
 
-import type { Account } from "@near-js/accounts";
-import { type Action, SignedTransaction, type Transaction } from "@near-js/transactions";
 import { SwapKitError } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
+import type { Account, Action, Transaction } from "near-api-js";
 
 /**
  * NEAR Browser Wallet Provider Interface
@@ -40,7 +39,7 @@ export async function createNearSignerFromProvider(provider: NearBrowserWalletPr
     await provider.connect({ contractId: "swapkit", methodNames: ["transfer"] });
   }
 
-  const signer = {
+  const signer: NearSigner = {
     ...provider,
 
     async getAddress() {
@@ -60,7 +59,7 @@ export async function createNearSignerFromProvider(provider: NearBrowserWalletPr
       throw new SwapKitError("wallet_connection_rejected_by_user", { wallet: walletName });
     },
     async getPublicKey() {
-      const { PublicKey } = await import("@near-js/crypto");
+      const { PublicKey } = await import("near-api-js");
 
       if (provider.getPublicKey) {
         const pubKey = await provider.getPublicKey();
@@ -115,16 +114,14 @@ export async function createNearSignerFromProvider(provider: NearBrowserWalletPr
       // @ts-expect-error
       const result: any = await provider.requestSignTransactions({ transactions: [mappedTransaction] });
 
-      const signedTransaction = SignedTransaction.decode(Uint8Array.fromBase64(result.txs[0].signedTx));
+      const { decodeSignedTransaction } = await import("near-api-js");
+      const signedTransaction = decodeSignedTransaction(Uint8Array.fromBase64(result.txs[0].signedTx));
 
-      return [signedTransaction.signature.ed25519Signature?.data, signedTransaction] as [
-        Uint8Array<ArrayBufferLike>,
-        SignedTransaction,
-      ];
+      return [signedTransaction.signature.data, signedTransaction];
     },
   };
 
-  return signer as unknown as NearSigner;
+  return signer;
 }
 
 /**
