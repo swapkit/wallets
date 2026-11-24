@@ -1,5 +1,13 @@
 # @swapkit/sdk
 
+## 5.1.7
+
+### Patch Changes
+
+- [#234](https://github.com/swapkit/wallets/pull/234) [`0be5037`](https://github.com/swapkit/wallets/commit/0be5037635a7b22b654ecd042c8b93b78e065ad1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - Update SwapKit SDK dependencies:
+- [#234](https://github.com/swapkit/wallets/pull/234) [`0be5037`](https://github.com/swapkit/wallets/commit/0be5037635a7b22b654ecd042c8b93b78e065ad1) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - The keystore wallet can connect Quantus (QTC) with either of its signature schemes, ML-DSA-87 or ML-DSA-65. It now matches the SDK keystore: an empty phrase, an invalid wallet index or a malformed derivation entry fails the connect with a clear error, and a UTXO script type a chain cannot encode is rejected before any chain connects. (via @swapkit/wallets@6.4.0)
+- [#237](https://github.com/swapkit/wallets/pull/237) [`7c3a437`](https://github.com/swapkit/wallets/commit/7c3a4379fa5face6487f9b40fdb22303218bf715) Thanks [@hippocampusSK](https://github.com/hippocampusSK)! - KeepKey XRP sends now carry the destination tag passed to `transfer`. Before, the tag was dropped and every payment went out with tag 0, so a deposit to an exchange was not credited. (via @swapkit/wallets@6.4.0)
+
 ## 5.1.6
 
 ### Patch Changes
