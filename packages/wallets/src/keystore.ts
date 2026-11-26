@@ -13,7 +13,7 @@ import {
   WalletOption,
 } from "@swapkit/helpers";
 import type { DerivedAddress, ExtendedPublicKeyResult, FullWallet, HDWalletAccountParams } from "@swapkit/toolboxes";
-import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import { type ChainSigningSupport, createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
 
 export {
   decryptFromKeystore,
@@ -161,6 +161,33 @@ const keystoreSupportedChains = [
   Chain.Quantus,
 ] as const;
 
+const keystoreMessageChains: readonly Chain[] = [
+  Chain.Bitcoin,
+  Chain.BitcoinCash,
+  Chain.Dash,
+  Chain.Dogecoin,
+  Chain.Litecoin,
+  Chain.Solana,
+  Chain.Tron,
+];
+
+const keystoreSigningSupport: ChainSigningSupport = Object.fromEntries(
+  keystoreSupportedChains.map((chain) => [
+    chain,
+    {
+      direct: true,
+      ...(EVMChains.includes(chain as EVMChain) && { typedData: true }),
+      ...(keystoreMessageChains.includes(chain) && { message: true }),
+    },
+  ]),
+);
+
+// A declared message capability holds only when the connected toolbox can sign, e.g. not for a Taproot key.
+function getConnectedSigning({ chain, signMessage }: { chain: Chain; signMessage?: unknown }) {
+  const { message, ...signing } = keystoreSigningSupport[chain] ?? {};
+  return typeof signMessage === "function" && message ? { ...signing, message } : signing;
+}
+
 export const keystoreWallet = createWallet({
   connect: ({ addChain }) =>
     async function connectKeystore(
@@ -169,34 +196,20 @@ export const keystoreWallet = createWallet({
       derivationPathMapOrIndex?: KeystoreDerivationPathMapOrIndex,
     ) {
       const wallets = await createKeystoreWallet({ chains, derivationPathMapOrIndex, phrase });
-      const bitcoinScriptType = wallets[Chain.Bitcoin]?.scriptType;
-      const bitcoinSigning =
-        bitcoinScriptType && !(await import("@swapkit/toolboxes/utxo")).canSignBitcoinMessage(bitcoinScriptType)
-          ? { direct: true }
-          : undefined;
 
       for (const wallet of Object.values(wallets)) {
         addChain({
           ...wallet,
           chain: wallet.chain,
+          signing: getConnectedSigning(wallet),
           walletType: WalletOption.KEYSTORE,
-          ...(wallet.chain === Chain.Bitcoin && bitcoinSigning ? { signing: bitcoinSigning } : {}),
         });
       }
 
       return true;
     },
   name: "connectKeystore",
-  signingSupport: Object.fromEntries(
-    keystoreSupportedChains.map((chain) => [
-      chain,
-      EVMChains.includes(chain as EVMChain)
-        ? { direct: true, typedData: true }
-        : chain === Chain.Bitcoin
-          ? { btcMessage: true, direct: true }
-          : { direct: true },
-    ]),
-  ),
+  signingSupport: keystoreSigningSupport,
   supportedChains: [...keystoreSupportedChains],
   walletType: WalletOption.KEYSTORE,
 });
