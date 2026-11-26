@@ -5,6 +5,7 @@ import {
   DerivationPath,
   type DerivationPathArray,
   derivationPathToString,
+  FeeOption,
   GAIAConfig,
   getRPCUrl,
   SwapKitError,
@@ -19,9 +20,7 @@ export async function cosmosWalletMethods({
   sdk: KeepKeySdk;
   derivationPath?: DerivationPathArray;
 }): Promise<any> {
-  const { DEFAULT_COSMOS_FEE_MAINNET, getCosmosToolbox, getFeeRateFromSwapKit, createStargateClient } = await import(
-    "@swapkit/toolboxes/cosmos"
-  );
+  const { getCosmosToolbox, getDefaultChainFee, createStargateClient } = await import("@swapkit/toolboxes/cosmos");
   const derivationPathString = derivationPath ? derivationPathToString(derivationPath) : `${DerivationPath.GAIA}/0`;
 
   const { address: fromAddress } = (await sdk.address.cosmosGetAddress({
@@ -30,11 +29,13 @@ export async function cosmosWalletMethods({
 
   const toolbox = await getCosmosToolbox(Chain.Cosmos);
 
-  if (DEFAULT_COSMOS_FEE_MAINNET.amount[0]) {
-    DEFAULT_COSMOS_FEE_MAINNET.amount[0].amount = String(await getFeeRateFromSwapKit(GAIAConfig.chainId, 500));
-  }
-
-  const transfer = async ({ assetValue, recipient, memo }: GenericTransferParams) => {
+  const transfer = async ({
+    assetValue,
+    recipient,
+    memo,
+    feeRate,
+    feeOptionKey = FeeOption.Fast,
+  }: GenericTransferParams) => {
     if (!(assetValue.chain === Chain.Cosmos && assetValue.isGasAsset)) {
       throw new SwapKitError("wallet_keepkey_method_not_supported", {
         asset: assetValue.toString(),
@@ -45,12 +46,15 @@ export async function cosmosWalletMethods({
 
     const amount = assetValue.getBaseValue("string");
     const accountInfo = await toolbox.getAccount(fromAddress);
+    // Pays what the toolbox's own transfer pays: the given fee, else the fee for the chosen option.
+    const feeAmount = feeRate ? String(feeRate) : (await toolbox.getFees())[feeOptionKey].getBaseValue("string");
 
     const keepKeySignedTx = await sdk.cosmos.cosmosSignAmino({
       signDoc: {
         account_number: accountInfo?.accountNumber.toString() ?? "",
         chain_id: GAIAConfig.chainId,
-        fee: DEFAULT_COSMOS_FEE_MAINNET,
+        // A new object per transfer: the toolbox's default fee objects are shared with every other Cosmos wallet.
+        fee: { amount: [{ amount: feeAmount, denom: "uatom" }], gas: getDefaultChainFee(Chain.Cosmos).gas },
         memo: memo || "",
         msgs: [
           {
