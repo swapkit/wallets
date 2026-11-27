@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   ApduResponse,
   DeviceActionStatus,
@@ -8,8 +9,17 @@ import {
   UserInteractionRequired,
 } from "@ledgerhq/device-management-kit";
 import Transport from "@ledgerhq/hw-transport";
-import type { Transaction as NearTransaction } from "@near-js/transactions";
+import { normalizeSignResult } from "@swapkit/toolboxes/near";
 import type { TronTransaction } from "@swapkit/toolboxes/tron";
+import {
+  actions,
+  createTransaction,
+  decodeSignedTransaction,
+  encodeTransaction,
+  KeyType,
+  type Transaction as NearTransaction,
+  SignedTransaction,
+} from "near-api-js";
 import { decode } from "ripple-binary-codec";
 import { from } from "rxjs";
 import type { Payment } from "xrpl";
@@ -148,11 +158,20 @@ describe("LedgerJS clients over the operation-scoped DMK bridge", () => {
     const client = await getNearLedgerClient({ derivationPath: [44, 397, 0, 0, 0], dmkSession: harness.dmkSession });
 
     const publicKey = await client.getPublicKey();
-    const transaction = { encode: () => new Uint8Array(600).fill(0x42) } as unknown as NearTransaction;
-    const [signature] = await client.signTransaction(transaction);
+    const call = actions.functionCall("ping", new Uint8Array(460).fill(0x42), 1n, 0n);
+    const transaction = createTransaction("alice.near", publicKey, "bob.near", 1n, [call], new Uint8Array(32));
+    const { signedTransaction, txHash } = await normalizeSignResult(await client.signTransaction(transaction));
+    const encodedTransaction = encodeTransaction(transaction);
 
+    expect(encodedTransaction).toHaveLength(600);
     expect(publicKey.toString()).toBe(`ed25519:${"1".repeat(32)}`);
-    expect([...signature]).toEqual(new Array(64).fill(0x71));
+    expect(signedTransaction).toBeInstanceOf(SignedTransaction);
+    expect(signedTransaction.signature.signatureType).toBe(KeyType.ED25519);
+    expect([...signedTransaction.signature.data]).toEqual(new Array(64).fill(0x71));
+    expect(encodeTransaction(decodeSignedTransaction(signedTransaction.encode()).transaction)).toEqual(
+      encodedTransaction,
+    );
+    expect(Buffer.from(txHash).toString("hex")).toBe(createHash("sha256").update(encodedTransaction).digest("hex"));
     expect(harness.actions).toEqual([
       { appName: "NEAR", requiredUserInteraction: UserInteractionRequired.None },
       { appName: "NEAR", requiredUserInteraction: UserInteractionRequired.SignTransaction },

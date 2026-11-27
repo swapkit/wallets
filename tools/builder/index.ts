@@ -16,10 +16,12 @@ export async function buildPackage({
     dependencies = {},
     exports,
     name: pkgName,
+    peerDependencies = {},
   } = (await Bun.file("package.json").json()) as {
     dependencies?: Record<string, string>;
     exports: Record<string, { bun: string }>;
     name: string;
+    peerDependencies?: Record<string, string>;
   };
 
   const parsedEntrypoints = Object.entries(exports).map(([, { bun }]) => bun);
@@ -32,7 +34,7 @@ export async function buildPackage({
 
   const bundledDependencies = new Set(bundlePackages);
   const packageExternals = bundlePackages
-    ? Object.keys(dependencies)
+    ? Object.keys({ ...dependencies, ...peerDependencies })
         .filter((dependency) => !bundledDependencies.has(dependency))
         .flatMap((dependency) => [dependency, `${dependency}/*`])
     : [];

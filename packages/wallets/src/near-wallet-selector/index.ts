@@ -1,11 +1,153 @@
+import type { PublicKey as WalletSelectorPublicKey } from "@near-js/crypto";
+import type {
+  AccessKey as WalletSelectorAccessKey,
+  Action as WalletSelectorAction,
+  Signature as WalletSelectorSignature,
+  Transaction as WalletSelectorTransaction,
+} from "@near-js/transactions";
 import type { Wallet, WalletModuleFactory } from "@near-wallet-selector/core";
 import "@near-wallet-selector/modal-ui-js/styles.css";
-import type { Transaction } from "@near-js/transactions";
 import { Chain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
-import { getNearToolbox } from "@swapkit/toolboxes/near";
+import { getNearToolbox, type NearSigner } from "@swapkit/toolboxes/near";
 import { createWallet, getWalletSupportedChains } from "@swapkit/wallet-core";
+import type { Transaction } from "near-api-js";
 
-function createNearSigner(wallet: Wallet) {
+type NearJsCrypto = typeof import("@near-js/crypto");
+type NearJsTransactions = typeof import("@near-js/transactions");
+
+// Borsh decoding yields plain objects and number arrays, while Wallet Selector and its modules call into the 2.x
+// classes (a KeyPairSigner compares `publicKey.toString()`), so the decoded transaction is rebuilt from them.
+function rebuildWalletSelectorTransaction(
+  { KeyType, PublicKey }: NearJsCrypto,
+  nearJs: NearJsTransactions,
+  decoded: WalletSelectorTransaction,
+) {
+  const {
+    AccessKey,
+    Action,
+    actionCreators,
+    DelegateAction,
+    GlobalContractDeployMode,
+    GlobalContractIdentifier,
+    Signature,
+    UseGlobalContract,
+  } = nearJs;
+  const bytes = (value: ArrayLike<number>) => Uint8Array.from(value);
+  const keyed = (ed25519?: { data: Uint8Array }, secp256k1?: { data: Uint8Array }) => ({
+    data: bytes((ed25519 ?? secp256k1)?.data ?? []),
+    keyType: ed25519 ? KeyType.ED25519 : KeyType.SECP256K1,
+  });
+
+  const toPublicKey = ({ ed25519Key, secp256k1Key }: WalletSelectorPublicKey) =>
+    new PublicKey(keyed(ed25519Key, secp256k1Key));
+
+  const toSignature = ({ ed25519Signature, secp256k1Signature }: WalletSelectorSignature) =>
+    new Signature(keyed(ed25519Signature, secp256k1Signature));
+
+  const toAccessKey = ({ nonce, permission: { functionCall } }: WalletSelectorAccessKey) => {
+    const { permission } = functionCall
+      ? actionCreators.functionCallAccessKey(
+          functionCall.receiverId,
+          functionCall.methodNames,
+          functionCall.allowance ?? undefined,
+        )
+      : actionCreators.fullAccessKey();
+
+    return new AccessKey({ nonce, permission });
+  };
+
+  const toAction = (action: WalletSelectorAction): WalletSelectorAction => {
+    const {
+      addKey,
+      deleteKey,
+      deployContract,
+      deployGlobalContract,
+      functionCall,
+      signedDelegate,
+      stake,
+      useGlobalContract,
+    } = action;
+
+    if (action.createAccount) return actionCreators.createAccount();
+    if (deployContract) return actionCreators.deployContract(bytes(deployContract.code));
+    if (functionCall) {
+      const { args, deposit, gas, methodName } = functionCall;
+      return actionCreators.functionCall(methodName, bytes(args), gas, deposit);
+    }
+    if (action.transfer) return actionCreators.transfer(action.transfer.deposit);
+    if (stake) return actionCreators.stake(stake.stake, toPublicKey(stake.publicKey));
+    if (addKey) return actionCreators.addKey(toPublicKey(addKey.publicKey), toAccessKey(addKey.accessKey));
+    if (deleteKey) return actionCreators.deleteKey(toPublicKey(deleteKey.publicKey));
+    if (action.deleteAccount) return actionCreators.deleteAccount(action.deleteAccount.beneficiaryId);
+    if (signedDelegate) {
+      const { delegateAction, signature } = signedDelegate;
+      return actionCreators.signedDelegate({
+        delegateAction: new DelegateAction({
+          ...delegateAction,
+          actions: delegateAction.actions.map(toAction),
+          publicKey: toPublicKey(delegateAction.publicKey),
+        }),
+        signature: toSignature(signature),
+      });
+    }
+    if (deployGlobalContract) {
+      const { code, deployMode } = deployGlobalContract;
+      return actionCreators.deployGlobalContract(bytes(code), new GlobalContractDeployMode(deployMode));
+    }
+    if (useGlobalContract) {
+      const { AccountId, CodeHash } = useGlobalContract.contractIdentifier;
+      const contractIdentifier = new GlobalContractIdentifier(CodeHash ? { CodeHash: bytes(CodeHash) } : { AccountId });
+      return new Action({ useGlobalContract: new UseGlobalContract({ contractIdentifier }) });
+    }
+
+    throw new Error(`Unknown @near-js 2.x action ${Object.keys(action)[0]}`);
+  };
+
+  return new nearJs.Transaction({
+    actions: decoded.actions.map(toAction),
+    blockHash: bytes(decoded.blockHash),
+    nonce: decoded.nonce,
+    publicKey: toPublicKey(decoded.publicKey),
+    receiverId: decoded.receiverId,
+    signerId: decoded.signerId,
+  });
+}
+
+// Wallet Selector 10 signs @near-js 2.x transactions, so near-api-js 7 transactions cross over as borsh bytes.
+// A transaction the 2.x schema cannot carry byte for byte is refused rather than signed in an altered form.
+async function toWalletSelectorTransaction(transaction: Transaction) {
+  const [{ encodeTransaction }, nearJsCrypto, nearJsTransactions] = await Promise.all([
+    import("near-api-js"),
+    import("@near-js/crypto"),
+    import("@near-js/transactions"),
+  ]);
+  const bytes = encodeTransaction(transaction);
+
+  try {
+    const walletSelectorTransaction = rebuildWalletSelectorTransaction(
+      nearJsCrypto,
+      nearJsTransactions,
+      nearJsTransactions.Transaction.decode(bytes),
+    );
+    const roundTrip = walletSelectorTransaction.encode();
+
+    if (roundTrip.length !== bytes.length || roundTrip.some((byte, index) => byte !== bytes[index])) {
+      throw new Error("The @near-js 2.x encoding differs from the near-api-js 7 encoding");
+    }
+
+    return walletSelectorTransaction;
+  } catch (error) {
+    throw new SwapKitError(
+      {
+        errorKey: "wallet_near_method_not_supported",
+        info: { reason: "Wallet Selector cannot sign this transaction", wallet: WalletOption.WALLET_SELECTOR },
+      },
+      error,
+    );
+  }
+}
+
+function createNearSigner(wallet: Wallet): NearSigner {
   return {
     getAddress: async () => {
       const accounts = await wallet.getAccounts();
@@ -21,8 +163,10 @@ function createNearSigner(wallet: Wallet) {
     getPublicKey: () => {
       throw new SwapKitError("wallet_near_method_not_supported");
     },
-    signAndSendTransactions: async (transactions: { transactions: Transaction[] }) => {
-      const result = await wallet.signAndSendTransactions(transactions);
+    signAndSendTransactions: async ({ transactions }: { transactions: Transaction[] }) => {
+      const result = await wallet.signAndSendTransactions({
+        transactions: await Promise.all(transactions.map(toWalletSelectorTransaction)),
+      });
       return result?.[0]?.transaction_outcome.id || "";
     },
 
@@ -34,11 +178,15 @@ function createNearSigner(wallet: Wallet) {
       throw new SwapKitError("wallet_near_method_not_supported");
     },
 
-    signTransaction: (params: Transaction) => {
+    signTransaction: async (transaction: Transaction) => {
       if (!wallet.signTransaction) {
         throw new SwapKitError("wallet_near_method_not_supported");
       }
-      return wallet.signTransaction(params);
+
+      const [hash, signedTransaction] = await wallet.signTransaction(await toWalletSelectorTransaction(transaction));
+      const { decodeSignedTransaction } = await import("near-api-js");
+
+      return [hash, decodeSignedTransaction(signedTransaction.encode())];
     },
   };
 }

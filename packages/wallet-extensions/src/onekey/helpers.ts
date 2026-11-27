@@ -5,6 +5,7 @@ import type { StellarSigner } from "@swapkit/toolboxes/stellar";
 import type { SuiChainSigner } from "@swapkit/toolboxes/sui";
 import type { TronSigner } from "@swapkit/toolboxes/tron";
 import { Transaction } from "@swapkit/utxo-signer";
+import type { Transaction as NearTransaction } from "near-api-js";
 import { getTonConnectWallet } from "../helpers/tonConnect";
 import { getUtxoScriptTypeParams } from "../helpers/utxoScriptType";
 
@@ -206,26 +207,27 @@ async function getNearWalletMethods() {
     Promise.reject(new SwapKitError("wallet_near_method_not_supported", { method, wallet: WalletOption.ONEKEY }));
 
   // OneKey only signs and sends NEAR transactions, so the toolbox falls back to signAndSendTransactions
-  const signer = {
+  const signer: NearSigner = {
     getAddress: () => Promise.resolve(account.accountId),
     async getPublicKey() {
-      const { PublicKey } = await import("@near-js/crypto");
+      const { PublicKey } = await import("near-api-js");
       return PublicKey.fromString(account.publicKey);
     },
-    async signAndSendTransactions({ transactions }: { transactions: { encode: () => Uint8Array }[] }) {
+    async signAndSendTransactions({ transactions }: { transactions: NearTransaction[] }) {
       const response = await requestNear<{ transactionHashes?: string[] }>("near_requestSignTransactions", [
         { meta: {}, send: true, transactions: transactions.map((transaction) => base64.encode(transaction.encode())) },
       ]);
 
-      if (!response?.transactionHashes?.length) throw signingError(Chain.Near, "OneKey returned no transaction hash");
-      return response.transactionHashes;
+      const [transactionHash] = response?.transactionHashes ?? [];
+      if (!transactionHash) throw signingError(Chain.Near, "OneKey returned no transaction hash");
+      return transactionHash;
     },
     signDelegateAction: () => notSupported("signDelegateAction"),
     signNep413Message: () => notSupported("signNep413Message"),
     signTransaction: () => notSupported("signTransaction"),
   };
 
-  return { ...getNearToolbox({ signer: signer as unknown as NearSigner }), address: account.accountId };
+  return { ...getNearToolbox({ signer }), address: account.accountId };
 }
 
 function getTonWalletMethods() {

@@ -1,5 +1,4 @@
 import type { AccountData, Algo, AminoSignResponse, OfflineAminoSigner, StdSignDoc } from "@cosmjs/amino";
-import type { Transaction } from "@near-js/transactions";
 import { base64, hex } from "@scure/base";
 import { Chain, type CosmosChain, filterSupportedChains, SKConfig, SwapKitError, WalletOption } from "@swapkit/helpers";
 import type { NearSigner } from "@swapkit/toolboxes/near";
@@ -8,6 +7,7 @@ import { type ChainSigningSupport, createWallet, getWalletSupportedChains } from
 import type { WalletConnectModal } from "@walletconnect/modal";
 import type SignClientClient from "@walletconnect/sign-client";
 import type { PairingTypes, ProposalTypes, SessionTypes, SignClientTypes } from "@walletconnect/types";
+import type { Transaction } from "near-api-js";
 import {
   DEFAULT_APP_METADATA,
   DEFAULT_COSMOS_METHODS,
@@ -338,7 +338,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
       const { getNearToolbox } = await import("@swapkit/toolboxes/near");
 
       // Create a NEAR signer that uses WalletConnect
-      const signer = {
+      const signer: NearSigner = {
         getAddress() {
           return Promise.resolve(address);
         },
@@ -383,13 +383,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
           );
         },
 
-        signNep413Message(
-          _message: string,
-          _accountId: string,
-          _recipient: string,
-          _nonce: Uint8Array,
-          _callbackUrl?: string,
-        ) {
+        signNep413Message() {
           // WalletConnect NEAR spec doesn't include NEP-413 message signing
           return Promise.reject(
             new SwapKitError("wallet_walletconnect_method_not_supported", { method: "signNep413Message" }),
@@ -402,7 +396,7 @@ async function getToolbox<T extends (typeof WC_SUPPORTED_CHAINS)[number]>({
             new SwapKitError("wallet_walletconnect_method_not_supported", { method: "near_signTransaction" }),
           );
         },
-      } as NearSigner;
+      };
 
       const toolbox = getNearToolbox({ signer });
       return toolbox;
