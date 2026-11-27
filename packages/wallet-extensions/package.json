@@ -160,7 +160,7 @@
   "homepage": "https://github.com/swapkit/wallets",
   "license": "SEE LICENSE IN LICENSE",
   "name": "@swapkit/wallet-extensions",
-  "peerDependencies": { "near-api-js": "~7.5.3" },
+  "peerDependencies": { "near-api-js": "7.5.3" },
   "peerDependenciesMeta": { "near-api-js": { "optional": true } },
   "publishConfig": { "access": "public" },
   "repository": {

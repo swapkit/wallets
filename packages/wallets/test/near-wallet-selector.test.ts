@@ -1,10 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { createHash } from "node:crypto";
-import {
-  Signature as LegacySignature,
-  SignedTransaction as LegacySignedTransaction,
-  Transaction as LegacyTransaction,
-} from "@near-js/transactions";
+import { KeyPairSigner as LegacyKeyPairSigner } from "@near-js/signers";
+import { Transaction as LegacyTransaction } from "@near-js/transactions";
 import { Chain } from "@swapkit/helpers";
 import { actions, createTransaction, KeyPair, KeyPairSigner, SignedTransaction, type Transaction } from "near-api-js";
 
@@ -14,6 +10,7 @@ globalThis.window = undefined as unknown as typeof globalThis.window;
 const realSelectorCoreSnapshot = { ...(await import("@near-wallet-selector/core")) };
 
 const keyPair = KeyPair.fromRandom("ed25519");
+const legacySigner = LegacyKeyPairSigner.fromSecretKey(keyPair.toString());
 const walletCalls: { method: string; transactions: unknown[] }[] = [];
 let walletSignsAlone = true;
 
@@ -28,11 +25,7 @@ const selectorWallet = {
   signTransaction: (transaction: LegacyTransaction) => {
     walletCalls.push({ method: "signTransaction", transactions: [transaction] });
     if (!walletSignsAlone) return Promise.reject(new Error("Method not supported by Selector Wallet"));
-    if (!(transaction instanceof LegacyTransaction)) throw new Error("expected a @near-js 2.x Transaction");
-
-    const hash = createHash("sha256").update(transaction.encode()).digest();
-    const signature = new LegacySignature({ data: keyPair.sign(hash).signature, keyType: 0 });
-    return Promise.resolve([new Uint8Array(hash), new LegacySignedTransaction({ signature, transaction })]);
+    return legacySigner.signTransaction(transaction);
   },
 };
 
@@ -70,7 +63,7 @@ describe("NEAR Wallet Selector signer", () => {
     walletSignsAlone = true;
   });
 
-  test("signs the toolbox transaction as @near-js 2.x bytes and returns the near-api-js 7 signed transaction", async () => {
+  test("has a @near-js 2.x KeyPairSigner sign the toolbox transaction and returns the near-api-js 7 signed transaction", async () => {
     const wallet = await connectNearWallet();
     const transaction = transferTransaction();
 
@@ -82,6 +75,39 @@ describe("NEAR Wallet Selector signer", () => {
     expect((walletCalls[0]?.transactions[0] as LegacyTransaction).encode()).toEqual(transaction.encode());
     expect(signedTransaction).toBeInstanceOf(SignedTransaction);
     expect(signedTransaction.encode()).toEqual(expected.encode());
+  });
+
+  test("hands key actions to Wallet Selector with 2.x public keys it can read", async () => {
+    const wallet = await connectNearWallet();
+    const publicKey = keyPair.getPublicKey().toString();
+    const transaction = createTransaction(
+      "alice.near",
+      keyPair.getPublicKey(),
+      "alice.near",
+      8n,
+      [
+        actions.addFunctionCallAccessKey(keyPair.getPublicKey(), "wrap.near", ["near_deposit"], 5n),
+        actions.deleteKey(keyPair.getPublicKey()),
+      ],
+      new Uint8Array(32).fill(4),
+    );
+
+    await wallet.signTransaction(transaction);
+    const bridged = walletCalls[0]?.transactions[0] as LegacyTransaction;
+
+    expect(bridged.actions.map(realSelectorCoreSnapshot.najActionToInternal)).toEqual([
+      {
+        params: {
+          accessKey: {
+            nonce: 0,
+            permission: { allowance: "5", methodNames: ["near_deposit"], receiverId: "wrap.near" },
+          },
+          publicKey,
+        },
+        type: "AddKey",
+      },
+      { params: { publicKey }, type: "DeleteKey" },
+    ]);
   });
 
   test("falls back to sign-and-send with the same transaction in @near-js 2.x form", async () => {
